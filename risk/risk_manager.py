@@ -207,9 +207,17 @@ class RiskManager:
     def _fetch_current_balance(self) -> bool:
         """Fetch current account balance from exchange"""
         try:
+            # If in simulated mode and balance fetch fails, use demo balance
             balance_data = self.client.get_account_balance()
 
             if not balance_data:
+                # Use demo balance for simulated mode
+                if self.client.simulated:
+                    logger.warning("⚠️  Using demo balance (10000 USDT) - could not fetch real balance")
+                    if self.starting_balance is None:
+                        self.starting_balance = 10000.0
+                    self.current_balance = 10000.0
+                    return True
                 return False
 
             # Extract USDT balance (or main balance)
