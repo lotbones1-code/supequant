@@ -9,6 +9,7 @@ from .multi_timeframe import MultiTimeframeFilter
 from .ai_rejection import AIRejectionFilter
 from .pattern_failure import PatternFailureFilter
 from .btc_sol_correlation import BTCSOLCorrelationFilter
+from .macro_driver import MacroDriverFilter
 from .filter_manager import FilterManager
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     'AIRejectionFilter',
     'PatternFailureFilter',
     'BTCSOLCorrelationFilter',
+    'MacroDriverFilter',
     'FilterManager'
 ]

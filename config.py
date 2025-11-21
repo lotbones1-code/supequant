@@ -87,11 +87,33 @@ LOW_LIQUIDITY_VOLUME_RATIO = 0.3  # Volume must be > 30% of avg
 STOP_HUNT_WICK_RATIO = 3.0  # Wick-to-body ratio for stop hunt detection
 FAKEOUT_REVERSION_PCT = 0.8  # Price reversion % to confirm fakeout
 
-# BTC-SOL Correlation Filter
+# BTC-SOL Correlation Filter (UPDATED - Less Strict)
 BTC_SOL_CORRELATION_ENABLED = True  # Enable BTC-SOL correlation check
 BTC_SOL_MIN_CORRELATION = 0.7  # Minimum correlation score (0-1)
-BTC_SOL_TREND_AGREEMENT_REQUIRED = True  # BTC and SOL must trend same direction
+BTC_SOL_TREND_AGREEMENT_REQUIRED = False  # Changed: No longer require exact alignment
 BTC_SOL_DIVERGENCE_MAX = 0.15  # Max 15% price divergence when trends differ
+BTC_SOL_STRONG_OPPOSITION_THRESHOLD = 0.7  # Only reject on strong opposing trends (>0.7 strength)
+BTC_VOL_EXTREME_PERCENTILE = 95  # Reject if BTC ATR > 95th percentile
+
+# Macro Driver Filter (NEW - 4-Tier System)
+MACRO_DRIVER_ENABLED = True  # Enable macro driver analysis
+MACRO_DRIVER_BLOCK_ON_CRISIS = True  # Block trades during liquidity/credit crisis
+MACRO_DRIVER_MIN_SCORE = 40  # Minimum weighted score to allow trade
+MACRO_DRIVER_TIER1_WEIGHT = 0.40  # Tier 1: Macro & Liquidity (most important)
+MACRO_DRIVER_TIER2_WEIGHT = 0.30  # Tier 2: Derivatives & Flows
+MACRO_DRIVER_TIER3_WEIGHT = 0.20  # Tier 3: Trend & Health
+MACRO_DRIVER_TIER4_WEIGHT = 0.10  # Tier 4: Tactical Tools
+
+# Trading Checklist Filter (NEW - Automated Checklist)
+CHECKLIST_ENABLED = True  # Enable automated checklist scoring
+CHECKLIST_BLOCK_THRESHOLD = 60  # Block trades with score < 60
+CHECKLIST_REDUCE_THRESHOLD = 80  # Reduce size for scores 60-80
+CHECKLIST_MACRO_WEIGHT = 0.25  # Weight for macro/geopolitical risk
+CHECKLIST_SENTIMENT_WEIGHT = 0.20  # Weight for market sentiment
+CHECKLIST_STRUCTURE_WEIGHT = 0.25  # Weight for market structure/trend
+CHECKLIST_AI_WEIGHT = 0.15  # Weight for AI model consensus
+CHECKLIST_FLOWS_WEIGHT = 0.10  # Weight for institutional flows
+CHECKLIST_SOCIAL_WEIGHT = 0.05  # Weight for social sentiment
 
 # =====================================
 # STRATEGY SETTINGS

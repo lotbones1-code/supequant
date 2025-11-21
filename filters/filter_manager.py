@@ -11,7 +11,9 @@ from .multi_timeframe import MultiTimeframeFilter
 from .ai_rejection import AIRejectionFilter
 from .pattern_failure import PatternFailureFilter
 from .btc_sol_correlation import BTCSOLCorrelationFilter
-from config import BTC_SOL_CORRELATION_ENABLED
+from .macro_driver import MacroDriverFilter
+from research_filters import SOLPlaybookEngine, TradingChecklistFilter, DriverTierWeighting
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +25,21 @@ class FilterManager:
     """
 
     def __init__(self):
+        # Core filters (blocking)
         self.filters = {
             'market_regime': MarketRegimeFilter(),
             'multi_timeframe': MultiTimeframeFilter(),
             'ai_rejection': AIRejectionFilter(),
             'pattern_failure': PatternFailureFilter(),
-            'btc_sol_correlation': BTCSOLCorrelationFilter()
+            'btc_sol_correlation': BTCSOLCorrelationFilter(),
+            'macro_driver': MacroDriverFilter(),
+            'checklist': TradingChecklistFilter(config)
+        }
+
+        # Research filters (advisory/enrichment)
+        self.research_filters = {
+            'sol_playbook': SOLPlaybookEngine(),
+            'driver_weighting': DriverTierWeighting()
         }
 
         self.filter_stats = {
@@ -38,8 +49,16 @@ class FilterManager:
             'failed_by_filter': {}
         }
 
-        filter_count = 5 if BTC_SOL_CORRELATION_ENABLED else 4
-        logger.info(f"✅ FilterManager initialized with {filter_count} filters")
+        # Count enabled filters
+        filter_count = 6  # Base filters
+        if config.BTC_SOL_CORRELATION_ENABLED:
+            filter_count += 1
+        if config.MACRO_DRIVER_ENABLED:
+            filter_count += 1
+        if config.CHECKLIST_ENABLED:
+            filter_count += 1
+
+        logger.info(f"✅ FilterManager initialized with {filter_count} blocking filters + 2 research filters")
 
     def check_all(self, market_state: Dict, signal_direction: str,
                  strategy_name: str, btc_market_state: Optional[Dict] = None) -> Tuple[bool, Dict]:
@@ -135,7 +154,7 @@ class FilterManager:
             results['passed_filters'].append('ai_rejection')
 
         # Filter 5: BTC-SOL Correlation (if enabled and BTC data available)
-        if BTC_SOL_CORRELATION_ENABLED and btc_market_state:
+        if config.BTC_SOL_CORRELATION_ENABLED and btc_market_state:
             correlation_passed, correlation_reason = self.filters['btc_sol_correlation'].check(
                 market_state, btc_market_state, signal_direction
             )
@@ -150,6 +169,68 @@ class FilterManager:
                 self._log_failure('btc_sol_correlation', correlation_reason)
             else:
                 results['passed_filters'].append('btc_sol_correlation')
+
+        # Filter 6: Macro Driver (if enabled)
+        macro_state = None
+        if config.MACRO_DRIVER_ENABLED:
+            macro_passed, macro_reason, macro_state = self.filters['macro_driver'].check(
+                market_state, btc_market_state, signal_direction
+            )
+            results['filter_results']['macro_driver'] = {
+                'passed': macro_passed,
+                'reason': macro_reason,
+                'macro_assessment': macro_state
+            }
+
+            if not macro_passed:
+                results['overall_pass'] = False
+                results['failed_filters'].append('macro_driver')
+                self._log_failure('macro_driver', macro_reason)
+            else:
+                results['passed_filters'].append('macro_driver')
+
+        # Filter 7: Trading Checklist (if enabled)
+        checklist_details = None
+        if config.CHECKLIST_ENABLED:
+            checklist_passed, checklist_reason, checklist_details = self.filters['checklist'].check(
+                market_state, macro_state, None  # TODO: Pass AI signals when available
+            )
+            results['filter_results']['checklist'] = {
+                'passed': checklist_passed,
+                'reason': checklist_reason,
+                'details': checklist_details
+            }
+
+            if not checklist_passed:
+                results['overall_pass'] = False
+                results['failed_filters'].append('checklist')
+                self._log_failure('checklist', checklist_reason)
+            else:
+                results['passed_filters'].append('checklist')
+
+            # Store checklist multiplier for position sizing
+            if checklist_details:
+                results['position_size_multiplier'] = checklist_details.get('total_score', 80) / 100
+
+        # Research Filter: SOL Playbook (advisory only, doesn't block)
+        playbook_analysis = self.research_filters['sol_playbook'].analyze(
+            market_state, btc_market_state
+        )
+        results['playbook_analysis'] = playbook_analysis
+        logger.info(f"📖 Playbook: {playbook_analysis.get('setup', 'none')} setup (confidence: {playbook_analysis.get('confidence', 0):.2f})")
+
+        # Research Filter: Driver Tier Weighting (advisory only, doesn't block)
+        if macro_state and 'tier_outputs' in macro_state:
+            tiers = macro_state['tier_outputs']
+            tier_assessment = self.research_filters['driver_weighting'].aggregate_assessment(
+                tiers.get('tier1', {}),
+                tiers.get('tier2', {}),
+                tiers.get('tier3', {}),
+                tiers.get('tier4', {}),
+                signal_direction
+            )
+            results['tier_assessment'] = tier_assessment
+            logger.info(f"⚖️  Tier Assessment: {tier_assessment.get('environment_bias', 'neutral')} (score: {tier_assessment.get('weighted_score', 50):.1f})")
 
         # Update stats
         if results['overall_pass']:

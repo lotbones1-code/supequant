@@ -31,7 +31,13 @@ class BTCSOLCorrelationFilter:
     def check(self, sol_market_state: Dict, btc_market_state: Dict,
              signal_direction: str) -> Tuple[bool, str]:
         """
-        Check if BTC and SOL are properly correlated
+        Check if BTC and SOL relationship allows trading
+
+        NEW LOGIC (Less Strict):
+        - Only reject on STRONG OPPOSING BTC trends
+        - Reject on extreme BTC volatility
+        - Allow neutral/sideways BTC
+        - Correlation is advisory, not blocking
 
         Args:
             sol_market_state: Solana market state
@@ -45,163 +51,162 @@ class BTCSOLCorrelationFilter:
             return True, "Correlation filter disabled"
 
         try:
-            # Check 1: Trend Agreement (BTC and SOL trending same direction)
-            if BTC_SOL_TREND_AGREEMENT_REQUIRED:
-                trend_check = self._check_trend_agreement(
-                    sol_market_state,
-                    btc_market_state,
-                    signal_direction
-                )
-                if not trend_check[0]:
-                    return trend_check
+            # Check 1: HARD GATE - Strong Opposing BTC Trend
+            # Only reject if BTC is STRONGLY moving against our signal
+            opposing_check = self._check_strong_opposition(
+                btc_market_state,
+                signal_direction
+            )
+            if not opposing_check[0]:
+                return opposing_check
 
-            # Check 2: Price Correlation
-            correlation_check = self._check_price_correlation(
-                sol_market_state,
+            # Check 2: HARD GATE - Extreme BTC Volatility
+            # Reject if BTC is going crazy (unsafe conditions)
+            volatility_check = self._check_btc_volatility_extreme(
                 btc_market_state
             )
-            if not correlation_check[0]:
-                return correlation_check
+            if not volatility_check[0]:
+                return volatility_check
 
-            # Check 3: Momentum Alignment
-            momentum_check = self._check_momentum_alignment(
+            # Check 3: SOFT WARNING - Divergence Detection
+            # Log warning but don't block trade
+            divergence_check = self._check_dangerous_divergence(
                 sol_market_state,
                 btc_market_state,
                 signal_direction
             )
-            if not momentum_check[0]:
-                return momentum_check
+            if not divergence_check[0]:
+                logger.warning(f"⚠️  {self.name}: {divergence_check[1]} (allowing trade)")
 
-            logger.info(f"✅ {self.name}: BTC-SOL correlation healthy")
-            return True, "BTC-SOL correlation confirmed"
+            logger.info(f"✅ {self.name}: BTC conditions acceptable for SOL trade")
+            return True, "BTC not opposing SOL trade"
 
         except Exception as e:
             logger.error(f"❌ {self.name}: Error during filter check: {e}")
-            return False, f"Filter error: {e}"
+            # Fail open (allow trade) on errors in this filter
+            logger.warning(f"⚠️  {self.name}: Error occurred, allowing trade as fallback")
+            return True, f"Filter error (allowed): {e}"
 
-    def _check_trend_agreement(self, sol_state: Dict, btc_state: Dict,
-                               signal_direction: str) -> Tuple[bool, str]:
+    def _check_strong_opposition(self, btc_state: Dict, signal_direction: str) -> Tuple[bool, str]:
         """
-        Check if BTC and SOL are trending in the same direction
+        NEW: Only reject if BTC is STRONGLY opposing the trade direction
+
+        Allows:
+        - Neutral/sideways BTC
+        - Weak trends
+        - Mixed signals
+
+        Rejects ONLY:
+        - Strong downtrend on 1H+4H when going long
+        - Strong uptrend on 1H+4H when going short
         """
-        sol_timeframes = sol_state.get('timeframes', {})
         btc_timeframes = btc_state.get('timeframes', {})
 
-        # Check HTF (4H) trends
-        if '4H' not in sol_timeframes or '4H' not in btc_timeframes:
-            # Fall back to 1H if 4H not available
-            timeframe = '1H' if '1H' in sol_timeframes and '1H' in btc_timeframes else '15m'
-        else:
-            timeframe = '4H'
+        # Check 1H and 4H trends
+        h1_trend = btc_timeframes.get('1H', {}).get('trend', {})
+        h4_trend = btc_timeframes.get('4H', {}).get('trend', {})
 
-        if timeframe not in sol_timeframes or timeframe not in btc_timeframes:
-            return True, "Insufficient timeframe data for comparison"
+        if not h1_trend or not h4_trend:
+            # Can't determine, allow trade
+            return True, "BTC trend data insufficient (allowing)"
 
-        sol_trend = sol_timeframes[timeframe].get('trend', {})
-        btc_trend = btc_timeframes[timeframe].get('trend', {})
+        h1_direction = h1_trend.get('trend_direction', 'sideways')
+        h1_strength = h1_trend.get('trend_strength', 0)
+        h4_direction = h4_trend.get('trend_direction', 'sideways')
+        h4_strength = h4_trend.get('trend_strength', 0)
 
-        sol_direction = sol_trend.get('trend_direction', 'sideways')
-        btc_direction = btc_trend.get('trend_direction', 'sideways')
-
-        # BTC must be trending in the same direction as our signal
-        if signal_direction == 'long' and btc_direction != 'up':
-            return False, f"BTC not bullish (BTC: {btc_direction}, signal: {signal_direction})"
-
-        if signal_direction == 'short' and btc_direction != 'down':
-            return False, f"BTC not bearish (BTC: {btc_direction}, signal: {signal_direction})"
-
-        # SOL should also align
-        if signal_direction == 'long' and sol_direction == 'down':
-            return False, f"SOL bearish while BTC bullish (divergence)"
-
-        if signal_direction == 'short' and sol_direction == 'up':
-            return False, f"SOL bullish while BTC bearish (divergence)"
-
-        return True, f"BTC and SOL trends aligned ({btc_direction})"
-
-    def _check_price_correlation(self, sol_state: Dict, btc_state: Dict) -> Tuple[bool, str]:
-        """
-        Calculate price correlation between BTC and SOL
-        Uses recent price changes to measure correlation
-        """
-        sol_timeframes = sol_state.get('timeframes', {})
-        btc_timeframes = btc_state.get('timeframes', {})
-
-        # Use 1H timeframe for correlation
-        timeframe = '1H' if '1H' in sol_timeframes and '1H' in btc_timeframes else '15m'
-
-        if timeframe not in sol_timeframes or timeframe not in btc_timeframes:
-            return True, "Insufficient data for correlation"
-
-        sol_candles = sol_timeframes[timeframe].get('candles', [])
-        btc_candles = btc_timeframes[timeframe].get('candles', [])
-
-        if len(sol_candles) < 20 or len(btc_candles) < 20:
-            return True, "Not enough candles for correlation"
-
-        # Get recent 20 candles
-        sol_recent = sol_candles[-20:]
-        btc_recent = btc_candles[-20:]
-
-        # Calculate price changes
-        sol_changes = []
-        btc_changes = []
-
-        for i in range(1, len(sol_recent)):
-            sol_change = (sol_recent[i]['close'] - sol_recent[i-1]['close']) / sol_recent[i-1]['close']
-            btc_change = (btc_recent[i]['close'] - btc_recent[i-1]['close']) / btc_recent[i-1]['close']
-
-            sol_changes.append(sol_change)
-            btc_changes.append(btc_change)
-
-        # Calculate correlation
-        correlation = np.corrcoef(sol_changes, btc_changes)[0, 1]
-
-        if np.isnan(correlation):
-            return True, "Unable to calculate correlation"
-
-        if abs(correlation) < BTC_SOL_MIN_CORRELATION:
-            return False, f"Low BTC-SOL correlation ({correlation:.2f} < {BTC_SOL_MIN_CORRELATION})"
-
-        return True, f"BTC-SOL correlation strong ({correlation:.2f})"
-
-    def _check_momentum_alignment(self, sol_state: Dict, btc_state: Dict,
-                                  signal_direction: str) -> Tuple[bool, str]:
-        """
-        Check if BTC and SOL momentum are aligned
-        """
-        sol_timeframes = sol_state.get('timeframes', {})
-        btc_timeframes = btc_state.get('timeframes', {})
-
-        # Use 15m for momentum check
-        if '15m' not in sol_timeframes or '15m' not in btc_timeframes:
-            return True, "Insufficient timeframe data for momentum"
-
-        sol_trend = sol_timeframes['15m'].get('trend', {})
-        btc_trend = btc_timeframes['15m'].get('trend', {})
-
-        sol_rsi = sol_trend.get('rsi', 50)
-        btc_rsi = btc_trend.get('rsi', 50)
-
-        # For long signals: both should not be oversold or diverging
+        # For LONG signals: Only reject if BTC STRONGLY bearish
         if signal_direction == 'long':
-            if btc_rsi < 30:
-                return False, f"BTC oversold (RSI: {btc_rsi:.1f})"
+            # Both 1H and 4H must be down AND strong
+            if (h1_direction == 'down' and h1_strength > 0.6 and
+                h4_direction == 'down' and h4_strength > 0.6):
+                return False, f"BTC strongly bearish (1H: {h1_strength:.2f}, 4H: {h4_strength:.2f})"
 
-            # If BTC is strong but SOL is weak, wait
-            if btc_rsi > 60 and sol_rsi < 40:
-                return False, f"BTC strong but SOL weak (BTC RSI: {btc_rsi:.1f}, SOL RSI: {sol_rsi:.1f})"
-
-        # For short signals: both should not be overbought or diverging
+        # For SHORT signals: Only reject if BTC STRONGLY bullish
         elif signal_direction == 'short':
-            if btc_rsi > 70:
-                return False, f"BTC overbought (RSI: {btc_rsi:.1f})"
+            # Both 1H and 4H must be up AND strong
+            if (h1_direction == 'up' and h1_strength > 0.6 and
+                h4_direction == 'up' and h4_strength > 0.6):
+                return False, f"BTC strongly bullish (1H: {h1_strength:.2f}, 4H: {h4_strength:.2f})"
 
-            # If BTC is weak but SOL is strong, wait
-            if btc_rsi < 40 and sol_rsi > 60:
-                return False, f"BTC weak but SOL strong (BTC RSI: {btc_rsi:.1f}, SOL RSI: {sol_rsi:.1f})"
+        # BTC not strongly opposing - allow trade
+        return True, f"BTC not strongly opposing (1H: {h1_direction}, 4H: {h4_direction})"
 
-        return True, f"BTC-SOL momentum aligned (BTC RSI: {btc_rsi:.1f}, SOL RSI: {sol_rsi:.1f})"
+    def _check_btc_volatility_extreme(self, btc_state: Dict) -> Tuple[bool, str]:
+        """
+        NEW: Reject if BTC volatility is extreme (unsafe conditions)
+
+        Checks for:
+        - Huge ATR spikes (volatility explosion)
+        - Large wicks (stop hunts)
+        - Unusual short-term volatility on 1m/5m
+        """
+        btc_timeframes = btc_state.get('timeframes', {})
+
+        # Check 1: ATR percentile (if in extreme territory)
+        if '15m' in btc_timeframes:
+            atr_data = btc_timeframes['15m'].get('atr', {})
+            atr_percentile = atr_data.get('atr_percentile', 50)
+
+            # If BTC ATR > 95th percentile = extreme volatility
+            if atr_percentile > 95:
+                return False, f"BTC volatility extreme (ATR {atr_percentile}th percentile)"
+
+        # Check 2: Recent wick sizes (stop hunts)
+        if '5m' in btc_timeframes:
+            candles = btc_timeframes['5m'].get('candles', [])
+            if len(candles) >= 5:
+                recent = candles[-5:]
+                for candle in recent:
+                    body = abs(candle['close'] - candle['open'])
+                    upper_wick = candle['high'] - max(candle['close'], candle['open'])
+                    lower_wick = min(candle['close'], candle['open']) - candle['low']
+
+                    if body > 0:
+                        if upper_wick / body > 4 or lower_wick / body > 4:
+                            return False, f"BTC stop hunt detected (large wicks)"
+
+        # Volatility acceptable
+        return True, "BTC volatility acceptable"
+
+    def _check_dangerous_divergence(self, sol_state: Dict, btc_state: Dict,
+                                    signal_direction: str) -> Tuple[bool, str]:
+        """
+        NEW: Soft warning for dangerous divergences
+        Returns False + reason for logging, but doesn't block trade
+
+        Detects:
+        - SOL pumping while BTC nuking (unstable)
+        - Extreme opposite movements
+        """
+        sol_timeframes = sol_state.get('timeframes', {})
+        btc_timeframes = btc_state.get('timeframes', {})
+
+        # Check recent price action
+        if '15m' not in sol_timeframes or '15m' not in btc_timeframes:
+            return True, "No divergence data"
+
+        sol_candles = sol_timeframes['15m'].get('candles', [])
+        btc_candles = btc_timeframes['15m'].get('candles', [])
+
+        if len(sol_candles) < 5 or len(btc_candles) < 5:
+            return True, "Not enough data for divergence check"
+
+        # Calculate recent moves (last 5 candles)
+        sol_move = (sol_candles[-1]['close'] - sol_candles[-5]['close']) / sol_candles[-5]['close']
+        btc_move = (btc_candles[-1]['close'] - btc_candles[-5]['close']) / btc_candles[-5]['close']
+
+        # For LONG: Warn if SOL pumping but BTC dumping hard
+        if signal_direction == 'long':
+            if sol_move > 0.02 and btc_move < -0.02:  # SOL +2%, BTC -2%
+                return False, f"SOL pumping (+{sol_move*100:.1f}%) while BTC dumping ({btc_move*100:.1f}%)"
+
+        # For SHORT: Warn if SOL dumping but BTC pumping hard
+        elif signal_direction == 'short':
+            if sol_move < -0.02 and btc_move > 0.02:  # SOL -2%, BTC +2%
+                return False, f"SOL dumping ({sol_move*100:.1f}%) while BTC pumping (+{btc_move*100:.1f}%)"
+
+        return True, "No dangerous divergence"
 
     def get_correlation_score(self, sol_state: Dict, btc_state: Dict) -> float:
         """
