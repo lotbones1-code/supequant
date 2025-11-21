@@ -40,13 +40,13 @@ class PullbackStrategy:
             Signal dict if setup found, None otherwise
         """
         try:
-            # Use 15m as primary, but need 1h for trend
+            # Use 15m as primary, but need 1H for trend
             timeframes = market_state.get('timeframes', {})
 
-            if '15m' not in timeframes or '1h' not in timeframes:
+            if '15m' not in timeframes or '1H' not in timeframes:
                 return None
 
-            htf_data = timeframes['1h']
+            htf_data = timeframes['1H']
             mtf_data = timeframes['15m']
 
             # Check for pullback conditions

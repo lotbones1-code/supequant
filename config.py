@@ -48,7 +48,7 @@ TRAILING_STOP_ACTIVATION = 1.2  # Activate trailing stop after 1.2:1 RR
 # TIMEFRAME SETTINGS
 # =====================================
 # Multi-timeframe analysis
-HTF_TIMEFRAME = "4h"  # Higher timeframe for trend
+HTF_TIMEFRAME = "4H"  # Higher timeframe for trend (OKX uses capital H)
 MTF_TIMEFRAME = "15m"  # Medium timeframe for conviction
 LTF_TIMEFRAME = "5m"  # Lower timeframe for entry trigger
 MICRO_TIMEFRAME = "1m"  # Micro timeframe for precise entry

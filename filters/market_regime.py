@@ -77,7 +77,7 @@ class MarketRegimeFilter:
 
         # Try to get 15m, fall back to first available
         tf_data = None
-        for tf in ['15m', '5m', '1h', '4h']:
+        for tf in ['15m', '5m', '1H', '4H']:
             if tf in timeframes:
                 tf_data = timeframes[tf]
                 break
@@ -155,7 +155,7 @@ class MarketRegimeFilter:
 
         # Check compression on multiple timeframes
         compressed_count = 0
-        for tf in ['15m', '1h', '4h']:
+        for tf in ['15m', '1H', '4H']:
             if tf in timeframes:
                 tf_data = timeframes[tf]
                 if tf_data.get('atr', {}).get('is_compressed', False):

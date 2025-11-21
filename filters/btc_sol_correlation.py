@@ -87,12 +87,12 @@ class BTCSOLCorrelationFilter:
         sol_timeframes = sol_state.get('timeframes', {})
         btc_timeframes = btc_state.get('timeframes', {})
 
-        # Check HTF (4h) trends
-        if '4h' not in sol_timeframes or '4h' not in btc_timeframes:
-            # Fall back to 1h if 4h not available
-            timeframe = '1h' if '1h' in sol_timeframes and '1h' in btc_timeframes else '15m'
+        # Check HTF (4H) trends
+        if '4H' not in sol_timeframes or '4H' not in btc_timeframes:
+            # Fall back to 1H if 4H not available
+            timeframe = '1H' if '1H' in sol_timeframes and '1H' in btc_timeframes else '15m'
         else:
-            timeframe = '4h'
+            timeframe = '4H'
 
         if timeframe not in sol_timeframes or timeframe not in btc_timeframes:
             return True, "Insufficient timeframe data for comparison"
@@ -127,8 +127,8 @@ class BTCSOLCorrelationFilter:
         sol_timeframes = sol_state.get('timeframes', {})
         btc_timeframes = btc_state.get('timeframes', {})
 
-        # Use 1h timeframe for correlation
-        timeframe = '1h' if '1h' in sol_timeframes and '1h' in btc_timeframes else '15m'
+        # Use 1H timeframe for correlation
+        timeframe = '1H' if '1H' in sol_timeframes and '1H' in btc_timeframes else '15m'
 
         if timeframe not in sol_timeframes or timeframe not in btc_timeframes:
             return True, "Insufficient data for correlation"
