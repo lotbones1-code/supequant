@@ -4,12 +4,14 @@ Orchestrates all filters and provides unified interface
 ALL filters must pass before a trade is allowed
 """
 
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
 import logging
 from .market_regime import MarketRegimeFilter
 from .multi_timeframe import MultiTimeframeFilter
 from .ai_rejection import AIRejectionFilter
 from .pattern_failure import PatternFailureFilter
+from .btc_sol_correlation import BTCSOLCorrelationFilter
+from config import BTC_SOL_CORRELATION_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,8 @@ class FilterManager:
             'market_regime': MarketRegimeFilter(),
             'multi_timeframe': MultiTimeframeFilter(),
             'ai_rejection': AIRejectionFilter(),
-            'pattern_failure': PatternFailureFilter()
+            'pattern_failure': PatternFailureFilter(),
+            'btc_sol_correlation': BTCSOLCorrelationFilter()
         }
 
         self.filter_stats = {
@@ -35,18 +38,20 @@ class FilterManager:
             'failed_by_filter': {}
         }
 
-        logger.info("✅ FilterManager initialized with 4 filters")
+        filter_count = 5 if BTC_SOL_CORRELATION_ENABLED else 4
+        logger.info(f"✅ FilterManager initialized with {filter_count} filters")
 
     def check_all(self, market_state: Dict, signal_direction: str,
-                 strategy_name: str) -> Tuple[bool, Dict]:
+                 strategy_name: str, btc_market_state: Optional[Dict] = None) -> Tuple[bool, Dict]:
         """
         Run ALL filters on a trade signal
         If ANY filter fails, trade is rejected
 
         Args:
-            market_state: Complete market state from MarketDataFeed
+            market_state: Complete market state from MarketDataFeed (for SOL)
             signal_direction: 'long' or 'short'
             strategy_name: 'breakout' or 'pullback'
+            btc_market_state: Optional Bitcoin market state for correlation check
 
         Returns:
             (all_passed: bool, results: Dict)
@@ -128,6 +133,23 @@ class FilterManager:
             self._log_failure('ai_rejection', ai_reason)
         else:
             results['passed_filters'].append('ai_rejection')
+
+        # Filter 5: BTC-SOL Correlation (if enabled and BTC data available)
+        if BTC_SOL_CORRELATION_ENABLED and btc_market_state:
+            correlation_passed, correlation_reason = self.filters['btc_sol_correlation'].check(
+                market_state, btc_market_state, signal_direction
+            )
+            results['filter_results']['btc_sol_correlation'] = {
+                'passed': correlation_passed,
+                'reason': correlation_reason
+            }
+
+            if not correlation_passed:
+                results['overall_pass'] = False
+                results['failed_filters'].append('btc_sol_correlation')
+                self._log_failure('btc_sol_correlation', correlation_reason)
+            else:
+                results['passed_filters'].append('btc_sol_correlation')
 
         # Update stats
         if results['overall_pass']:

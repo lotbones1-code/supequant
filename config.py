@@ -20,7 +20,8 @@ OKX_SIMULATED = os.getenv('OKX_SIMULATED', 'True').lower() == 'true'  # Start in
 # TRADING PARAMETERS
 # =====================================
 # Core trading settings
-TRADING_SYMBOL = "BTC-USDT"  # Main trading pair
+TRADING_SYMBOL = "SOL-USDT-SWAP"  # Main trading pair (Solana perpetual)
+REFERENCE_SYMBOL = "BTC-USDT-SWAP"  # Reference symbol (Bitcoin for correlation)
 TRADING_MODE = "perp"  # 'spot' or 'perp'
 MAX_DAILY_TRADES = 5  # Maximum trades per day
 TRADE_INTERVAL_MINUTES = 60  # Minimum minutes between trades
@@ -85,6 +86,12 @@ BEAR_TRAP_THRESHOLD = 0.015
 LOW_LIQUIDITY_VOLUME_RATIO = 0.3  # Volume must be > 30% of avg
 STOP_HUNT_WICK_RATIO = 3.0  # Wick-to-body ratio for stop hunt detection
 FAKEOUT_REVERSION_PCT = 0.8  # Price reversion % to confirm fakeout
+
+# BTC-SOL Correlation Filter
+BTC_SOL_CORRELATION_ENABLED = True  # Enable BTC-SOL correlation check
+BTC_SOL_MIN_CORRELATION = 0.7  # Minimum correlation score (0-1)
+BTC_SOL_TREND_AGREEMENT_REQUIRED = True  # BTC and SOL must trend same direction
+BTC_SOL_DIVERGENCE_MAX = 0.15  # Max 15% price divergence when trends differ
 
 # =====================================
 # STRATEGY SETTINGS

@@ -116,13 +116,24 @@ class EliteQuantSystem:
             # Step 1: Update existing positions
             self._update_positions()
 
-            # Step 2: Check emergency conditions
-            market_state = self.market_data.get_market_state(
+            # Step 2: Fetch market data for SOL (trading) and BTC (reference)
+            logger.info(f"📊 Fetching market data...")
+            sol_market_state = self.market_data.get_market_state(
                 config.TRADING_SYMBOL,
                 self.timeframes
             )
 
-            emergency, reason = self.risk_manager.check_emergency_conditions(market_state)
+            # Fetch BTC data for correlation analysis
+            btc_market_state = None
+            if hasattr(config, 'REFERENCE_SYMBOL'):
+                logger.info(f"📊 Fetching BTC reference data...")
+                btc_market_state = self.market_data.get_market_state(
+                    config.REFERENCE_SYMBOL,
+                    self.timeframes
+                )
+
+            # Step 3: Check emergency conditions
+            emergency, reason = self.risk_manager.check_emergency_conditions(sol_market_state)
             if emergency:
                 logger.critical(f"🚨 EMERGENCY: {reason}")
                 self.risk_manager.trigger_emergency_shutdown(reason)
@@ -142,8 +153,8 @@ class EliteQuantSystem:
                 logger.info(f"📊 Max positions open ({len(open_positions)}), monitoring only")
                 return
 
-            # Step 5: Look for trading signals
-            signal = self.strategy_manager.analyze_market(market_state)
+            # Step 5: Look for trading signals (on SOL)
+            signal = self.strategy_manager.analyze_market(sol_market_state)
 
             if not signal:
                 logger.info("📉 No signal detected")
@@ -153,9 +164,10 @@ class EliteQuantSystem:
 
             # Step 6: Run ALL filters (most important step!)
             filters_passed, filter_results = self.filter_manager.check_all(
-                market_state,
+                sol_market_state,
                 signal['direction'],
-                signal['strategy']
+                signal['strategy'],
+                btc_market_state  # Pass BTC data for correlation check
             )
 
             if not filters_passed:

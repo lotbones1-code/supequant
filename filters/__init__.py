@@ -8,6 +8,7 @@ from .market_regime import MarketRegimeFilter
 from .multi_timeframe import MultiTimeframeFilter
 from .ai_rejection import AIRejectionFilter
 from .pattern_failure import PatternFailureFilter
+from .btc_sol_correlation import BTCSOLCorrelationFilter
 from .filter_manager import FilterManager
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     'MultiTimeframeFilter',
     'AIRejectionFilter',
     'PatternFailureFilter',
+    'BTCSOLCorrelationFilter',
     'FilterManager'
 ]
