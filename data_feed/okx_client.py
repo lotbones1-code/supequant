@@ -114,12 +114,20 @@ class OKXClient:
                 # Check OKX specific error codes
                 if data.get('code') != '0':
                     error_msg = data.get('msg', 'Unknown error')
-                    logger.error(f"OKX API Error: {error_msg}")
+                    error_code = data.get('code', 'unknown')
+                    logger.error(f"❌ OKX API Error [{error_code}]: {error_msg}")
+                    logger.error(f"   Endpoint: {endpoint}")
+                    logger.error(f"   Params: {params}")
+                    logger.error(f"   Response: {data}")
                     self.error_count += 1
                     return None
 
                 self.request_count += 1
                 self.error_count = 0  # Reset error count on success
+
+                # Log successful responses for debugging
+                logger.debug(f"✅ OKX API Success: {endpoint} (code: {data.get('code')})")
+
                 return data
 
             except requests.exceptions.RequestException as e:
