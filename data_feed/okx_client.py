@@ -108,8 +108,22 @@ class OKXClient:
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
+                # Try to parse response even if status code is error
+                try:
+                    data = response.json()
+                except:
+                    data = None
+
+                # Log detailed error info for debugging
+                if response.status_code != 200:
+                    logger.error(f"❌ HTTP {response.status_code} from {endpoint}")
+                    if data:
+                        logger.error(f"   OKX Error: {data}")
+                    else:
+                        logger.error(f"   Response body: {response.text[:500]}")
+
                 response.raise_for_status()
-                data = response.json()
+
 
                 # Check OKX specific error codes
                 if data.get('code') != '0':
@@ -167,6 +181,46 @@ class OKXClient:
             'instId': symbol,
             'bar': timeframe,
             'limit': min(limit, 300)
+        }
+
+        if after:
+            params['after'] = after
+        if before:
+            params['before'] = before
+
+        # Try authenticated request if using pagination parameters
+        # Some OKX endpoints require auth even though they're "public"
+        use_auth = bool(after or before)
+
+        response = self._request('GET', endpoint, params=params, authenticated=use_auth)
+        if response and response.get('data'):
+            return response['data']
+        return None
+
+    def get_history_candles(self, symbol: str, timeframe: str, limit: int = 100,
+                           after: Optional[str] = None, before: Optional[str] = None) -> Optional[List[List]]:
+        """
+        Get historical candlestick data (for backtesting)
+
+        This endpoint provides access to years of historical data, unlike get_candles()
+        which only returns recent candles.
+
+        Args:
+            symbol: Trading pair (e.g., 'BTC-USDT')
+            timeframe: Timeframe (e.g., '1m', '5m', '15m', '1H', '4H')
+            limit: Number of candles (max 100 for history endpoint vs 300 for live)
+            after: Pagination - get candles after (older than) this timestamp
+            before: Pagination - get candles before (newer than) this timestamp
+
+        Returns:
+            List of candles [[timestamp, open, high, low, close, volume, volumeCcy], ...]
+            Note: OKX returns candles in reverse chronological order (newest first)
+        """
+        endpoint = '/api/v5/market/history-candles'
+        params = {
+            'instId': symbol,
+            'bar': timeframe,
+            'limit': min(limit, 100)  # History endpoint max is 100
         }
 
         if after:

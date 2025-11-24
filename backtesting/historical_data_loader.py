@@ -132,8 +132,8 @@ class HistoricalDataLoader:
         }
         candle_minutes = durations.get(timeframe, 60)
 
-        # OKX returns max 300 candles per request
-        max_candles_per_request = 300
+        # OKX history-candles endpoint returns max 100 candles per request (vs 300 for live)
+        max_candles_per_request = 100
         chunk_duration = timedelta(minutes=candle_minutes * max_candles_per_request)
 
         while current_end > start_dt:
@@ -145,10 +145,10 @@ class HistoricalDataLoader:
             before_ts = int(current_end.timestamp() * 1000)
 
             try:
-                # Fetch candles
-                # Note: get_candles returns data list directly (not wrapped in dict)
+                # Fetch historical candles using history-candles endpoint
+                # Note: get_history_candles returns data list directly (not wrapped in dict)
                 # Using 'before' parameter for historical data (get candles before this timestamp)
-                candles = self.client.get_candles(
+                candles = self.client.get_history_candles(
                     symbol=symbol,
                     timeframe=timeframe,
                     before=str(before_ts),
