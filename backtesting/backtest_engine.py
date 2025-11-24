@@ -231,12 +231,12 @@ class BacktestEngine:
 
         indicators = {}
 
-        # ATR
-        atr = self.indicators.calculate_atr(highs, lows, closes, period=14)
-        if atr:
+        # ATR - calculate_atr returns single float, calculate_atr_series returns list
+        atr_series = self.indicators.calculate_atr_series(highs, lows, closes, period=14)
+        if atr_series:
             indicators['atr'] = {
-                'atr': atr[-1],
-                'atr_previous': atr[-2] if len(atr) > 1 else atr[-1]
+                'atr': atr_series[-1],
+                'atr_previous': atr_series[-2] if len(atr_series) > 1 else atr_series[-1]
             }
 
         # Trend
