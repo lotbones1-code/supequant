@@ -141,15 +141,17 @@ class HistoricalDataLoader:
             chunk_start = max(start_dt, current_end - chunk_duration)
 
             # Convert to millisecond timestamps (OKX format)
-            after_ts = int(current_end.timestamp() * 1000)
+            # Use 'before' parameter to get candles before (older than) current_end
+            before_ts = int(current_end.timestamp() * 1000)
 
             try:
                 # Fetch candles
                 # Note: get_candles returns data list directly (not wrapped in dict)
+                # Using 'before' parameter for historical data (get candles before this timestamp)
                 candles = self.client.get_candles(
                     symbol=symbol,
                     timeframe=timeframe,
-                    after=str(after_ts),
+                    before=str(before_ts),
                     limit=max_candles_per_request
                 )
 
@@ -173,7 +175,7 @@ class HistoricalDataLoader:
                     # Rate limiting
                     time.sleep(0.1)
                 else:
-                    logger.warning(f"⚠️  No data returned for {symbol} {timeframe} (after={after_ts})")
+                    logger.warning(f"⚠️  No data returned for {symbol} {timeframe} (before={before_ts})")
                     logger.warning(f"   Check: 1) Symbol format correct? 2) API credentials valid? 3) Date range valid?")
                     break
 

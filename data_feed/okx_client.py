@@ -147,7 +147,7 @@ class OKXClient:
     # =====================================
 
     def get_candles(self, symbol: str, timeframe: str, limit: int = 100,
-                    after: Optional[str] = None) -> Optional[List[List]]:
+                    after: Optional[str] = None, before: Optional[str] = None) -> Optional[List[List]]:
         """
         Get candlestick data
 
@@ -155,10 +155,12 @@ class OKXClient:
             symbol: Trading pair (e.g., 'BTC-USDT')
             timeframe: Timeframe (e.g., '1m', '5m', '15m', '1h', '4h')
             limit: Number of candles (max 300)
-            after: Timestamp for pagination
+            after: Pagination - get candles after (older than) this timestamp
+            before: Pagination - get candles before (newer than) this timestamp
 
         Returns:
             List of candles [[timestamp, open, high, low, close, volume, volumeCcy], ...]
+            Note: OKX returns candles in reverse chronological order (newest first)
         """
         endpoint = '/api/v5/market/candles'
         params = {
@@ -169,6 +171,8 @@ class OKXClient:
 
         if after:
             params['after'] = after
+        if before:
+            params['before'] = before
 
         response = self._request('GET', endpoint, params=params)
         if response and response.get('data'):
