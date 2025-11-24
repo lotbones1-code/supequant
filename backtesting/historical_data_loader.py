@@ -37,12 +37,8 @@ class HistoricalDataLoader:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.client = OKXClient(
-            api_key=config.OKX_API_KEY,
-            secret_key=config.OKX_SECRET_KEY,
-            passphrase=config.OKX_PASSPHRASE,
-            simulated=True  # Always use demo for historical data
-        )
+        # OKXClient reads credentials from config.py directly
+        self.client = OKXClient()
 
         self.timeframes = {
             '1m': '1m',
