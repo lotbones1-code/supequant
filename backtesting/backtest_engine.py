@@ -282,14 +282,14 @@ class BacktestEngine:
                 return
 
         # Try breakout strategy
-        breakout_signal = self.breakout_strategy.check_signal(sol_market_state)
+        breakout_signal = self.breakout_strategy.analyze(sol_market_state)
         if breakout_signal:
             self._process_signal(breakout_signal, 'breakout', sol_market_state,
                                btc_market_state, current_time)
             return
 
         # Try pullback strategy
-        pullback_signal = self.pullback_strategy.check_signal(sol_market_state)
+        pullback_signal = self.pullback_strategy.analyze(sol_market_state)
         if pullback_signal:
             self._process_signal(pullback_signal, 'pullback', sol_market_state,
                                btc_market_state, current_time)
