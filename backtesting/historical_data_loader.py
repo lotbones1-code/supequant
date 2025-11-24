@@ -141,20 +141,20 @@ class HistoricalDataLoader:
             chunk_start = max(start_dt, current_end - chunk_duration)
 
             # Convert to millisecond timestamps (OKX format)
-            before_ts = int(current_end.timestamp() * 1000)
+            after_ts = int(current_end.timestamp() * 1000)
 
             try:
                 # Fetch candles
-                response = self.client.get_candles(
+                # Note: get_candles returns data list directly (not wrapped in dict)
+                candles = self.client.get_candles(
                     symbol=symbol,
-                    bar=timeframe,
-                    before=str(before_ts),
-                    limit=str(max_candles_per_request)
+                    timeframe=timeframe,
+                    after=str(after_ts),
+                    limit=max_candles_per_request
                 )
 
-                if response and 'data' in response:
-                    candles = response['data']
-
+                if candles:
+                    logger.debug(f"Fetched {len(candles)} candles for {timeframe}")
                     # Convert OKX format to our format
                     for candle in candles:
                         # OKX format: [timestamp, open, high, low, close, volume, volumeCcy, volumeCcyQuote, confirm]
@@ -173,11 +173,14 @@ class HistoricalDataLoader:
                     # Rate limiting
                     time.sleep(0.1)
                 else:
-                    logger.warning(f"⚠️  No data returned for chunk")
+                    logger.warning(f"⚠️  No data returned for {symbol} {timeframe} (after={after_ts})")
+                    logger.warning(f"   Check: 1) Symbol format correct? 2) API credentials valid? 3) Date range valid?")
                     break
 
             except Exception as e:
-                logger.error(f"❌ Error fetching candles: {e}")
+                logger.error(f"❌ Error fetching candles for {symbol} {timeframe}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 break
 
         # Sort by timestamp (oldest first)
