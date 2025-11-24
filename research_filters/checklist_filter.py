@@ -33,18 +33,18 @@ class TradingChecklistFilter:
         self.name = "TradingChecklist"
         self.config = config
 
-        # Thresholds
-        self.block_threshold = config.get('CHECKLIST_BLOCK_THRESHOLD', 60)
-        self.reduce_threshold = config.get('CHECKLIST_REDUCE_THRESHOLD', 80)
+        # Thresholds - use getattr since config is a module, not a dict
+        self.block_threshold = getattr(config, 'CHECKLIST_BLOCK_THRESHOLD', 60)
+        self.reduce_threshold = getattr(config, 'CHECKLIST_REDUCE_THRESHOLD', 80)
 
         # Component weights (must sum to 1.0)
         self.weights = {
-            'macro_risk': 0.25,      # Geopolitical, liquidity environment
-            'sentiment': 0.20,        # Fear & greed, risk appetite
-            'structure': 0.25,        # Trend quality, market structure
-            'ai_agreement': 0.15,     # Model consensus
-            'flows': 0.10,            # ETF, institutional flows
-            'social': 0.05            # Social sentiment
+            'macro_risk': getattr(config, 'CHECKLIST_MACRO_WEIGHT', 0.25),
+            'sentiment': getattr(config, 'CHECKLIST_SENTIMENT_WEIGHT', 0.20),
+            'structure': getattr(config, 'CHECKLIST_STRUCTURE_WEIGHT', 0.25),
+            'ai_agreement': getattr(config, 'CHECKLIST_AI_WEIGHT', 0.15),
+            'flows': getattr(config, 'CHECKLIST_FLOWS_WEIGHT', 0.10),
+            'social': getattr(config, 'CHECKLIST_SOCIAL_WEIGHT', 0.05)
         }
 
     def check(self, market_state: Dict, macro_state: Optional[Dict] = None,
