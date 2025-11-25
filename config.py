@@ -182,12 +182,51 @@ ENABLE_KILL_SWITCH = True
 KILL_SWITCH_FILE = "KILL_SWITCH.txt"  # Create this file to stop trading
 
 # =====================================
-# BACKTESTING SETTINGS (For Future Use)
+# BACKTESTING SETTINGS
 # =====================================
 BACKTEST_START_DATE = "2024-01-01"
 BACKTEST_END_DATE = "2024-12-31"
 BACKTEST_INITIAL_CAPITAL = 10000
 BACKTEST_COMMISSION = 0.0006  # 0.06% taker fee
+
+# Backtest Mode - Use looser filters to see strategy performance
+BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
+
+# BACKTEST MODE FILTER THRESHOLDS (Looser for historical testing)
+if BACKTEST_MODE:
+    # Market Regime - More permissive
+    ATR_MIN_PERCENTILE = 10  # Lower from 20 - accept calmer markets
+    ATR_MAX_PERCENTILE = 90  # Higher from 80 - accept more volatility
+    FUNDING_RATE_MAX = 0.001  # Higher from 0.0005 - more permissive
+    FUNDING_RATE_MIN = -0.001
+    OI_CHANGE_MAX = 0.25  # Higher from 0.15 - allow more OI changes
+
+    # Trend Requirements - Lighter
+    HTF_TREND_MIN_STRENGTH = 0.4  # Lower from 0.6
+    MTF_TREND_MIN_STRENGTH = 0.3  # Lower from 0.5
+    LTF_TREND_MIN_STRENGTH = 0.2  # Lower from 0.4
+    TIMEFRAME_ALIGNMENT_THRESHOLD = 0.5  # Lower from 0.7
+
+    # AI Rejection - More permissive
+    AI_CONFIDENCE_THRESHOLD = 50  # Lower from 70
+
+    # Pattern Failure - Less strict
+    BULL_TRAP_THRESHOLD = 0.025  # Higher from 0.015 - more tolerance
+    BEAR_TRAP_THRESHOLD = 0.025
+    LOW_LIQUIDITY_VOLUME_RATIO = 0.2  # Lower from 0.3
+    STOP_HUNT_WICK_RATIO = 4.0  # Higher from 3.0
+
+    # BTC-SOL Correlation - More flexible
+    BTC_SOL_MIN_CORRELATION = 0.5  # Lower from 0.7
+    BTC_SOL_DIVERGENCE_MAX = 0.25  # Higher from 0.15
+    BTC_SOL_STRONG_OPPOSITION_THRESHOLD = 0.8  # Higher from 0.7
+
+    # Macro Driver - Lower bar
+    MACRO_DRIVER_MIN_SCORE = 30  # Lower from 40
+
+    # Checklist - More permissive
+    CHECKLIST_BLOCK_THRESHOLD = 40  # Lower from 60
+    CHECKLIST_REDUCE_THRESHOLD = 60  # Lower from 80
 
 # =====================================
 # TELEGRAM ALERTS (For Future Use)
