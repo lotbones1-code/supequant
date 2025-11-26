@@ -155,6 +155,10 @@ class BacktestEngine:
             sol_market_state = self._build_market_state(sol_data, idx, primary_tf)
             btc_market_state = self._build_market_state(btc_data, idx, primary_tf)
 
+            # Skip if we couldn't build market state (data alignment issues)
+            if not sol_market_state or not btc_market_state:
+                continue
+
             # Check if we have an open position
             if self.open_position:
                 self._update_open_position(candle, current_time)
@@ -181,6 +185,11 @@ class BacktestEngine:
 
         This simulates what the live system would see
         """
+        # Bounds check
+        if current_idx >= len(data[primary_tf]):
+            logger.warning(f"Index {current_idx} out of bounds for {primary_tf} (len={len(data[primary_tf])})")
+            return None
+
         market_state = {
             'timeframes': {},
             'timestamp': data[primary_tf][current_idx]['timestamp']
