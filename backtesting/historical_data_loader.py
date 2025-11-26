@@ -154,12 +154,17 @@ class HistoricalDataLoader:
                 # Fetch historical candles using history-candles endpoint
                 # Note: get_history_candles returns data list directly (not wrapped in dict)
                 # Using 'before' parameter for historical data (get candles before this timestamp)
+                logger.debug(f"Requesting: symbol={symbol}, tf={timeframe}, before={before_ts}, limit={max_candles_per_request}")
+                logger.debug(f"Date range: {chunk_start} to {current_end}")
+
                 candles = self.client.get_history_candles(
                     symbol=symbol,
                     timeframe=timeframe,
                     before=str(before_ts),
                     limit=max_candles_per_request
                 )
+
+                logger.debug(f"Response: {candles if candles is None else f'{len(candles)} candles'}")
 
                 if candles:
                     logger.debug(f"Fetched {len(candles)} candles for {timeframe}")

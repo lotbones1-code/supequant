@@ -159,7 +159,7 @@ FEATURES_MARKET_DATA = True  # Funding, OI, liquidations
 # =====================================
 # LOGGING & MONITORING
 # =====================================
-LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL = "DEBUG"  # DEBUG, INFO, WARNING, ERROR
 LOG_FILE = "logs/trading.log"
 LOG_TRADES_FILE = "logs/trades.log"
 LOG_FILTERS_FILE = "logs/filters.log"
