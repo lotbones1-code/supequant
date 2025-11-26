@@ -136,6 +136,7 @@ class HistoricalDataLoader:
         max_candles_per_request = 100
         chunk_duration = timedelta(minutes=candle_minutes * max_candles_per_request)
 
+        request_count = 0
         while current_end > start_dt:
             # Calculate chunk start (work backwards)
             chunk_start = max(start_dt, current_end - chunk_duration)
@@ -143,6 +144,11 @@ class HistoricalDataLoader:
             # Convert to millisecond timestamps (OKX format)
             # Use 'before' parameter to get candles before (older than) current_end
             before_ts = int(current_end.timestamp() * 1000)
+
+            # Progress logging every 10 requests
+            request_count += 1
+            if request_count % 10 == 0:
+                logger.info(f"      Fetching chunk {request_count}... (current: {chunk_start.strftime('%Y-%m-%d')})")
 
             try:
                 # Fetch historical candles using history-candles endpoint
