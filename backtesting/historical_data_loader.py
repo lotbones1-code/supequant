@@ -199,13 +199,24 @@ class HistoricalDataLoader:
         # Sort by timestamp (oldest first)
         all_candles.sort(key=lambda x: x['timestamp'])
 
+        logger.info(f"   Downloaded {len(all_candles)} total candles for {symbol} {timeframe}")
+        if all_candles:
+            first_ts = datetime.fromtimestamp(all_candles[0]['timestamp'] / 1000)
+            last_ts = datetime.fromtimestamp(all_candles[-1]['timestamp'] / 1000)
+            logger.info(f"   Data range: {first_ts} to {last_ts}")
+
         # Filter to exact date range
         start_ts = int(start_dt.timestamp() * 1000)
         end_ts = int(end_dt.timestamp() * 1000)
+        logger.info(f"   Requested range: {start_dt} to {end_dt}")
+        logger.info(f"   Requested timestamps: {start_ts} to {end_ts}")
+
         filtered_candles = [
             c for c in all_candles
             if start_ts <= c['timestamp'] <= end_ts
         ]
+
+        logger.info(f"   After filtering: {len(filtered_candles)} candles")
 
         return filtered_candles
 
