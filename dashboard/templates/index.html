@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SupeQuant Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); min-height: 100vh; }
+        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .glow-green { box-shadow: 0 0 20px rgba(34,197,94,0.3); }
+        .glow-red { box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="text-white p-4 md:p-8" x-data="dashboard()" x-init="init()">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+                SupeQuant Dashboard
+            </h1>
+            <p class="text-gray-400 text-sm">SOL-USDT Perpetual Trading Bot</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+                <div :class="status === 'running' ? 'bg-green-500 pulse' : 'bg-red-500'" class="w-3 h-3 rounded-full"></div>
+                <span class="text-sm" x-text="status === 'running' ? 'LIVE' : 'STOPPED'"></span>
+            </div>
+            <div class="text-gray-400 text-sm" x-text="lastUpdate"></div>
+        </div>
+    </div>
+
+    <!-- Price Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="glass rounded-xl p-4">
+            <div class="text-gray-400 text-sm">SOL Price</div>
+            <div class="text-2xl font-bold text-white" x-text="'$' + solPrice.toFixed(2)"></div>
+        </div>
+        <div class="glass rounded-xl p-4">
+            <div class="text-gray-400 text-sm">BTC Price</div>
+            <div class="text-2xl font-bold text-white" x-text="'$' + btcPrice.toLocaleString()"></div>
+        </div>
+        <div class="glass rounded-xl p-4">
+            <div class="text-gray-400 text-sm">Market Regime</div>
+            <div class="text-xl font-bold" :class="regime === 'bullish' ? 'text-green-400' : regime === 'bearish' ? 'text-red-400' : 'text-yellow-400'" x-text="regime.toUpperCase()"></div>
+        </div>
+        <div class="glass rounded-xl p-4">
+            <div class="text-gray-400 text-sm">Win Rate</div>
+            <div class="text-2xl font-bold" :class="winRate >= 50 ? 'text-green-400' : 'text-red-400'" x-text="winRate.toFixed(1) + '%'"></div>
+        </div>
+    </div>
+
+    <!-- Balance Section -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div class="glass rounded-xl p-6" :class="dailyPnl >= 0 ? 'glow-green' : 'glow-red'">
+            <div class="text-gray-400 text-sm mb-2">Account Balance</div>
+            <div class="text-4xl font-bold mb-4" x-text="'$' + balance.toFixed(2)"></div>
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-400">Equity</span>
+                <span x-text="'$' + equity.toFixed(2)"></span>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-400">Unrealized PnL</span>
+                <span :class="unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400'" x-text="(unrealizedPnl >= 0 ? '+$' : '-$') + Math.abs(unrealizedPnl).toFixed(2)"></span>
+            </div>
+        </div>
+        
+        <div class="glass rounded-xl p-6">
+            <div class="text-gray-400 text-sm mb-2">Today's PnL</div>
+            <div class="text-4xl font-bold mb-4" :class="dailyPnl >= 0 ? 'text-green-400' : 'text-red-400'" x-text="(dailyPnl >= 0 ? '+$' : '-$') + Math.abs(dailyPnl).toFixed(2)"></div>
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-400">Percentage</span>
+                <span :class="dailyPnlPct >= 0 ? 'text-green-400' : 'text-red-400'" x-text="(dailyPnlPct >= 0 ? '+' : '') + dailyPnlPct.toFixed(2) + '%'"></span>
+            </div>
+        </div>
+        
+        <div class="glass rounded-xl p-6">
+            <div class="text-gray-400 text-sm mb-2">Trade Stats</div>
+            <div class="text-4xl font-bold mb-4" x-text="totalTrades"></div>
+            <div class="flex justify-between text-sm">
+                <span class="text-green-400" x-text="'W: ' + winningTrades"></span>
+                <span class="text-red-400" x-text="'L: ' + losingTrades"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Open Positions -->
+    <div class="glass rounded-xl p-6 mb-8">
+        <h2 class="text-xl font-bold mb-4">Open Positions</h2>
+        <template x-if="positions.length === 0">
+            <div class="text-gray-400 text-center py-8">No open positions</div>
+        </template>
+        <template x-if="positions.length > 0">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-gray-400 text-sm border-b border-gray-700">
+                            <th class="text-left py-2">Symbol</th>
+                            <th class="text-left py-2">Side</th>
+                            <th class="text-right py-2">Size</th>
+                            <th class="text-right py-2">Entry</th>
+                            <th class="text-right py-2">Current</th>
+                            <th class="text-right py-2">PnL</th>
+                            <th class="text-right py-2">PnL %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="pos in positions" :key="pos.symbol">
+                            <tr class="border-b border-gray-800">
+                                <td class="py-3 font-medium" x-text="pos.symbol"></td>
+                                <td :class="pos.side === 'long' ? 'text-green-400' : 'text-red-400'" x-text="pos.side.toUpperCase()"></td>
+                                <td class="text-right" x-text="pos.size"></td>
+                                <td class="text-right" x-text="'$' + pos.entry_price.toFixed(2)"></td>
+                                <td class="text-right" x-text="'$' + pos.current_price.toFixed(2)"></td>
+                                <td class="text-right" :class="pos.pnl >= 0 ? 'text-green-400' : 'text-red-400'" x-text="(pos.pnl >= 0 ? '+$' : '-$') + Math.abs(pos.pnl).toFixed(2)"></td>
+                                <td class="text-right" :class="pos.pnl_pct >= 0 ? 'text-green-400' : 'text-red-400'" x-text="(pos.pnl_pct >= 0 ? '+' : '') + pos.pnl_pct.toFixed(2) + '%'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+    </div>
+
+    <!-- Recent Trades -->
+    <div class="glass rounded-xl p-6 mb-8">
+        <h2 class="text-xl font-bold mb-4">Recent Trades</h2>
+        <template x-if="trades.length === 0">
+            <div class="text-gray-400 text-center py-8">No trades yet</div>
+        </template>
+        <template x-if="trades.length > 0">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-gray-400 text-sm border-b border-gray-700">
+                            <th class="text-left py-2">Time</th>
+                            <th class="text-left py-2">Symbol</th>
+                            <th class="text-left py-2">Side</th>
+                            <th class="text-right py-2">Entry</th>
+                            <th class="text-right py-2">Exit</th>
+                            <th class="text-right py-2">PnL</th>
+                            <th class="text-left py-2">Strategy</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="trade in trades.slice(-20).reverse()" :key="trade.timestamp">
+                            <tr class="border-b border-gray-800">
+                                <td class="py-3 text-gray-400 text-sm" x-text="formatTime(trade.timestamp)"></td>
+                                <td class="font-medium" x-text="trade.symbol"></td>
+                                <td :class="trade.side === 'long' ? 'text-green-400' : 'text-red-400'" x-text="trade.side.toUpperCase()"></td>
+                                <td class="text-right" x-text="'$' + (trade.entry_price || 0).toFixed(2)"></td>
+                                <td class="text-right" x-text="'$' + (trade.exit_price || 0).toFixed(2)"></td>
+                                <td class="text-right" :class="trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'" x-text="(trade.pnl >= 0 ? '+$' : '-$') + Math.abs(trade.pnl || 0).toFixed(2)"></td>
+                                <td class="text-gray-400" x-text="trade.strategy || '-'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+    </div>
+
+    <!-- Recent Signals -->
+    <div class="glass rounded-xl p-6">
+        <h2 class="text-xl font-bold mb-4">Recent Signals</h2>
+        <div class="space-y-2 max-h-64 overflow-y-auto">
+            <template x-if="signals.length === 0">
+                <div class="text-gray-400 text-center py-4">Waiting for signals...</div>
+            </template>
+            <template x-for="signal in signals.slice(-20).reverse()" :key="signal.timestamp">
+                <div class="flex justify-between items-center p-3 rounded-lg" :class="signal.type === 'entry' ? 'bg-green-900/30' : signal.type === 'exit' ? 'bg-red-900/30' : 'bg-gray-800/50'">
+                    <div>
+                        <span class="font-medium" :class="signal.direction === 'long' ? 'text-green-400' : signal.direction === 'short' ? 'text-red-400' : 'text-gray-300'" x-text="(signal.direction || signal.type || '').toUpperCase()"></span>
+                        <span class="text-gray-400 ml-2" x-text="signal.reason || signal.strategy || ''"></span>
+                    </div>
+                    <div class="text-gray-500 text-sm" x-text="formatTime(signal.timestamp)"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                status: 'stopped',
+                lastUpdate: 'Never',
+                balance: 0,
+                equity: 0,
+                unrealizedPnl: 0,
+                dailyPnl: 0,
+                dailyPnlPct: 0,
+                solPrice: 0,
+                btcPrice: 0,
+                regime: 'unknown',
+                winRate: 0,
+                totalTrades: 0,
+                winningTrades: 0,
+                losingTrades: 0,
+                positions: [],
+                trades: [],
+                signals: [],
+                
+                init() {
+                    this.fetchData();
+                    setInterval(() => this.fetchData(), 5000);  // Update every 5 seconds
+                },
+                
+                async fetchData() {
+                    try {
+                        const response = await fetch('/api/all');
+                        const data = await response.json();
+                        
+                        this.status = data.bot_status || 'stopped';
+                        this.lastUpdate = data.last_update ? this.formatTime(data.last_update) : 'Never';
+                        this.balance = data.balance || 0;
+                        this.equity = data.equity || 0;
+                        this.unrealizedPnl = data.unrealized_pnl || 0;
+                        this.dailyPnl = data.daily_pnl || 0;
+                        this.dailyPnlPct = data.daily_pnl_pct || 0;
+                        this.solPrice = data.current_price || 0;
+                        this.btcPrice = data.btc_price || 0;
+                        this.regime = data.market_regime || 'unknown';
+                        this.winRate = data.win_rate || 0;
+                        this.totalTrades = data.total_trades || 0;
+                        this.winningTrades = data.winning_trades || 0;
+                        this.losingTrades = data.losing_trades || 0;
+                        this.positions = data.open_positions || [];
+                        this.trades = data.recent_trades || [];
+                        this.signals = data.signals || [];
+                    } catch (e) {
+                        console.error('Failed to fetch data:', e);
+                    }
+                },
+                
+                formatTime(isoString) {
+                    if (!isoString) return '';
+                    const date = new Date(isoString);
+                    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
