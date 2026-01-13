@@ -2,12 +2,16 @@
 OKX API Client
 Handles all direct interactions with OKX exchange API
 Includes rate limiting, retries, and error handling
+
+DRY_RUN MODE: When enabled, skips all authenticated endpoints
+and uses simulated data for paper trading without API keys.
 """
 
 import time
 import hmac
 import base64
 import json
+import os
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 import requests
@@ -19,10 +23,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Check for DRY_RUN mode
+DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
+
 
 class OKXClient:
     """
     OKX Exchange API Client with built-in rate limiting and retry logic
+    
+    DRY_RUN mode: Skips all authenticated API calls and returns simulated data
     """
 
     def __init__(self):
@@ -30,23 +39,30 @@ class OKXClient:
         self.secret_key = OKX_SECRET_KEY
         self.passphrase = OKX_PASSPHRASE
         self.simulated = OKX_SIMULATED
+        self.dry_run = DRY_RUN
 
         # API endpoints
-        if self.simulated:
-            self.base_url = "https://www.okx.com"
+        self.base_url = "https://www.okx.com"
+        
+        if self.dry_run:
+            logger.info("🧪 OKX Client initialized in DRY RUN mode (no API auth)")
+            logger.info("   📊 Public market data: ENABLED")
+            logger.info("   💰 Account/Trading: SIMULATED LOCALLY")
+        elif self.simulated:
             logger.info("🟡 OKX Client initialized in SIMULATED mode")
         else:
-            self.base_url = "https://www.okx.com"
             logger.info("🔴 OKX Client initialized in LIVE mode")
 
         self.last_request_time = 0
         self.request_count = 0
         self.error_count = 0
+        
+        # Simulated account for dry run
+        self._dry_run_balance = 10000.0
+        self._dry_run_positions = []
 
     def _generate_signature(self, timestamp: str, method: str, request_path: str, body: str = '') -> str:
-        """
-        Generate signature for authenticated requests
-        """
+        """Generate signature for authenticated requests"""
         message = timestamp + method + request_path + body
         mac = hmac.new(
             bytes(self.secret_key, encoding='utf8'),
@@ -56,9 +72,7 @@ class OKXClient:
         return base64.b64encode(mac.digest()).decode()
 
     def _get_headers(self, method: str, request_path: str, body: str = '') -> Dict[str, str]:
-        """
-        Generate headers for API request
-        """
+        """Generate headers for API request"""
         timestamp = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
         signature = self._generate_signature(timestamp, method, request_path, body)
 
@@ -76,9 +90,7 @@ class OKXClient:
         return headers
 
     def _rate_limit(self):
-        """
-        Implement rate limiting to avoid API throttling
-        """
+        """Implement rate limiting to avoid API throttling"""
         elapsed = (time.time() * 1000) - self.last_request_time
         if elapsed < API_RATE_LIMIT_MS:
             time.sleep((API_RATE_LIMIT_MS - elapsed) / 1000)
@@ -86,9 +98,13 @@ class OKXClient:
 
     def _request(self, method: str, endpoint: str, params: Optional[Dict] = None,
                  body: Optional[Dict] = None, authenticated: bool = False) -> Optional[Dict]:
-        """
-        Make HTTP request to OKX API with retry logic
-        """
+        """Make HTTP request to OKX API with retry logic"""
+        
+        # DRY RUN: Skip authenticated requests entirely
+        if self.dry_run and authenticated:
+            logger.debug(f"🧪 DRY RUN: Skipping authenticated request to {endpoint}")
+            return None
+            
         self._rate_limit()
 
         url = self.base_url + endpoint
@@ -108,40 +124,28 @@ class OKXClient:
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
-                # Try to parse response even if status code is error
+                # Try to parse response
                 try:
                     data = response.json()
                 except:
                     data = None
 
-                # Log detailed error info for debugging
                 if response.status_code != 200:
                     logger.error(f"❌ HTTP {response.status_code} from {endpoint}")
                     if data:
                         logger.error(f"   OKX Error: {data}")
-                    else:
-                        logger.error(f"   Response body: {response.text[:500]}")
 
                 response.raise_for_status()
 
-
-                # Check OKX specific error codes
                 if data.get('code') != '0':
                     error_msg = data.get('msg', 'Unknown error')
                     error_code = data.get('code', 'unknown')
                     logger.error(f"❌ OKX API Error [{error_code}]: {error_msg}")
-                    logger.error(f"   Endpoint: {endpoint}")
-                    logger.error(f"   Params: {params}")
-                    logger.error(f"   Response: {data}")
                     self.error_count += 1
                     return None
 
                 self.request_count += 1
-                self.error_count = 0  # Reset error count on success
-
-                # Log successful responses for debugging
-                logger.debug(f"✅ OKX API Success: {endpoint} (code: {data.get('code')})")
-
+                self.error_count = 0
                 return data
 
             except requests.exceptions.RequestException as e:
@@ -157,25 +161,12 @@ class OKXClient:
         return None
 
     # =====================================
-    # PUBLIC MARKET DATA ENDPOINTS
+    # PUBLIC MARKET DATA ENDPOINTS (work in DRY_RUN)
     # =====================================
 
     def get_candles(self, symbol: str, timeframe: str, limit: int = 100,
                     after: Optional[str] = None, before: Optional[str] = None) -> Optional[List[List]]:
-        """
-        Get candlestick data
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC-USDT')
-            timeframe: Timeframe (e.g., '1m', '5m', '15m', '1h', '4h')
-            limit: Number of candles (max 300)
-            after: Pagination - get candles after (older than) this timestamp
-            before: Pagination - get candles before (newer than) this timestamp
-
-        Returns:
-            List of candles [[timestamp, open, high, low, close, volume, volumeCcy], ...]
-            Note: OKX returns candles in reverse chronological order (newest first)
-        """
+        """Get candlestick data - PUBLIC endpoint, works in DRY_RUN"""
         endpoint = '/api/v5/market/candles'
         params = {
             'instId': symbol,
@@ -188,39 +179,19 @@ class OKXClient:
         if before:
             params['before'] = before
 
-        # Try authenticated request if using pagination parameters
-        # Some OKX endpoints require auth even though they're "public"
-        use_auth = bool(after or before)
-
-        response = self._request('GET', endpoint, params=params, authenticated=use_auth)
+        response = self._request('GET', endpoint, params=params, authenticated=False)
         if response and response.get('data'):
             return response['data']
         return None
 
     def get_history_candles(self, symbol: str, timeframe: str, limit: int = 100,
                            after: Optional[str] = None, before: Optional[str] = None) -> Optional[List[List]]:
-        """
-        Get historical candlestick data (for backtesting)
-
-        This endpoint provides access to years of historical data, unlike get_candles()
-        which only returns recent candles.
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC-USDT')
-            timeframe: Timeframe (e.g., '1m', '5m', '15m', '1H', '4H')
-            limit: Number of candles (max 100 for history endpoint vs 300 for live)
-            after: Pagination - get candles after (older than) this timestamp
-            before: Pagination - get candles before (newer than) this timestamp
-
-        Returns:
-            List of candles [[timestamp, open, high, low, close, volume, volumeCcy], ...]
-            Note: OKX returns candles in reverse chronological order (newest first)
-        """
+        """Get historical candlestick data - PUBLIC endpoint"""
         endpoint = '/api/v5/market/history-candles'
         params = {
             'instId': symbol,
             'bar': timeframe,
-            'limit': min(limit, 100)  # History endpoint max is 100
+            'limit': min(limit, 100)
         }
 
         if after:
@@ -234,9 +205,7 @@ class OKXClient:
         return None
 
     def get_ticker(self, symbol: str) -> Optional[Dict]:
-        """
-        Get ticker price for symbol
-        """
+        """Get ticker price - PUBLIC endpoint, works in DRY_RUN"""
         endpoint = '/api/v5/market/ticker'
         params = {'instId': symbol}
 
@@ -246,9 +215,7 @@ class OKXClient:
         return None
 
     def get_funding_rate(self, symbol: str) -> Optional[Dict]:
-        """
-        Get current funding rate for perpetual contracts
-        """
+        """Get funding rate - PUBLIC endpoint"""
         endpoint = '/api/v5/public/funding-rate'
         params = {'instId': symbol}
 
@@ -258,9 +225,7 @@ class OKXClient:
         return None
 
     def get_open_interest(self, symbol: str) -> Optional[Dict]:
-        """
-        Get open interest data
-        """
+        """Get open interest - PUBLIC endpoint"""
         endpoint = '/api/v5/public/open-interest'
         params = {'instId': symbol}
 
@@ -269,30 +234,8 @@ class OKXClient:
             return response['data'][0] if response['data'] else None
         return None
 
-    def get_liquidation_orders(self, symbol: str, uly: Optional[str] = None,
-                              state: str = 'filled', limit: int = 100) -> Optional[List[Dict]]:
-        """
-        Get liquidation orders (for heatmap data)
-        """
-        endpoint = '/api/v5/public/liquidation-orders'
-        params = {
-            'instId': symbol,
-            'state': state,
-            'limit': min(limit, 100)
-        }
-
-        if uly:
-            params['uly'] = uly
-
-        response = self._request('GET', endpoint, params=params)
-        if response and response.get('data'):
-            return response['data']
-        return None
-
     def get_orderbook(self, symbol: str, depth: int = 20) -> Optional[Dict]:
-        """
-        Get orderbook depth
-        """
+        """Get orderbook - PUBLIC endpoint"""
         endpoint = '/api/v5/market/books'
         params = {
             'instId': symbol,
@@ -305,13 +248,21 @@ class OKXClient:
         return None
 
     # =====================================
-    # AUTHENTICATED TRADING ENDPOINTS
+    # AUTHENTICATED ENDPOINTS (simulated in DRY_RUN)
     # =====================================
 
     def get_account_balance(self) -> Optional[List[Dict]]:
-        """
-        Get account balance
-        """
+        """Get account balance - SIMULATED in DRY_RUN mode"""
+        if self.dry_run:
+            logger.info(f"🧪 DRY RUN: Returning simulated balance ${self._dry_run_balance:.2f}")
+            return [{
+                'details': [{
+                    'ccy': 'USDT',
+                    'availEq': str(self._dry_run_balance),
+                    'eq': str(self._dry_run_balance)
+                }]
+            }]
+            
         endpoint = '/api/v5/account/balance'
         response = self._request('GET', endpoint, authenticated=True)
         if response and response.get('data'):
@@ -319,9 +270,11 @@ class OKXClient:
         return None
 
     def get_positions(self, symbol: Optional[str] = None) -> Optional[List[Dict]]:
-        """
-        Get open positions
-        """
+        """Get positions - SIMULATED in DRY_RUN mode"""
+        if self.dry_run:
+            logger.debug(f"🧪 DRY RUN: Returning {len(self._dry_run_positions)} simulated positions")
+            return self._dry_run_positions
+            
         endpoint = '/api/v5/account/positions'
         params = {}
         if symbol:
@@ -334,21 +287,31 @@ class OKXClient:
 
     def place_order(self, symbol: str, side: str, order_type: str, size: str,
                    price: Optional[str] = None, **kwargs) -> Optional[Dict]:
-        """
-        Place an order
-
-        Args:
-            symbol: Trading pair
-            side: 'buy' or 'sell'
-            order_type: 'market', 'limit', 'post_only', etc.
-            size: Order size
-            price: Limit price (for limit orders)
-            **kwargs: Additional order parameters
-        """
+        """Place order - SIMULATED in DRY_RUN mode"""
+        if self.dry_run:
+            order_id = f"DRY-{int(time.time()*1000)}"
+            logger.info(f"🧪 DRY RUN: Simulated {side.upper()} order placed")
+            logger.info(f"   Symbol: {symbol}")
+            logger.info(f"   Size: {size}")
+            logger.info(f"   Type: {order_type}")
+            logger.info(f"   Order ID: {order_id}")
+            
+            # Update simulated balance
+            if price:
+                notional = float(size) * float(price)
+                # Just track it, don't deduct (we'll track PnL separately)
+            
+            return {
+                'ordId': order_id,
+                'clOrdId': '',
+                'sCode': '0',
+                'sMsg': 'DRY RUN - Order simulated'
+            }
+            
         endpoint = '/api/v5/trade/order'
         body = {
             'instId': symbol,
-            'tdMode': kwargs.get('tdMode', 'cross'),  # cross or isolated
+            'tdMode': kwargs.get('tdMode', 'cross'),
             'side': side,
             'ordType': order_type,
             'sz': size,
@@ -357,7 +320,6 @@ class OKXClient:
         if price:
             body['px'] = price
 
-        # Add optional parameters
         if 'reduce_only' in kwargs:
             body['reduceOnly'] = kwargs['reduce_only']
         if 'stop_loss' in kwargs:
@@ -371,9 +333,11 @@ class OKXClient:
         return None
 
     def cancel_order(self, symbol: str, order_id: str) -> Optional[Dict]:
-        """
-        Cancel an order
-        """
+        """Cancel order - SIMULATED in DRY_RUN mode"""
+        if self.dry_run:
+            logger.info(f"🧪 DRY RUN: Simulated cancel for order {order_id}")
+            return {'ordId': order_id, 'sCode': '0', 'sMsg': 'DRY RUN - Order cancelled'}
+            
         endpoint = '/api/v5/trade/cancel-order'
         body = {
             'instId': symbol,
@@ -386,9 +350,15 @@ class OKXClient:
         return None
 
     def get_order(self, symbol: str, order_id: str) -> Optional[Dict]:
-        """
-        Get order details
-        """
+        """Get order details - SIMULATED in DRY_RUN mode"""
+        if self.dry_run:
+            return {
+                'ordId': order_id,
+                'state': 'filled',
+                'fillSz': '1',
+                'avgPx': '100'
+            }
+            
         endpoint = '/api/v5/trade/order'
         params = {
             'instId': symbol,
@@ -401,16 +371,35 @@ class OKXClient:
         return None
 
     # =====================================
+    # DRY RUN HELPERS
+    # =====================================
+    
+    def update_dry_run_balance(self, pnl: float):
+        """Update simulated balance (for DRY_RUN mode)"""
+        if self.dry_run:
+            self._dry_run_balance += pnl
+            logger.info(f"🧪 DRY RUN: Balance updated to ${self._dry_run_balance:.2f} (PnL: ${pnl:+.2f})")
+
+    def add_dry_run_position(self, position: Dict):
+        """Add simulated position (for DRY_RUN mode)"""
+        if self.dry_run:
+            self._dry_run_positions.append(position)
+            
+    def remove_dry_run_position(self, position_id: str):
+        """Remove simulated position (for DRY_RUN mode)"""
+        if self.dry_run:
+            self._dry_run_positions = [p for p in self._dry_run_positions if p.get('posId') != position_id]
+
+    # =====================================
     # UTILITY METHODS
     # =====================================
 
     def get_health_status(self) -> Dict[str, Any]:
-        """
-        Get client health metrics
-        """
+        """Get client health metrics"""
         return {
             'request_count': self.request_count,
             'error_count': self.error_count,
             'error_rate': self.error_count / max(self.request_count, 1),
-            'simulated_mode': self.simulated
+            'simulated_mode': self.simulated,
+            'dry_run_mode': self.dry_run
         }
