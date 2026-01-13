@@ -1,64 +1,74 @@
 """
-SupeQuant Elite Trading System - Main Entry Point
-SOL-USDT Perpetual Trading with Heavy Filtering
+Elite Quant Trading System - Main Entry Point
+Orchestrates all components for automated crypto trading
+
+Architecture:
+1. Data Feed - Fetches market data from OKX
+2. Filters - Heavy filtering to reject bad trades
+3. Strategy - Generates trading signals
+4. Risk - Validates risk parameters
+5. Execution - Places and manages orders
+6. Model Learning - Trains AI rejection model
+
+Trading Philosophy:
+- Quality over quantity (3-5 trades/day max)
+- Heavy filtering > high volume
+- Only trade when ALL conditions are perfect
+- Strict risk management always enforced
 """
 
-import asyncio
+import time
 import signal
 import sys
-import logging
 import threading
-from datetime import datetime, timedelta
-from typing import Optional
-import os
+from datetime import datetime
+from typing import Optional, Dict
+import logging
 
-# Local imports
-import config
-from data_feed.okx_client import OKXClient
-from strategy.strategy_engine import StrategyEngine
-from filters.filter_manager import FilterManager
-from risk.risk_manager import RiskManager
-from execution.order_manager import OrderManager
+# Import modules
 from utils.logger import setup_logging
+from data_feed import OKXClient, MarketDataFeed
+from filters import FilterManager
+from strategy import StrategyManager
+from risk import RiskManager
+from execution import OrderManager, PositionTracker
+from model_learning import DataCollector
 
-# Dashboard imports
-from dashboard.app import (
-    create_app, 
-    update_balance, 
-    update_positions,
-    add_trade, 
-    add_signal, 
-    set_bot_status,
-    update_prices,
-    set_market_regime,
-    update_filter_stats,
-    add_error
-)
+import config
 
-# Setup logging
-logger = setup_logging("main")
+# Setup logging first
+setup_logging()
+logger = logging.getLogger(__name__)
 
-# Global shutdown flag
-shutdown_flag = False
-dashboard_app = None
-
-
-def signal_handler(signum, frame):
-    """Handle shutdown signals gracefully"""
-    global shutdown_flag
-    logger.info("\n\u26a0\ufe0f  Interrupt signal received")
-    shutdown_flag = True
-    set_bot_status('stopped')
+# Dashboard imports (optional - won't crash if missing)
+try:
+    from dashboard.app import (
+        create_app,
+        update_balance,
+        update_positions,
+        add_trade,
+        add_signal,
+        set_bot_status,
+        update_prices,
+        set_market_regime,
+        update_filter_stats,
+        add_error,
+        update_daily_pnl
+    )
+    DASHBOARD_AVAILABLE = True
+except ImportError:
+    DASHBOARD_AVAILABLE = False
+    logger.warning("Dashboard not available - install flask to enable")
 
 
 def run_dashboard():
     """Run dashboard in separate thread"""
-    global dashboard_app
+    if not DASHBOARD_AVAILABLE:
+        return
     try:
-        dashboard_app = create_app()
-        logger.info(f"\U0001f4ca Dashboard starting on http://localhost:{config.DASHBOARD_PORT}")
-        # Run without reloader in thread
-        dashboard_app.run(
+        app = create_app()
+        logger.info(f"📊 Dashboard running on http://localhost:{config.DASHBOARD_PORT}")
+        app.run(
             host=config.DASHBOARD_HOST,
             port=config.DASHBOARD_PORT,
             debug=False,
@@ -69,267 +79,440 @@ def run_dashboard():
         logger.error(f"Dashboard error: {e}")
 
 
-class TradingBot:
-    """Main trading bot orchestrator"""
-    
+class EliteQuantSystem:
+    """
+    Main trading system coordinator
+    Runs the full trading loop with all safety checks
+    """
+
     def __init__(self):
-        self.okx_client: Optional[OKXClient] = None
-        self.strategy_engine: Optional[StrategyEngine] = None
-        self.filter_manager: Optional[FilterManager] = None
-        self.risk_manager: Optional[RiskManager] = None
-        self.order_manager: Optional[OrderManager] = None
-        
-        self.last_trade_time = None
-        self.daily_trades = 0
-        self.daily_pnl = 0.0
-        self.start_balance = 0.0
-        self.last_day_check = datetime.now().date()
-        
-    async def initialize(self):
-        """Initialize all components"""
-        logger.info("\U0001f680 Initializing SupeQuant Trading System...")
-        
-        # Initialize OKX client
-        self.okx_client = OKXClient(
-            api_key=config.OKX_API_KEY,
-            secret_key=config.OKX_SECRET_KEY,
-            passphrase=config.OKX_PASSPHRASE,
-            simulated=config.OKX_SIMULATED
-        )
-        
-        # Test connection
-        if not await self.okx_client.test_connection():
-            raise Exception("Failed to connect to OKX API")
-        
-        logger.info(f"\u2705 Connected to OKX ({'DEMO' if config.OKX_SIMULATED else 'LIVE'} mode)")
-        
-        # Initialize components
-        self.strategy_engine = StrategyEngine(self.okx_client)
-        self.filter_manager = FilterManager(self.okx_client)
+        logger.info("🚀 Initializing Elite Quant System")
+
+        # Initialize all components
+        self.okx_client = OKXClient()
+        self.market_data = MarketDataFeed(self.okx_client)
+        self.filter_manager = FilterManager()
+        self.strategy_manager = StrategyManager()
         self.risk_manager = RiskManager(self.okx_client)
         self.order_manager = OrderManager(self.okx_client)
+        self.position_tracker = PositionTracker(self.okx_client)
+        self.data_collector = DataCollector()
+
+        # State
+        self.running = False
+        self.cycle_count = 0
+        self.last_trade_time = None
+
+        # Timeframes to analyze
+        self.timeframes = [
+            config.MICRO_TIMEFRAME,
+            config.LTF_TIMEFRAME,
+            config.MTF_TIMEFRAME,
+            config.HTF_TIMEFRAME
+        ]
+
+        logger.info("✅ All components initialized")
+
+    def run(self):
+        """
+        Main trading loop
+        """
+        self.running = True
         
-        # Get initial balance
-        balance_info = await self.okx_client.get_account_balance()
-        if balance_info:
-            self.start_balance = float(balance_info.get('totalEq', 0))
-            update_balance(
-                float(balance_info.get('totalEq', 0)),
-                float(balance_info.get('totalEq', 0))
-            )
-            logger.info(f"\U0001f4b0 Account Balance: ${self.start_balance:.2f}")
-        
-        logger.info("\u2705 All components initialized")
-        set_bot_status('running')
-        
-    async def run_trading_loop(self):
-        """Main trading loop"""
-        logger.info("\n\U0001f3af Starting trading loop...")
-        logger.info(f"   Symbol: {config.TRADING_SYMBOL}")
-        logger.info(f"   Mode: {'DEMO' if config.OKX_SIMULATED else 'LIVE'}")
-        logger.info(f"   Max Daily Trades: {config.MAX_DAILY_TRADES}")
-        logger.info(f"   Dashboard: http://localhost:{config.DASHBOARD_PORT}\n")
-        
-        while not shutdown_flag:
-            try:
-                await self.trading_cycle()
-                
+        if DASHBOARD_AVAILABLE:
+            set_bot_status('running')
+
+        logger.info("\n" + "="*60)
+        logger.info("🎯 ELITE QUANT SYSTEM STARTED")
+        logger.info(f"Symbol: {config.TRADING_SYMBOL}")
+        logger.info(f"Mode: {'SIMULATED' if config.OKX_SIMULATED else 'LIVE'}")
+        logger.info(f"Max Daily Trades: {config.MAX_DAILY_TRADES}")
+        logger.info(f"Risk Per Trade: {config.MAX_RISK_PER_TRADE*100}%")
+        if DASHBOARD_AVAILABLE:
+            logger.info(f"Dashboard: http://localhost:{config.DASHBOARD_PORT}")
+        logger.info("="*60 + "\n")
+
+        try:
+            while self.running:
+                self.cycle_count += 1
+                logger.info(f"\n{'─'*60}")
+                logger.info(f"CYCLE #{self.cycle_count} - {datetime.now()}")
+                logger.info(f"{'─'*60}")
+
+                # Run one trading cycle
+                self._run_trading_cycle()
+
                 # Wait before next cycle
-                for _ in range(60):  # 60 second cycles
-                    if shutdown_flag:
-                        break
-                    await asyncio.sleep(1)
-                    
-            except Exception as e:
-                logger.error(f"Error in trading cycle: {e}")
+                time.sleep(60)  # Check every minute
+
+        except KeyboardInterrupt:
+            logger.info("\n⚠️  Keyboard interrupt received")
+            self.shutdown()
+        except Exception as e:
+            logger.error(f"❌ Unexpected error in main loop: {e}", exc_info=True)
+            if DASHBOARD_AVAILABLE:
                 add_error(str(e))
-                await asyncio.sleep(30)
-                
-    async def trading_cycle(self):
-        """Single trading cycle"""
-        # Check if new day - reset daily counters
-        today = datetime.now().date()
-        if today != self.last_day_check:
-            self.daily_trades = 0
-            self.daily_pnl = 0.0
-            self.last_day_check = today
-            logger.info("\U0001f305 New trading day started")
-        
-        # Get current market data
-        sol_data = await self.okx_client.get_candles(
-            config.TRADING_SYMBOL,
-            config.LTF_TIMEFRAME,
-            limit=config.LTF_LOOKBACK
-        )
-        
-        if not sol_data:
-            logger.warning("\u26a0\ufe0f  Failed to fetch market data")
-            return
-        
-        # Update dashboard with current price
-        current_price = float(sol_data[-1][4])  # Close price
-        btc_data = await self.okx_client.get_candles(
-            config.REFERENCE_SYMBOL,
-            config.LTF_TIMEFRAME,
-            limit=10
-        )
-        btc_price = float(btc_data[-1][4]) if btc_data else 0
-        update_prices(current_price, btc_price)
-        
-        # Update balance
-        balance_info = await self.okx_client.get_account_balance()
-        if balance_info:
-            equity = float(balance_info.get('totalEq', 0))
-            update_balance(equity, equity)
-        
-        # Check open positions
-        positions = await self.okx_client.get_positions()
-        if positions:
-            formatted_positions = []
-            for pos in positions:
-                if float(pos.get('pos', 0)) != 0:
-                    formatted_positions.append({
-                        'symbol': pos.get('instId', ''),
-                        'side': 'long' if float(pos.get('pos', 0)) > 0 else 'short',
-                        'size': abs(float(pos.get('pos', 0))),
-                        'entry_price': float(pos.get('avgPx', 0)),
-                        'current_price': current_price,
-                        'pnl': float(pos.get('upl', 0)),
-                        'pnl_pct': float(pos.get('uplRatio', 0)) * 100
-                    })
-            update_positions(formatted_positions)
-        else:
-            update_positions([])
-        
-        # Check if we can trade
-        if self.daily_trades >= config.MAX_DAILY_TRADES:
-            logger.info(f"\U0001f6ab Daily trade limit reached ({self.daily_trades}/{config.MAX_DAILY_TRADES})")
-            return
-        
-        if self.last_trade_time:
-            minutes_since_last = (datetime.now() - self.last_trade_time).seconds / 60
-            if minutes_since_last < config.TRADE_INTERVAL_MINUTES:
-                logger.debug(f"Waiting {config.TRADE_INTERVAL_MINUTES - minutes_since_last:.0f}m before next trade")
+            self.shutdown()
+
+    def _run_trading_cycle(self):
+        """
+        Single iteration of the trading loop
+        """
+        try:
+            # Step 1: Update existing positions
+            self._update_positions()
+
+            # Step 2: Fetch market data for SOL (trading) and BTC (reference)
+            logger.info(f"📊 Fetching market data...")
+            sol_market_state = self.market_data.get_market_state(
+                config.TRADING_SYMBOL,
+                self.timeframes
+            )
+
+            # Update dashboard with prices
+            if DASHBOARD_AVAILABLE and sol_market_state:
+                current_price = sol_market_state.get('current_price', 0)
+                update_prices(current_price, 0)  # BTC price updated below
+
+            # Fetch BTC data for correlation analysis
+            btc_market_state = None
+            if hasattr(config, 'REFERENCE_SYMBOL'):
+                logger.info(f"📊 Fetching BTC reference data...")
+                btc_market_state = self.market_data.get_market_state(
+                    config.REFERENCE_SYMBOL,
+                    self.timeframes
+                )
+                if DASHBOARD_AVAILABLE and btc_market_state:
+                    btc_price = btc_market_state.get('current_price', 0)
+                    sol_price = sol_market_state.get('current_price', 0) if sol_market_state else 0
+                    update_prices(sol_price, btc_price)
+
+            # Update balance on dashboard
+            if DASHBOARD_AVAILABLE:
+                balance = self.risk_manager.get_account_balance()
+                if balance:
+                    update_balance(balance, balance)
+
+            # Step 3: Check emergency conditions
+            emergency, reason = self.risk_manager.check_emergency_conditions(sol_market_state)
+            if emergency:
+                logger.critical(f"🚨 EMERGENCY: {reason}")
+                if DASHBOARD_AVAILABLE:
+                    add_error(f"EMERGENCY: {reason}")
+                self.risk_manager.trigger_emergency_shutdown(reason)
+                self.running = False
                 return
-        
-        # Run strategy analysis
-        signal = await self.strategy_engine.analyze(sol_data)
-        
-        if not signal:
-            logger.info("\U0001f4c9 No signal detected")
-            add_signal({'type': 'scan', 'reason': 'No signal detected'})
-            return
-        
-        logger.info(f"\U0001f4ca Signal detected: {signal['direction'].upper()} from {signal['strategy']}")
-        add_signal({
-            'type': 'detected',
-            'direction': signal['direction'],
-            'strategy': signal['strategy'],
-            'reason': f"Raw signal from {signal['strategy']}"
-        })
-        
-        # Apply filters
-        filter_result = await self.filter_manager.evaluate_signal(signal, sol_data)
-        update_filter_stats(filter_result.get('stats', {}))
-        
-        if not filter_result['approved']:
-            logger.info(f"\u274c Signal rejected: {filter_result['reason']}")
-            add_signal({
-                'type': 'rejected',
-                'direction': signal['direction'],
-                'reason': filter_result['reason']
-            })
-            return
-        
-        logger.info(f"\u2705 Signal approved (score: {filter_result.get('score', 0):.0f})")
-        add_signal({
-            'type': 'approved',
-            'direction': signal['direction'],
-            'reason': f"Filter score: {filter_result.get('score', 0):.0f}"
-        })
-        
-        # Calculate position size
-        position_size = await self.risk_manager.calculate_position_size(
-            current_price,
-            signal.get('stop_loss', current_price * 0.98)
-        )
-        
-        if position_size <= 0:
-            logger.warning("\u26a0\ufe0f  Position size too small")
-            return
-        
-        # Execute trade
-        logger.info(f"\U0001f4b5 Executing {signal['direction'].upper()} trade...")
-        add_signal({
-            'type': 'entry',
-            'direction': signal['direction'],
-            'strategy': signal['strategy'],
-            'reason': f"Size: {position_size}, Entry: ${current_price:.2f}"
-        })
-        
-        order_result = await self.order_manager.execute_entry(
-            symbol=config.TRADING_SYMBOL,
-            side=signal['direction'],
-            size=position_size,
-            entry_price=current_price,
-            stop_loss=signal.get('stop_loss'),
-            take_profit=signal.get('take_profit')
-        )
-        
-        if order_result['success']:
-            logger.info(f"\u2705 Trade executed: {order_result.get('order_id', 'N/A')}")
-            self.daily_trades += 1
+
+            # Step 3: Check if we can trade
+            open_positions = self.position_tracker.get_open_positions()
+            can_trade, trade_reason = self.risk_manager.check_can_trade(len(open_positions))
+
+            if not can_trade:
+                logger.info(f"⏸️  Trading paused: {trade_reason}")
+                if DASHBOARD_AVAILABLE:
+                    add_signal({'type': 'paused', 'reason': trade_reason})
+                return
+
+            # Step 4: If we have open positions, don't look for new trades
+            if len(open_positions) >= config.MAX_POSITIONS_OPEN:
+                logger.info(f"📊 Max positions open ({len(open_positions)}), monitoring only")
+                return
+
+            # Step 5: Look for trading signals (on SOL)
+            signal = self.strategy_manager.analyze_market(sol_market_state)
+
+            if not signal:
+                logger.info("📉 No signal detected")
+                if DASHBOARD_AVAILABLE:
+                    add_signal({'type': 'scan', 'reason': 'No signal detected'})
+                return
+
+            logger.info(f"🎯 SIGNAL DETECTED: {signal['strategy']} - {signal['direction'].upper()}")
+            if DASHBOARD_AVAILABLE:
+                add_signal({
+                    'type': 'detected',
+                    'direction': signal['direction'],
+                    'strategy': signal['strategy'],
+                    'reason': f"Raw signal from {signal['strategy']}"
+                })
+
+            # Step 6: Run ALL filters (most important step!)
+            filters_passed, filter_results = self.filter_manager.check_all(
+                sol_market_state,
+                signal['direction'],
+                signal['strategy'],
+                btc_market_state  # Pass BTC data for correlation check
+            )
+
+            if DASHBOARD_AVAILABLE:
+                update_filter_stats(filter_results)
+
+            if not filters_passed:
+                logger.warning(f"❌ SIGNAL REJECTED BY FILTERS")
+                logger.warning(f"   Failed: {', '.join(filter_results['failed_filters'])}")
+                if DASHBOARD_AVAILABLE:
+                    add_signal({
+                        'type': 'rejected',
+                        'direction': signal['direction'],
+                        'reason': f"Failed: {', '.join(filter_results['failed_filters'])}"
+                    })
+                return
+
+            logger.info(f"✅ ALL FILTERS PASSED - TRADE APPROVED")
+            if DASHBOARD_AVAILABLE:
+                add_signal({
+                    'type': 'approved',
+                    'direction': signal['direction'],
+                    'strategy': signal['strategy'],
+                    'reason': 'All filters passed'
+                })
+
+            # Step 7: Calculate position size
+            account_balance = self.risk_manager.get_account_balance()
+            if not account_balance:
+                logger.error("❌ Could not get account balance")
+                return
+
+            position_size, size_details = self.risk_manager.calculate_position_size(
+                signal,
+                account_balance
+            )
+
+            # Step 8: Execute trade
+            self._execute_trade(signal, position_size)
+
+        except Exception as e:
+            logger.error(f"❌ Error in trading cycle: {e}", exc_info=True)
+            if DASHBOARD_AVAILABLE:
+                add_error(str(e))
+
+    def _execute_trade(self, signal: Dict, position_size: float):
+        """
+        Execute a trade based on signal
+
+        Args:
+            signal: Trading signal
+            position_size: Position size to trade
+        """
+        try:
+            logger.info("\n" + "="*60)
+            logger.info("💰 EXECUTING TRADE")
+            logger.info("="*60)
+
+            if DASHBOARD_AVAILABLE:
+                add_signal({
+                    'type': 'entry',
+                    'direction': signal['direction'],
+                    'strategy': signal['strategy'],
+                    'reason': f"Executing {signal['direction'].upper()} trade"
+                })
+
+            # Place market order
+            entry_order = self.order_manager.place_market_order(signal, position_size)
+
+            if not entry_order:
+                logger.error("❌ Failed to place entry order")
+                if DASHBOARD_AVAILABLE:
+                    add_error("Failed to place entry order")
+                return
+
+            # Create position
+            position = self.position_tracker.create_position(signal, entry_order)
+
+            # Place stop loss
+            stop_order = self.order_manager.place_stop_loss(position, signal['stop_loss'])
+            if stop_order:
+                position['orders']['stop_loss'] = stop_order.get('order_id')
+
+            # Place take profits
+            # TP1: Close 50% of position
+            tp1_size = position_size * 0.5
+            tp1_order = self.order_manager.place_take_profit(position, signal['take_profit_1'], tp1_size)
+            if tp1_order:
+                position['orders']['take_profit_1'] = tp1_order.get('order_id')
+
+            # TP2: Close remaining 50%
+            tp2_order = self.order_manager.place_take_profit(position, signal['take_profit_2'], tp1_size)
+            if tp2_order:
+                position['orders']['take_profit_2'] = tp2_order.get('order_id')
+
+            # Save prediction for AI learning
+            if config.COLLECT_TRAINING_DATA:
+                self._save_prediction_for_learning(signal, position)
+
+            # Update risk manager
             self.last_trade_time = datetime.now()
-            
-            add_trade({
-                'symbol': config.TRADING_SYMBOL,
-                'side': signal['direction'],
-                'entry_price': current_price,
-                'size': position_size,
-                'strategy': signal['strategy'],
-                'pnl': 0,  # Will be updated on close
-                'exit_price': 0
+
+            logger.info("="*60)
+            logger.info("✅ TRADE EXECUTED SUCCESSFULLY")
+            logger.info(f"Position ID: {position['position_id']}")
+            logger.info(f"Entry: ${signal['entry_price']:.2f}")
+            logger.info(f"Stop Loss: ${signal['stop_loss']:.2f}")
+            logger.info(f"Take Profit 1: ${signal['take_profit_1']:.2f}")
+            logger.info(f"Take Profit 2: ${signal['take_profit_2']:.2f}")
+            logger.info("="*60 + "\n")
+
+            # Update dashboard
+            if DASHBOARD_AVAILABLE:
+                add_trade({
+                    'symbol': config.TRADING_SYMBOL,
+                    'side': signal['direction'],
+                    'entry_price': signal['entry_price'],
+                    'exit_price': 0,
+                    'pnl': 0,
+                    'strategy': signal['strategy']
+                })
+
+        except Exception as e:
+            logger.error(f"❌ Error executing trade: {e}", exc_info=True)
+            if DASHBOARD_AVAILABLE:
+                add_error(f"Trade execution error: {e}")
+
+    def _update_positions(self):
+        """
+        Update all open positions with current prices
+        """
+        open_positions = self.position_tracker.get_open_positions()
+
+        if not open_positions:
+            if DASHBOARD_AVAILABLE:
+                update_positions([])
+            return
+
+        current_price = self.market_data.get_current_price(config.TRADING_SYMBOL)
+        if not current_price:
+            return
+
+        dashboard_positions = []
+        for position in open_positions:
+            self.position_tracker.update_position_pnl(
+                position['position_id'],
+                current_price
+            )
+
+            # Log position status
+            logger.info(
+                f"📊 Position {position['position_id']}: "
+                f"${current_price:.2f} | "
+                f"PnL: {position['pnl_pct']:+.2f}%"
+            )
+
+            # Format for dashboard
+            if DASHBOARD_AVAILABLE:
+                dashboard_positions.append({
+                    'symbol': config.TRADING_SYMBOL,
+                    'side': position.get('direction', 'long'),
+                    'size': position.get('size', 0),
+                    'entry_price': position.get('entry_price', 0),
+                    'current_price': current_price,
+                    'pnl': position.get('pnl', 0),
+                    'pnl_pct': position.get('pnl_pct', 0)
+                })
+
+        if DASHBOARD_AVAILABLE:
+            update_positions(dashboard_positions)
+
+    def _save_prediction_for_learning(self, signal: Dict, position: Dict):
+        """
+        Save prediction for later AI model training
+        """
+        try:
+            # This will be labeled later when position closes
+            self.data_collector.save_prediction({
+                'trade_id': position['position_id'],
+                'timestamp': datetime.now().isoformat(),
+                'signal': signal,
+                'position': position,
+                'features': {},  # Features would be extracted by AI filter
+                'confidence': 0,  # Confidence from AI filter
+                'outcome': None  # Will be filled when position closes
             })
-        else:
-            logger.error(f"\u274c Trade failed: {order_result.get('error', 'Unknown')}")
-            add_error(f"Trade failed: {order_result.get('error', 'Unknown')}")
+        except Exception as e:
+            logger.error(f"Failed to save prediction: {e}")
+
+    def shutdown(self):
+        """
+        Graceful shutdown
+        """
+        logger.info("\n" + "="*60)
+        logger.info("🛑 SHUTTING DOWN ELITE QUANT SYSTEM")
+        logger.info("="*60)
+
+        self.running = False
+        
+        if DASHBOARD_AVAILABLE:
+            set_bot_status('stopped')
+
+        # Log final statistics
+        self._log_final_statistics()
+
+        logger.info("="*60)
+        logger.info("✅ System shut down successfully")
+        logger.info("="*60 + "\n")
+
+    def _log_final_statistics(self):
+        """Log final system statistics"""
+        try:
+            # Filter stats
+            filter_stats = self.filter_manager.get_filter_statistics()
+            logger.info(f"\n📊 Filter Statistics:")
+            logger.info(f"   Total checks: {filter_stats['total_checks']}")
+            logger.info(f"   Pass rate: {filter_stats['pass_rate']*100:.1f}%")
+
+            # Position stats
+            position_stats = self.position_tracker.get_statistics()
+            logger.info(f"\n💰 Trading Statistics:")
+            logger.info(f"   Total trades: {position_stats['total_trades']}")
+            logger.info(f"   Win rate: {position_stats['win_rate']*100:.1f}%")
+            logger.info(f"   Total PnL: ${position_stats['total_pnl']:.2f}")
+
+            # Risk stats
+            risk_stats = self.risk_manager.get_risk_statistics()
+            logger.info(f"\n🛡️  Risk Statistics:")
+            logger.info(f"   Daily PnL: ${risk_stats['daily_pnl']:.2f}")
+            logger.info(f"   Daily trades: {risk_stats['daily_trades']}")
+
+        except Exception as e:
+            logger.error(f"Error logging statistics: {e}")
 
 
-async def main():
-    """Main entry point"""
-    global shutdown_flag
-    
-    # Setup signal handlers
+def signal_handler(sig, frame):
+    """Handle interrupt signals"""
+    logger.info("\n⚠️  Interrupt signal received")
+    if DASHBOARD_AVAILABLE:
+        set_bot_status('stopped')
+    sys.exit(0)
+
+
+def main():
+    """
+    Main entry point
+    """
+    # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
-    # Print banner
-    print("\n" + "="*50)
-    print("   SupeQuant Elite Trading System v2.0")
-    print("   SOL-USDT Perpetual | Heavy Filtering")
-    print("="*50 + "\n")
-    
-    # Start dashboard in background thread
-    if config.DASHBOARD_ENABLED:
+
+    # Validate configuration
+    validation_errors = config.validate_config()
+    if validation_errors:
+        logger.error("❌ Configuration errors detected:")
+        for error in validation_errors:
+            logger.error(f"   - {error}")
+
+        if not config.OKX_SIMULATED:
+            logger.error("⚠️  Cannot start in LIVE mode with configuration errors")
+            sys.exit(1)
+
+    # Start dashboard in background
+    if DASHBOARD_AVAILABLE and getattr(config, 'DASHBOARD_ENABLED', True):
         dashboard_thread = threading.Thread(target=run_dashboard, daemon=True)
         dashboard_thread.start()
-        await asyncio.sleep(1)  # Give dashboard time to start
-    
-    # Initialize and run bot
-    bot = TradingBot()
-    
-    try:
-        await bot.initialize()
-        await bot.run_trading_loop()
-    except KeyboardInterrupt:
-        logger.info("Shutdown requested...")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        add_error(f"Fatal: {e}")
-    finally:
-        set_bot_status('stopped')
-        logger.info("\n\U0001f44b Bot shutdown complete")
+        time.sleep(1)  # Give dashboard time to start
+
+    # Create and run system
+    system = EliteQuantSystem()
+    system.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
