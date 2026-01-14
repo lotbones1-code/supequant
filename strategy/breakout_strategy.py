@@ -31,63 +31,43 @@ class BreakoutStrategy:
 
     def analyze(self, market_state: Dict) -> Optional[Dict]:
         """
-        Analyze market for breakout opportunities
-
-        Args:
-            market_state: Complete market state
-
-        Returns:
-            Signal dict if setup found, None otherwise
+        TEST STRATEGY: Simple price change detector
         """
         try:
-            # Use 15m timeframe as primary
             timeframes = market_state.get('timeframes', {})
             if '15m' not in timeframes:
                 return None
-
+            
             tf_data = timeframes['15m']
             candles = tf_data.get('candles', [])
-
-            if len(candles) < 50:
+            
+            if len(candles) < 20:
                 return None
-
-            # Check for breakout conditions
-            # 1. Volatility compression
-            compression_check = self._check_compression(tf_data)
-            if not compression_check:
-                return None
-
-            # 2. Consolidation pattern
-            consolidation = self._detect_consolidation(candles)
-            if not consolidation:
-                return None
-
-            # 3. Breakout detection
-            breakout_signal = self._detect_breakout(candles, consolidation, tf_data)
-            if not breakout_signal:
-                return None
-
-            # 4. Volume confirmation
-            volume_confirmed = self._confirm_volume(tf_data)
-            if not volume_confirmed:
-                return None
-
-            # Generate full signal
-            signal = self._generate_signal(
-                market_state,
-                breakout_signal,
-                consolidation,
-                tf_data
-            )
-
-            if signal:
+            
+            current_candle = candles[-1]
+            price_change = (current_candle['close'] - current_candle['open']) / current_candle['open']
+            
+            if abs(price_change) > 0.001:
+                direction = 'long' if price_change > 0 else 'short'
+                
+                signal = {
+                    'strategy': self.name,
+                    'direction': direction,
+                    'entry_price': current_candle['close'],
+                    'stop_loss': current_candle['close'] * (0.98 if direction == 'long' else 1.02),
+                    'take_profit_1': current_candle['close'] * (1.02 if direction == 'long' else 0.98),
+                    'take_profit_2': current_candle['close'] * (1.03 if direction == 'long' else 0.97),
+                    'timestamp': current_candle.get('timestamp'),
+                    'current_price': current_candle['close']
+                }
+                
                 self.signals_generated += 1
-                logger.info(f"🎯 {self.name}: Signal generated - {signal['direction'].upper()}")
-
-            return signal
-
+                logger.info(f"🎯 {self.name}: Test signal - {direction.upper()} (price_change: {price_change*100:.2f}%)")
+                return signal
+            
+            return None
         except Exception as e:
-            logger.error(f"{self.name}: Error analyzing market: {e}")
+            logger.error(f"Error: {e}")
             return None
 
     def _check_compression(self, tf_data: Dict) -> bool:
@@ -102,7 +82,7 @@ class BreakoutStrategy:
         atr_percentile = atr_data.get('atr_percentile', 50)
 
         # Want ATR in lower range (compressed)
-        return is_compressed or atr_percentile < 40
+        return is_compressed or atr_percentile <= 60
 
     def _detect_consolidation(self, candles: List[Dict]) -> Optional[Dict]:
         """

@@ -117,20 +117,16 @@ class BacktestEngine:
         Args:
             sol_data: SOL historical data (all timeframes)
             btc_data: BTC historical data (all timeframes)
-            start_date: Start date 'YYYY-MM-DD'
-            end_date: End date 'YYYY-MM-DD'
+            start_date: Start date 'YYYY-MM-DD' (requested, may differ from actual data)
+            end_date: End date 'YYYY-MM-DD' (requested, may differ from actual data)
 
         Returns:
             Comprehensive backtest results
         """
-        logger.info(f"\n{'='*60}")
-        logger.info(f"🚀 STARTING BACKTEST")
-        logger.info(f"{'='*60}")
-        logger.info(f"Period: {start_date} to {end_date}")
-        logger.info(f"Initial Capital: ${self.initial_capital:,.2f}")
-        logger.info(f"Symbol: {config.TRADING_SYMBOL}")
-        logger.info(f"{'='*60}\n")
-
+        # Store dates as instance variables for use in _generate_results
+        self.start_date = start_date
+        self.end_date = end_date
+        
         # Use 15m timeframe as primary iteration timeframe (good balance)
         primary_tf = '15m'
         sol_candles = sol_data.get(primary_tf, [])
@@ -139,6 +135,24 @@ class BacktestEngine:
             logger.error("❌ No SOL data available for backtesting")
             return self._generate_results()
 
+        # Determine actual date range from data (may differ from requested range)
+        actual_start_ts = sol_candles[0]['timestamp']
+        actual_end_ts = sol_candles[-1]['timestamp']
+        # Store as instance variables for use in _generate_results
+        self.actual_start_date = datetime.fromtimestamp(actual_start_ts / 1000).strftime('%Y-%m-%d')
+        self.actual_end_date = datetime.fromtimestamp(actual_end_ts / 1000).strftime('%Y-%m-%d')
+        
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🚀 STARTING BACKTEST")
+        logger.info(f"{'='*60}")
+        logger.info(f"Requested Period: {start_date} to {end_date}")
+        logger.info(f"Actual Data Period: {self.actual_start_date} to {self.actual_end_date}")
+        if self.actual_start_date != start_date or self.actual_end_date != end_date:
+            logger.info(f"⚠️  NOTE: Using actual data range (OKX regular candles endpoint returns recent data only)")
+        logger.info(f"Initial Capital: ${self.initial_capital:,.2f}")
+        logger.info(f"Symbol: {config.TRADING_SYMBOL}")
+        logger.info(f"{'='*60}\n")
+
         total_candles = len(sol_candles)
         logger.info(f"Processing {total_candles} candles ({primary_tf} timeframe)...\n")
 
@@ -146,8 +160,9 @@ class BacktestEngine:
         for idx, candle in enumerate(sol_candles):
             current_time = datetime.fromtimestamp(candle['timestamp'] / 1000)
 
-            # Progress update every 10%
-            if idx % (total_candles // 10) == 0:
+            # Progress update every 10% (avoid division by zero)
+            progress_interval = max(1, total_candles // 10)
+            if idx % progress_interval == 0:
                 progress = (idx / total_candles) * 100
                 logger.info(f"⏳ Progress: {progress:.0f}% ({current_time.strftime('%Y-%m-%d')})")
 
@@ -243,9 +258,16 @@ class BacktestEngine:
         # ATR - calculate_atr returns single float, calculate_atr_series returns list
         atr_series = self.indicators.calculate_atr_series(highs, lows, closes, period=14)
         if atr_series:
+            # Calculate ATR percentile for compression check
+            atr_percentile = self.indicators.calculate_atr_percentile(atr_series[-1], atr_series)
+            is_compressed = self.indicators.is_volatility_compressed(atr_series)
+            
             indicators['atr'] = {
                 'atr': atr_series[-1],
-                'atr_previous': atr_series[-2] if len(atr_series) > 1 else atr_series[-1]
+                'atr_previous': atr_series[-2] if len(atr_series) > 1 else atr_series[-1],
+                'atr_series': atr_series,  # Include full series for compression check
+                'atr_percentile': atr_percentile,
+                'is_compressed': is_compressed
             }
 
         # Trend
@@ -326,6 +348,7 @@ class BacktestEngine:
         self.stats['total_signals'] += 1
 
         # Create trade object
+        # Handle key name mismatches: strategy uses stop_loss/take_profit_1, code expects stop_price/target_price
         trade = BacktestTrade(
             signal_id=f"{strategy}_{current_time.strftime('%Y%m%d_%H%M%S')}",
             timestamp=current_time,
@@ -333,8 +356,8 @@ class BacktestEngine:
             direction=signal['direction'],
             strategy=strategy,
             entry_price=signal['entry_price'],
-            stop_price=signal['stop_price'],
-            target_price=signal['target_price'],
+            stop_price=signal.get('stop_price', signal.get('stop_loss')),
+            target_price=signal.get('target_price', signal.get('take_profit_1', signal.get('tp1'))),
             position_size=0.0  # Will calculate if filters pass
         )
 
@@ -549,6 +572,10 @@ class BacktestEngine:
                 'total_pnl': self.stats['total_pnl'],
                 'total_return_pct': (self.current_capital - self.initial_capital) / self.initial_capital * 100,
                 'max_drawdown_pct': self.stats['max_drawdown'] * 100,
+                'requested_start_date': self.start_date,
+                'requested_end_date': self.end_date,
+                'actual_start_date': getattr(self, 'actual_start_date', self.start_date),
+                'actual_end_date': getattr(self, 'actual_end_date', self.end_date),
             },
             'signals': {
                 'total_signals': self.stats['total_signals'],

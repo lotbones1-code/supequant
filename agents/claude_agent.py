@@ -1,0 +1,501 @@
+"""
+Claude AI Agent
+Main agent class for debugging, market analysis, and strategy optimization
+"""
+
+import os
+import time
+import logging
+from typing import Dict, Optional, List, Any
+from datetime import datetime
+import json
+
+try:
+    from anthropic import Anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    logging.warning("anthropic package not installed. Install with: pip install anthropic")
+
+logger = logging.getLogger(__name__)
+
+
+class ClaudeAgent:
+    """
+    Claude AI agent for trading bot analysis and debugging
+    
+    Capabilities:
+    - Debug why signals aren't generating
+    - Analyze market conditions and suggest trade direction
+    - Explain filter rejections and recommend threshold adjustments
+    - Analyze backtest results and suggest improvements
+    - Log all AI decisions for review
+    """
+    
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514", 
+                 verbose: bool = False, max_retries: int = 3):
+        """
+        Initialize Claude agent
+        
+        Args:
+            api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY env var)
+            model: Claude model to use
+            verbose: Enable verbose logging
+            max_retries: Maximum retry attempts for API calls
+        """
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("anthropic package required. Install with: pip install anthropic")
+        
+        self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+        if not self.api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+        
+        self.model = model
+        self.verbose = verbose
+        self.max_retries = max_retries
+        
+        self.client = Anthropic(api_key=self.api_key)
+        
+        # Token usage tracking
+        self.token_usage = {
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'total_requests': 0
+        }
+        
+        # Rate limiting
+        self.last_request_time = 0
+        self.min_request_interval = 0.5  # 500ms between requests
+        
+        logger.info(f"✅ ClaudeAgent initialized (model: {self.model})")
+    
+    def _rate_limit(self):
+        """Enforce rate limiting"""
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_request_interval:
+            time.sleep(self.min_request_interval - elapsed)
+        self.last_request_time = time.time()
+    
+    def _call_claude(self, messages: List[Dict], system: str = "", max_tokens: int = 4096) -> Dict:
+        """
+        Call Claude API with retry logic
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            system: System prompt
+            max_tokens: Maximum tokens in response
+            
+        Returns:
+            Response dict with 'content' and usage stats
+        """
+        self._rate_limit()
+        
+        for attempt in range(self.max_retries):
+            try:
+                kwargs = {
+                    'model': self.model,
+                    'max_tokens': max_tokens,
+                    'messages': messages
+                }
+                if system:
+                    kwargs['system'] = system
+                
+                response = self.client.messages.create(**kwargs)
+                
+                # Track token usage
+                usage = response.usage
+                self.token_usage['input_tokens'] += usage.input_tokens
+                self.token_usage['output_tokens'] += usage.output_tokens
+                self.token_usage['total_requests'] += 1
+                
+                if self.verbose:
+                    logger.info(f"Claude API: {usage.input_tokens} input, {usage.output_tokens} output tokens")
+                
+                # Extract text content
+                content = ""
+                if response.content:
+                    for block in response.content:
+                        if hasattr(block, 'text'):
+                            content += block.text
+                
+                return {
+                    'content': content,
+                    'usage': {
+                        'input_tokens': usage.input_tokens,
+                        'output_tokens': usage.output_tokens
+                    }
+                }
+                
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    logger.warning(f"Claude API error (attempt {attempt + 1}/{self.max_retries}): {e}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Claude API failed after {self.max_retries} attempts: {e}")
+                    raise
+        
+        raise Exception("Failed to call Claude API")
+    
+    def debug_signals(self, market_state: Dict, strategy: str = "breakout", 
+                     btc_market_state: Optional[Dict] = None) -> Dict:
+        """
+        Debug why signals aren't generating
+        
+        Args:
+            market_state: Current market state from MarketDataFeed
+            strategy: Strategy name ('breakout' or 'pullback')
+            btc_market_state: Optional BTC market state for correlation
+            
+        Returns:
+            Dict with analysis and recommendations
+        """
+        system_prompt = """You are an expert quantitative trading analyst helping debug a crypto trading bot.
+
+The bot trades SOL-USDT perpetual futures using breakout and pullback strategies. It has multiple filters that must all pass before a trade executes.
+
+Your task: Analyze why signals aren't generating and provide specific, actionable recommendations.
+
+Be concise, technical, and focus on specific threshold values that need adjustment."""
+
+        # Build context about current market state
+        context = self._build_market_context(market_state, btc_market_state)
+        
+        prompt = f"""Analyze why the {strategy} strategy is not generating signals.
+
+Current Market State:
+{context}
+
+Strategy Requirements:
+- Breakout: ATR compression (< 1.5x average), consolidation (< 5% range), volume (≥ 0.8x average), breakout (0.3% above/below)
+- Pullback: Strong trend, Fibonacci retracement, trend resumption, volume confirmation
+
+Provide:
+1. Which conditions are failing
+2. Current values vs required thresholds
+3. Specific threshold adjustments needed
+4. Reasoning for each recommendation"""
+        
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self._call_claude(messages, system=system_prompt)
+        
+        result = {
+            'analysis': response['content'],
+            'timestamp': datetime.now().isoformat(),
+            'strategy': strategy,
+            'usage': response['usage']
+        }
+        
+        logger.info(f"🔍 Signal debug analysis complete ({response['usage']['input_tokens']} tokens)")
+        return result
+    
+    def analyze_setup(self, market_state: Dict, signal: Optional[Dict] = None,
+                     filter_results: Optional[Dict] = None) -> Dict:
+        """
+        Analyze a trading setup and provide recommendation
+        
+        Args:
+            market_state: Current market state
+            signal: Optional signal dict (if one was generated)
+            filter_results: Optional filter results (if signal was rejected)
+            
+        Returns:
+            Dict with trade recommendation and reasoning
+        """
+        system_prompt = """You are an expert crypto trader analyzing trading setups.
+
+Provide clear, actionable trade recommendations with risk assessment.
+Consider: market conditions, trend strength, volatility, volume, and risk/reward."""
+        
+        context = self._build_market_context(market_state)
+        
+        if signal:
+            signal_info = f"""
+Signal Generated:
+- Direction: {signal.get('direction', 'unknown')}
+- Entry: ${signal.get('entry_price', 0):.2f}
+- Stop Loss: ${signal.get('stop_loss', 0):.2f}
+- Take Profit 1: ${signal.get('take_profit_1', 0):.2f}
+- Strategy: {signal.get('strategy', 'unknown')}
+"""
+        else:
+            signal_info = "No signal generated"
+        
+        if filter_results:
+            filter_info = f"""
+Filter Results:
+- Passed: {filter_results.get('overall_pass', False)}
+- Failed Filters: {', '.join(filter_results.get('failed_filters', []))}
+"""
+        else:
+            filter_info = "No filter results available"
+        
+        prompt = f"""Analyze this trading setup and provide a recommendation.
+
+Market State:
+{context}
+
+{signal_info}
+
+{filter_info}
+
+Provide:
+1. Trade recommendation (LONG/SHORT/WAIT)
+2. Confidence level (1-10)
+3. Key factors supporting your recommendation
+4. Risk assessment
+5. Suggested position size (if trading)"""
+        
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self._call_claude(messages, system=system_prompt)
+        
+        result = {
+            'recommendation': response['content'],
+            'timestamp': datetime.now().isoformat(),
+            'usage': response['usage']
+        }
+        
+        logger.info(f"📊 Setup analysis complete ({response['usage']['input_tokens']} tokens)")
+        return result
+    
+    def explain_filter_rejection(self, filter_name: str, filter_result: Dict,
+                                market_state: Dict) -> Dict:
+        """
+        Explain why a filter rejected a signal and recommend threshold adjustments
+        
+        Args:
+            filter_name: Name of the filter that rejected
+            filter_result: Filter result dict with 'reason' and details
+            market_state: Current market state
+            
+        Returns:
+            Dict with explanation and recommendations
+        """
+        system_prompt = """You are an expert at tuning trading filters.
+
+Explain why filters reject signals and provide specific threshold adjustments.
+Focus on finding the balance between signal quality and frequency."""
+        
+        context = self._build_market_context(market_state)
+        
+        prompt = f"""The {filter_name} filter rejected a signal.
+
+Filter Result:
+{json.dumps(filter_result, indent=2)}
+
+Market State:
+{context}
+
+Provide:
+1. Why this filter rejected (explain the logic)
+2. Current threshold value (if available)
+3. Recommended threshold adjustment
+4. Expected impact (more/fewer signals)
+5. Risk of relaxing this filter"""
+        
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self._call_claude(messages, system=system_prompt)
+        
+        result = {
+            'explanation': response['content'],
+            'filter_name': filter_name,
+            'timestamp': datetime.now().isoformat(),
+            'usage': response['usage']
+        }
+        
+        logger.info(f"🔍 Filter rejection explanation complete ({response['usage']['input_tokens']} tokens)")
+        return result
+    
+    def analyze_backtest_results(self, backtest_results: Dict) -> Dict:
+        """
+        Analyze backtest results and suggest improvements
+        
+        Args:
+            backtest_results: Backtest results dict from BacktestEngine
+            
+        Returns:
+            Dict with analysis and improvement suggestions
+        """
+        system_prompt = """You are an expert quantitative analyst reviewing backtest results.
+
+Identify weaknesses, suggest improvements, and provide specific parameter adjustments.
+Focus on: win rate, profit factor, drawdown, and trade frequency."""
+        
+        # Format backtest results for analysis
+        results_summary = self._format_backtest_results(backtest_results)
+        
+        prompt = f"""Analyze these backtest results and suggest improvements.
+
+Backtest Results:
+{results_summary}
+
+Provide:
+1. Overall assessment (good/poor/needs work)
+2. Key strengths
+3. Key weaknesses
+4. Specific parameter adjustments needed
+5. Expected impact of changes
+6. Risk considerations"""
+        
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self._call_claude(messages, system=system_prompt)
+        
+        result = {
+            'analysis': response['content'],
+            'timestamp': datetime.now().isoformat(),
+            'usage': response['usage']
+        }
+        
+        logger.info(f"📈 Backtest analysis complete ({response['usage']['input_tokens']} tokens)")
+        return result
+    
+    def auto_tune_strategy(self, strategy_name: str, backtest_results: Dict,
+                          market_analysis: Optional[Dict] = None) -> Dict:
+        """
+        Automatically tune strategy parameters based on backtest results
+        
+        Args:
+            strategy_name: 'breakout' or 'pullback'
+            backtest_results: Backtest results dict
+            market_analysis: Optional market condition analysis
+            
+        Returns:
+            Dict with recommended parameter changes
+        """
+        system_prompt = """You are an expert at optimizing trading strategy parameters.
+
+Provide specific, actionable parameter adjustments based on performance data.
+Include reasoning and expected impact for each change."""
+        
+        results_summary = self._format_backtest_results(backtest_results)
+        
+        prompt = f"""Optimize the {strategy_name} strategy parameters.
+
+Current Performance:
+{results_summary}
+
+{f"Market Analysis: {json.dumps(market_analysis, indent=2)}" if market_analysis else ""}
+
+Provide:
+1. Current parameter values (if known)
+2. Recommended parameter changes
+3. Reasoning for each change
+4. Expected impact on:
+   - Signal frequency
+   - Win rate
+   - Profit factor
+   - Drawdown
+5. Implementation steps"""
+        
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self._call_claude(messages, system=system_prompt)
+        
+        result = {
+            'recommendations': response['content'],
+            'strategy': strategy_name,
+            'timestamp': datetime.now().isoformat(),
+            'usage': response['usage']
+        }
+        
+        logger.info(f"⚙️ Strategy tuning complete ({response['usage']['input_tokens']} tokens)")
+        return result
+    
+    def _build_market_context(self, market_state: Dict, 
+                             btc_market_state: Optional[Dict] = None) -> str:
+        """Build human-readable market context for Claude"""
+        context_parts = []
+        
+        # SOL market state
+        if '15m' in market_state.get('timeframes', {}):
+            tf_15m = market_state['timeframes']['15m']
+            price = tf_15m.get('current_price', 0)
+            candles = tf_15m.get('candles', [])
+            
+            context_parts.append(f"SOL Price: ${price:.2f}")
+            
+            if candles:
+                recent = candles[-5:] if len(candles) >= 5 else candles
+                highs = [c['high'] for c in recent]
+                lows = [c['low'] for c in recent]
+                context_parts.append(f"Recent Range: ${min(lows):.2f} - ${max(highs):.2f}")
+            
+            # ATR data
+            atr_data = tf_15m.get('atr', {})
+            if atr_data:
+                atr = atr_data.get('atr', 0)
+                atr_percentile = atr_data.get('atr_percentile', 50)
+                context_parts.append(f"ATR: {atr:.4f} (percentile: {atr_percentile:.1f})")
+            
+            # Volume data
+            volume_data = tf_15m.get('volume', {})
+            if volume_data:
+                volume_ratio = volume_data.get('volume_ratio', 1.0)
+                context_parts.append(f"Volume Ratio: {volume_ratio:.2f}x average")
+            
+            # Trend data
+            trend_data = tf_15m.get('trend', {})
+            if trend_data:
+                direction = trend_data.get('trend_direction', 'unknown')
+                strength = trend_data.get('trend_strength', 0)
+                context_parts.append(f"Trend: {direction} (strength: {strength:.2f})")
+        
+        # BTC market state
+        if btc_market_state and '15m' in btc_market_state.get('timeframes', {}):
+            btc_tf = btc_market_state['timeframes']['15m']
+            btc_price = btc_tf.get('current_price', 0)
+            context_parts.append(f"BTC Price: ${btc_price:.2f}")
+        
+        return "\n".join(context_parts) if context_parts else "No market data available"
+    
+    def _format_backtest_results(self, results: Dict) -> str:
+        """Format backtest results for Claude analysis"""
+        summary = []
+        
+        # Trades
+        trades = results.get('trades', {})
+        if trades:
+            summary.append(f"Total Trades: {trades.get('total_trades', 0)}")
+            summary.append(f"Wins: {trades.get('wins', 0)} | Losses: {trades.get('losses', 0)}")
+            summary.append(f"Win Rate: {trades.get('win_rate', 0):.1f}%")
+        
+        # Performance
+        perf = results.get('performance', {})
+        if perf:
+            summary.append(f"Profit Factor: {perf.get('profit_factor', 0):.2f}")
+            summary.append(f"Avg Win: ${perf.get('avg_win', 0):.2f}")
+            summary.append(f"Avg Loss: ${perf.get('avg_loss', 0):.2f}")
+        
+        # Summary
+        summary_data = results.get('summary', {})
+        if summary_data:
+            summary.append(f"Total PnL: ${summary_data.get('total_pnl', 0):.2f}")
+            summary.append(f"Total Return: {summary_data.get('total_return_pct', 0):.2f}%")
+            summary.append(f"Max Drawdown: {summary_data.get('max_drawdown_pct', 0):.2f}%")
+        
+        # Signals
+        signals = results.get('signals', {})
+        if signals:
+            summary.append(f"Signals Generated: {signals.get('total_signals', 0)}")
+            summary.append(f"Signals Rejected: {signals.get('signals_rejected', 0)}")
+        
+        return "\n".join(summary) if summary else "No results data available"
+    
+    def get_token_usage(self) -> Dict:
+        """Get cumulative token usage statistics"""
+        return {
+            **self.token_usage,
+            'total_tokens': self.token_usage['input_tokens'] + self.token_usage['output_tokens']
+        }
+    
+    def reset_token_usage(self):
+        """Reset token usage tracking"""
+        self.token_usage = {
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'total_requests': 0
+        }

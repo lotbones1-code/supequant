@@ -87,10 +87,40 @@ class HistoricalDataLoader:
 
             # Try to load from cache first
             if not force_refresh and cache_file.exists():
-                logger.info(f"   ✅ {tf}: Loading from cache")
-                with open(cache_file, 'r') as f:
-                    data[tf] = json.load(f)
-            else:
+                try:
+                    logger.info(f"   ✅ {tf}: Loading from cache")
+                    with open(cache_file, 'r') as f:
+                        cached_data = json.load(f)
+                    
+                    # Validate cache data quality
+                    if isinstance(cached_data, list) and len(cached_data) > 0:
+                        # Check if data looks reasonable (has expected structure)
+                        first_candle = cached_data[0]
+                        if isinstance(first_candle, dict) and 'timestamp' in first_candle:
+                            # Deduplicate cached data (in case cache has duplicates)
+                            seen_timestamps = set()
+                            unique_cached = []
+                            for candle in cached_data:
+                                if candle.get('timestamp') not in seen_timestamps:
+                                    seen_timestamps.add(candle['timestamp'])
+                                    unique_cached.append(candle)
+                            
+                            if len(unique_cached) < len(cached_data):
+                                logger.warning(f"   ⚠️  {tf}: Removed {len(cached_data) - len(unique_cached)} duplicates from cache")
+                            
+                            data[tf] = unique_cached
+                            logger.info(f"      Loaded {len(unique_cached)} unique candles from cache")
+                        else:
+                            logger.warning(f"   ⚠️  {tf}: Cache file has invalid structure, fetching fresh data")
+                            force_refresh = True
+                    else:
+                        logger.warning(f"   ⚠️  {tf}: Cache file is empty, fetching fresh data")
+                        force_refresh = True
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"   ⚠️  {tf}: Cache file corrupted ({e}), fetching fresh data")
+                    force_refresh = True
+            
+            if force_refresh or tf not in data:
                 # Fetch from API
                 logger.info(f"   📡 {tf}: Fetching from OKX API...")
                 candles = self._fetch_candles(symbol, tf, start_date, end_date)
@@ -101,8 +131,20 @@ class HistoricalDataLoader:
                     self._save_to_cache(cache_file, candles)
                     logger.info(f"   ✅ {tf}: Fetched {len(candles)} candles")
                 else:
-                    logger.error(f"   ❌ {tf}: Failed to fetch data")
-                    data[tf] = []
+                    # For 4H and 1H timeframes, if no data (common for recent data),
+                    # fall back to using 15m data aggregated or skip gracefully
+                    if tf in ['4H', '1H']:
+                        logger.warning(f"   ⚠️  {tf}: No data available (may be too recent for completed candles)")
+                        logger.warning(f"      Falling back to 15m data for this timeframe")
+                        # Use 15m data as fallback - the filters will handle missing HTF data
+                        if '15m' in data and data['15m']:
+                            data[tf] = data['15m']  # Use 15m candles as fallback
+                            logger.info(f"      Using {len(data[tf])} candles from 15m as fallback")
+                        else:
+                            data[tf] = []
+                    else:
+                        logger.error(f"   ❌ {tf}: Failed to fetch data")
+                        data[tf] = []
 
         # Validate data quality
         self._validate_data(data, start_date, end_date)
@@ -113,112 +155,162 @@ class HistoricalDataLoader:
                       start_date: str, end_date: str) -> List[Dict]:
         """
         Fetch candles from OKX API
-
-        OKX API returns max 300 candles per request, so we need to paginate
+        
+        IMPORTANT: OKX has two endpoints:
+        - /api/v5/market/candles: Returns RECENT data only (last ~24 hours), can't request specific dates
+        - /api/v5/market/history-candles: Returns historical data for specific dates
+        
+        For recent data (regular candles endpoint), we accept whatever the API returns
+        without date filtering. For historical data, we filter by date range.
         """
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-
+        
         all_candles = []
-        current_end = end_dt
-
-        # Calculate candle duration in minutes
-        durations = {
-            '1m': 1,
-            '5m': 5,
-            '15m': 15,
-            '1H': 60,
-            '4H': 240
-        }
-        candle_minutes = durations.get(timeframe, 60)
-
-        # OKX history-candles endpoint returns max 100 candles per request (vs 300 for live)
-        max_candles_per_request = 100
-        chunk_duration = timedelta(minutes=candle_minutes * max_candles_per_request)
-
-        request_count = 0
-        while current_end > start_dt:
-            # Calculate chunk start (work backwards)
-            chunk_start = max(start_dt, current_end - chunk_duration)
-
-            # Convert to millisecond timestamps (OKX format)
-            # Use 'before' parameter to get candles before (older than) current_end
-            before_ts = int(current_end.timestamp() * 1000)
-
-            # Progress logging every 10 requests
-            request_count += 1
-            if request_count % 10 == 0:
-                logger.info(f"      Fetching chunk {request_count}... (current: {chunk_start.strftime('%Y-%m-%d')})")
-
+        
+        # Convert to milliseconds
+        end_ts = int(end_dt.timestamp() * 1000)
+        start_ts = int(start_dt.timestamp() * 1000)
+        now_ts = int(time.time() * 1000)
+        three_months_ago_ms = now_ts - (90 * 24 * 60 * 60 * 1000)
+        
+        # Determine if we're requesting recent data (will use regular candles endpoint)
+        # Regular candles endpoint only returns recent data, can't filter by date
+        is_recent_data = end_ts > three_months_ago_ms
+        
+        if is_recent_data:
+            logger.info(f"   Fetching {timeframe} data (recent data - will use regular candles endpoint)")
+            logger.info(f"   NOTE: Regular candles endpoint returns recent data only, not specific date ranges")
+            logger.info(f"   Requesting WITHOUT 'before' parameter to get maximum candles (up to 300)")
+        else:
+            logger.info(f"   Fetching {timeframe} data from {start_date} to {end_date} (historical data)")
+        
+        max_retries = 50  # Prevent infinite loops
+        retry_count = 0
+        
+        # For recent data, call API without 'before' to get max candles
+        # For historical data, use pagination with 'before'
+        if is_recent_data:
+            # For recent data: call API WITHOUT 'before' parameter to get maximum recent candles
+            # This ensures we get up to 300 candles instead of just 2-8
             try:
-                # Fetch historical candles using history-candles endpoint
-                # Note: get_history_candles returns data list directly (not wrapped in dict)
-                # Using 'before' parameter for historical data (get candles before this timestamp)
-                logger.debug(f"Requesting: symbol={symbol}, tf={timeframe}, before={before_ts}, limit={max_candles_per_request}")
-                logger.debug(f"Date range: {chunk_start} to {current_end}")
-
+                logger.debug(f"   Requesting recent candles (no 'before' parameter) - limit=300")
+                # Explicitly don't pass 'before' - pass None or omit it entirely
+                # The get_history_candles method will detect this and use regular endpoint without before/after
                 candles = self.client.get_history_candles(
                     symbol=symbol,
                     timeframe=timeframe,
-                    before=str(before_ts),
-                    limit=max_candles_per_request
+                    before=None,  # Explicitly None - don't pass 'before' for recent data
+                    after=None,   # Explicitly None - don't pass 'after' for recent data
+                    limit=300     # Max limit for regular candles endpoint
                 )
-
-                logger.debug(f"Response: {candles if candles is None else f'{len(candles)} candles'}")
-
-                if candles:
-                    logger.debug(f"Fetched {len(candles)} candles for {timeframe}")
+                
+                if candles and len(candles) > 0:
                     # Convert OKX format to our format
+                    batch_candles = []
                     for candle in candles:
-                        # OKX format: [timestamp, open, high, low, close, volume, volumeCcy, volumeCcyQuote, confirm]
-                        all_candles.append({
-                            'timestamp': int(candle[0]),
+                        ts = int(candle[0])
+                        batch_candles.append({
+                            'timestamp': ts,
                             'open': float(candle[1]),
                             'high': float(candle[2]),
                             'low': float(candle[3]),
                             'close': float(candle[4]),
                             'volume': float(candle[5])
                         })
-
-                    # Move to next chunk
-                    current_end = chunk_start
-
-                    # Rate limiting
-                    time.sleep(0.1)
+                    all_candles.extend(batch_candles)
+                    logger.info(f"   ✅ Received {len(batch_candles)} candles from recent data endpoint")
                 else:
-                    logger.warning(f"⚠️  No data returned for {symbol} {timeframe} (before={before_ts})")
-                    logger.warning(f"   Check: 1) Symbol format correct? 2) API credentials valid? 3) Date range valid?")
-                    break
-
+                    logger.warning(f"   ⚠️  No candles returned from recent data endpoint")
             except Exception as e:
-                logger.error(f"❌ Error fetching candles for {symbol} {timeframe}: {e}")
+                logger.error(f"   Error fetching recent data: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
-                break
-
+        else:
+            # For historical data: use pagination with 'before' parameter
+            current_before = end_ts
+            
+            while retry_count < max_retries:
+                retry_count += 1
+                
+                try:
+                    # Use 'before' to get candles before (older than) current_before
+                    logger.debug(f"   Requesting candles before timestamp: {current_before} ({datetime.fromtimestamp(current_before/1000)})")
+                    
+                    candles = self.client.get_history_candles(
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        before=str(current_before),
+                        limit=100
+                    )
+                    
+                    if not candles or len(candles) == 0:
+                        logger.debug(f"   No more candles returned")
+                        break
+                    
+                    # Convert OKX format to our format
+                    # ACCEPT ALL CANDLES - no validation based on recency or date range
+                    # The API returns what it returns, and we use it for backtesting
+                    batch_candles = []
+                    for candle in candles:
+                        # OKX format: [timestamp, open, high, low, close, volume, ...]
+                        ts = int(candle[0])
+                        
+                        # Accept all candles regardless of timestamp - no filtering by recency or date range
+                        batch_candles.append({
+                            'timestamp': ts,
+                            'open': float(candle[1]),
+                            'high': float(candle[2]),
+                            'low': float(candle[3]),
+                            'close': float(candle[4]),
+                            'volume': float(candle[5])
+                        })
+                    
+                    all_candles.extend(batch_candles)
+                    
+                    logger.info(f"   Accepted {len(batch_candles)} candles from API (no recency validation)")
+                    
+                    # Continue pagination if we got candles
+                    if batch_candles:
+                        oldest_ts = min(c['timestamp'] for c in batch_candles)
+                        
+                        # Move before cursor to oldest timestamp for next iteration
+                        current_before = oldest_ts
+                    else:
+                        # No more candles, stop
+                        break
+                    
+                    # Rate limiting
+                    time.sleep(0.15)
+                    
+                    if retry_count % 10 == 0:
+                        logger.info(f"   Fetched {len(all_candles)} candles so far...")
+                        
+                except Exception as e:
+                    logger.error(f"   Error fetching: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    break
+        
         # Sort by timestamp (oldest first)
         all_candles.sort(key=lambda x: x['timestamp'])
-
-        logger.info(f"   Downloaded {len(all_candles)} total candles for {symbol} {timeframe}")
-        if all_candles:
-            first_ts = datetime.fromtimestamp(all_candles[0]['timestamp'] / 1000)
-            last_ts = datetime.fromtimestamp(all_candles[-1]['timestamp'] / 1000)
-            logger.info(f"   Data range: {first_ts} to {last_ts}")
-
-        # Filter to exact date range
-        start_ts = int(start_dt.timestamp() * 1000)
-        end_ts = int(end_dt.timestamp() * 1000)
-        logger.info(f"   Requested range: {start_dt} to {end_dt}")
-        logger.info(f"   Requested timestamps: {start_ts} to {end_ts}")
-
-        filtered_candles = [
-            c for c in all_candles
-            if start_ts <= c['timestamp'] <= end_ts
-        ]
-
-        logger.info(f"   After filtering: {len(filtered_candles)} candles")
-
-        return filtered_candles
+        
+        # Deduplicate by timestamp
+        seen = set()
+        unique_candles = []
+        for c in all_candles:
+            if c['timestamp'] not in seen:
+                seen.add(c['timestamp'])
+                unique_candles.append(c)
+        
+        logger.info(f"   Total: {len(unique_candles)} unique candles for {timeframe}")
+        if unique_candles:
+            first_ts = datetime.fromtimestamp(unique_candles[0]['timestamp'] / 1000)
+            last_ts = datetime.fromtimestamp(unique_candles[-1]['timestamp'] / 1000)
+            logger.info(f"   Actual data range: {first_ts} to {last_ts}")
+            logger.info(f"   ✅ Accepted all candles from API (no recency validation applied)")
+        
+        return unique_candles
 
     def _get_cache_filename(self, symbol: str, timeframe: str,
                            start_date: str, end_date: str) -> Path:

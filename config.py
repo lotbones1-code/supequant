@@ -128,8 +128,8 @@ CHECKLIST_SOCIAL_WEIGHT = 0.05
 # =====================================
 # Breakout Strategy - EASIER TO TRIGGER
 BREAKOUT_VOLUME_MULTIPLIER = 1.2  # Was 1.5 - less volume required
-BREAKOUT_ATR_COMPRESSION = 0.75  # Was 0.65 - easier to detect
-BREAKOUT_CONSOLIDATION_BARS = 15  # Was 20 - shorter consolidation OK
+BREAKOUT_ATR_COMPRESSION = 1.25  # Was 0.65 - easier to detect
+BREAKOUT_CONSOLIDATION_BARS = 8  # Was 20 - shorter consolidation OK
 
 # Pullback Strategy - MORE PERMISSIVE
 PULLBACK_FIBONACCI_LEVELS = [0.382, 0.5, 0.618, 0.786]  # Added 0.786
@@ -187,8 +187,8 @@ KILL_SWITCH_FILE = "KILL_SWITCH.txt"
 # =====================================
 # BACKTESTING SETTINGS
 # =====================================
-BACKTEST_START_DATE = "2024-01-01"
-BACKTEST_END_DATE = "2024-12-31"
+BACKTEST_START_DATE = "2025-12-01"
+BACKTEST_END_DATE = "2025-12-15"
 BACKTEST_INITIAL_CAPITAL = 10000
 BACKTEST_COMMISSION = 0.0006
 

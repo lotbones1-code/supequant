@@ -1,0 +1,29 @@
+{
+  "run_name": "fixed_v2",
+  "generated": "2026-01-13T23:06:11.769177",
+  "results": {
+    "summary": {
+      "initial_capital": 10000.0,
+      "final_capital": 10000.0,
+      "total_pnl": 0.0,
+      "total_return_pct": 0.0,
+      "max_drawdown_pct": 0.0
+    },
+    "signals": {
+      "total_signals": 0,
+      "signals_passed_filters": 0,
+      "signals_rejected": 0,
+      "filter_pass_rate": 0
+    },
+    "trades": {
+      "total_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "breakevens": 0,
+      "win_rate": 0
+    },
+    "performance": {},
+    "filter_rejections": {}
+  },
+  "metrics": {}
+}

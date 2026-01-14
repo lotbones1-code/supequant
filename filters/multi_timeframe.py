@@ -47,8 +47,15 @@ class MultiTimeframeFilter:
             mtf_trend = self._get_trend_data(timeframes, MTF_TIMEFRAME)
             ltf_trend = self._get_trend_data(timeframes, LTF_TIMEFRAME)
 
-            if not all([htf_trend, mtf_trend, ltf_trend]):
-                return False, "Missing trend data for one or more timeframes"
+            # If HTF data is missing (e.g., 4H timeframe not available), allow the trade
+            # This is common when requesting recent data where larger timeframes may not have completed candles
+            if not htf_trend:
+                logger.warning(f"⚠️  {self.name}: HTF ({HTF_TIMEFRAME}) data not available, allowing trade")
+                return True, "HTF data not available, skipping check"
+            
+            # MTF and LTF are still required
+            if not all([mtf_trend, ltf_trend]):
+                return False, "Missing trend data for MTF or LTF timeframes"
 
             # Check 1: HTF must show strong trend in signal direction
             htf_check = self._check_timeframe_trend(

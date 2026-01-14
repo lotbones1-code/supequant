@@ -21,3 +21,6 @@ flask>=3.0.0
 
 # Telegram (optional)
 python-telegram-bot>=20.0 ; extra == "telegram"
+
+# AI Agent
+anthropic>=0.34.0

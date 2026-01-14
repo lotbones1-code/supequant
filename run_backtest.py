@@ -71,10 +71,15 @@ def run_backtest(start_date: str, end_date: str,
         logger.info("📥 STEP 1: Loading historical data...")
         data_loader = HistoricalDataLoader()
 
+        # Load ALL timeframes needed by filters (4H, 15m, 5m, 1H for strategies)
+        timeframes_to_load = [config.HTF_TIMEFRAME, config.MTF_TIMEFRAME, config.LTF_TIMEFRAME, '1H']
+        logger.info(f"   Loading timeframes: {', '.join(timeframes_to_load)}")
+
         sol_data = data_loader.load_data(
             symbol=config.TRADING_SYMBOL,
             start_date=start_date,
             end_date=end_date,
+            timeframes=timeframes_to_load,
             force_refresh=force_refresh
         )
 
@@ -82,6 +87,7 @@ def run_backtest(start_date: str, end_date: str,
             symbol=config.REFERENCE_SYMBOL,
             start_date=start_date,
             end_date=end_date,
+            timeframes=timeframes_to_load,
             force_refresh=force_refresh
         )
 
@@ -213,7 +219,12 @@ Examples:
     parser.add_argument('--capital', type=float, default=10000.0, help='Initial capital (default: 10000)')
     parser.add_argument('--name', type=str, help='Name for this backtest run')
     parser.add_argument('--refresh', action='store_true', help='Force refresh data from API')
+    parser.add_argument('--clear-cache', action='store_true', help='Clear cache directory before loading data')
     parser.add_argument('--quick', action='store_true', help='Quick 30-day test (last 30 days from today)')
+    parser.add_argument('--ai-debug', action='store_true', help='Use Claude AI to debug if no signals generated')
+    parser.add_argument('--strategy', type=str, default='breakout', choices=['breakout', 'pullback'],
+                       help='Strategy to debug (for --ai-debug)')
+    parser.add_argument('--max-iterations', type=int, default=5, help='Max debug iterations (for --ai-debug)')
 
     args = parser.parse_args()
 
@@ -239,14 +250,60 @@ Examples:
         except ValueError:
             parser.error("Dates must be in YYYY-MM-DD format")
 
+    # Clear cache if requested
+    if args.clear_cache:
+        import shutil
+        from pathlib import Path
+        cache_dir = Path("backtesting/cache")
+        if cache_dir.exists():
+            logger.info("🗑️  Clearing cache directory...")
+            shutil.rmtree(cache_dir)
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            logger.info("✅ Cache cleared")
+
     # Run backtest
     result = run_backtest(
         start_date=start_date,
         end_date=end_date,
         initial_capital=args.capital,
         run_name=run_name,
-        force_refresh=args.refresh
+        force_refresh=args.refresh or args.clear_cache
     )
+
+    # If AI debug enabled and no signals, run debug agent
+    if args.ai_debug and result:
+        signals_generated = result.get('results', {}).get('signals', {}).get('total_signals', 0)
+        if signals_generated == 0:
+            logger.info("\n" + "="*80)
+            logger.info("🤖 AI DEBUG MODE: No signals generated, running Claude debug agent...")
+            logger.info("="*80 + "\n")
+            
+            try:
+                from agents.debug_agent import DebugAgent
+                
+                debugger = DebugAgent(max_iterations=args.max_iterations)
+                debug_result = debugger.debug_backtest(
+                    start_date,
+                    end_date,
+                    args.strategy,
+                    args.capital
+                )
+                
+                if debug_result['success']:
+                    logger.info(f"✅ AI Debug successful: {debug_result['signals_generated']} signals generated")
+                    logger.info(f"   Iterations: {debug_result['iterations']}")
+                    logger.info(f"   Fixes Applied: {len(debug_result['fixes_applied'])}")
+                else:
+                    logger.warning(f"⚠️  AI Debug completed but no signals generated after {debug_result['iterations']} iterations")
+                
+                # Token usage
+                usage = debugger.agent.get_token_usage()
+                logger.info(f"   Token Usage: {usage['total_tokens']} tokens ({usage['total_requests']} requests)")
+                
+            except ImportError:
+                logger.error("❌ agents package not available. Install anthropic: pip install anthropic")
+            except Exception as e:
+                logger.error(f"❌ AI Debug failed: {e}", exc_info=True)
 
     if result:
         sys.exit(0)
