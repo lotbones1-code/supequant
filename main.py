@@ -5,16 +5,18 @@ Orchestrates all components for automated crypto trading
 Architecture:
 1. Data Feed - Fetches market data from OKX
 2. Filters - Heavy filtering to reject bad trades
-3. Strategy - Generates trading signals
-4. Risk - Validates risk parameters
-5. Execution - Places and manages orders
-6. Model Learning - Trains AI rejection model
+3. Claude AI - Learned rejection rules from past losses
+4. Strategy - Generates trading signals
+5. Risk - Validates risk parameters
+6. Execution - Places and manages orders
+7. Model Learning - Trains AI rejection model
 
 Trading Philosophy:
 - Quality over quantity (3-5 trades/day max)
 - Heavy filtering > high volume
 - Only trade when ALL conditions are perfect
 - Strict risk management always enforced
+- Learn from every loss
 """
 
 import time
@@ -39,6 +41,18 @@ import config
 # Setup logging first
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Claude AI integration (optional - won't crash if missing)
+try:
+    from agents.claude_autonomous_system import AutonomousTradeSystem
+    CLAUDE_AVAILABLE = True
+    logger.info("🤖 Claude AI gating enabled")
+except ImportError:
+    CLAUDE_AVAILABLE = False
+    logger.warning("Claude AI not available - install anthropic to enable")
+except Exception as e:
+    CLAUDE_AVAILABLE = False
+    logger.warning(f"Claude AI disabled: {e}")
 
 # Dashboard imports (optional - won't crash if missing)
 try:
@@ -98,10 +112,22 @@ class EliteQuantSystem:
         self.position_tracker = PositionTracker(self.okx_client)
         self.data_collector = DataCollector()
 
+        # Initialize Claude AI gating (if available)
+        self.claude_system = None
+        self.claude_enabled = getattr(config, 'CLAUDE_GATING_ENABLED', True)
+        if CLAUDE_AVAILABLE and self.claude_enabled:
+            try:
+                self.claude_system = AutonomousTradeSystem()
+                logger.info("✅ Claude AI gating initialized")
+            except Exception as e:
+                logger.warning(f"Claude AI init failed: {e}")
+                self.claude_system = None
+
         # State
         self.running = False
         self.cycle_count = 0
         self.last_trade_time = None
+        self.claude_blocks = 0  # Track how many trades Claude blocked
 
         # Timeframes to analyze
         self.timeframes = [
@@ -128,6 +154,7 @@ class EliteQuantSystem:
         logger.info(f"Mode: {'SIMULATED' if config.OKX_SIMULATED else 'LIVE'}")
         logger.info(f"Max Daily Trades: {config.MAX_DAILY_TRADES}")
         logger.info(f"Risk Per Trade: {config.MAX_RISK_PER_TRADE*100}%")
+        logger.info(f"Claude AI Gating: {'ENABLED' if self.claude_system else 'DISABLED'}")
         if DASHBOARD_AVAILABLE:
             logger.info(f"Dashboard: http://localhost:{config.DASHBOARD_PORT}")
         logger.info("="*60 + "\n")
@@ -258,16 +285,33 @@ class EliteQuantSystem:
                     })
                 return
 
-            logger.info(f"✅ ALL FILTERS PASSED - TRADE APPROVED")
+            logger.info(f"✅ ALL FILTERS PASSED")
+
+            # Step 7: Claude AI Gating (learned rejection rules)
+            if self.claude_system:
+                claude_approved = self._check_claude_approval(signal, sol_market_state)
+                if not claude_approved:
+                    logger.warning(f"🤖 SIGNAL REJECTED BY CLAUDE AI")
+                    self.claude_blocks += 1
+                    if DASHBOARD_AVAILABLE:
+                        add_signal({
+                            'type': 'rejected',
+                            'direction': signal['direction'],
+                            'reason': 'Blocked by Claude AI (learned pattern)'
+                        })
+                    return
+                logger.info(f"🤖 Claude AI APPROVED")
+
+            logger.info(f"✅ TRADE APPROVED - EXECUTING")
             if DASHBOARD_AVAILABLE:
                 add_signal({
                     'type': 'approved',
                     'direction': signal['direction'],
                     'strategy': signal['strategy'],
-                    'reason': 'All filters passed'
+                    'reason': 'All filters + Claude AI passed'
                 })
 
-            # Step 7: Calculate position size
+            # Step 8: Calculate position size
             account_balance = self.risk_manager.get_account_balance()
             if not account_balance:
                 logger.error("❌ Could not get account balance")
@@ -278,13 +322,63 @@ class EliteQuantSystem:
                 account_balance
             )
 
-            # Step 8: Execute trade
+            # Step 9: Execute trade
             self._execute_trade(signal, position_size)
 
         except Exception as e:
             logger.error(f"❌ Error in trading cycle: {e}", exc_info=True)
             if DASHBOARD_AVAILABLE:
                 add_error(str(e))
+
+    def _check_claude_approval(self, signal: Dict, market_state: Dict) -> bool:
+        """
+        Check if Claude AI approves the trade based on learned patterns
+        
+        Args:
+            signal: Trading signal dict
+            market_state: Current market state
+            
+        Returns:
+            True if approved, False if blocked
+        """
+        if not self.claude_system:
+            return True  # If Claude not available, approve by default
+        
+        try:
+            # Build trade dict for Claude to evaluate
+            trade_to_check = {
+                'trade_id': f"pending_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                'direction': signal.get('direction'),
+                'entry_price': signal.get('entry_price', market_state.get('current_price', 0)),
+                'stop_loss': signal.get('stop_loss', 0),
+                'take_profit_1': signal.get('take_profit_1', 0),
+                'take_profit_2': signal.get('take_profit_2', 0),
+                'strategy': signal.get('strategy'),
+                'volatility': market_state.get('volatility', 0),
+                'volume_ratio': market_state.get('volume_ratio', 1),
+                'risk_amount': signal.get('risk_amount', 0),
+            }
+            
+            # Get market context
+            market_context = {
+                'price': market_state.get('current_price', 0),
+                'trend': market_state.get('trend', 'unknown'),
+                'volatility': market_state.get('volatility', 'unknown'),
+                'volume_ratio': market_state.get('volume_ratio', 1),
+            }
+            
+            # Ask Claude to approve/reject
+            decision = self.claude_system.approve_trade(trade_to_check, market_context)
+            
+            if not decision['approved']:
+                logger.info(f"🤖 Claude blocked trade: {decision.get('reasoning', 'Unknown reason')}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Claude approval check failed: {e}")
+            return True  # On error, default to approve (fail open)
 
     def _execute_trade(self, signal: Dict, position_size: float):
         """
@@ -371,6 +465,7 @@ class EliteQuantSystem:
     def _update_positions(self):
         """
         Update all open positions with current prices
+        Also analyze closed positions for Claude learning
         """
         open_positions = self.position_tracker.get_open_positions()
 
@@ -411,6 +506,43 @@ class EliteQuantSystem:
 
         if DASHBOARD_AVAILABLE:
             update_positions(dashboard_positions)
+        
+        # Check for newly closed positions and send to Claude for learning
+        self._check_closed_positions_for_learning()
+
+    def _check_closed_positions_for_learning(self):
+        """
+        Check for recently closed positions and send losing ones to Claude
+        """
+        if not self.claude_system:
+            return
+            
+        try:
+            # Get recently closed positions
+            closed_positions = self.position_tracker.get_recently_closed_positions()
+            
+            for position in closed_positions:
+                # Only analyze losing trades
+                if position.get('pnl', 0) < 0:
+                    trade_dict = {
+                        'trade_id': position.get('position_id'),
+                        'direction': position.get('direction'),
+                        'entry_price': position.get('entry_price', 0),
+                        'exit_price': position.get('exit_price', 0),
+                        'stop_loss': position.get('stop_loss', 0),
+                        'pnl': position.get('pnl', 0),
+                        'loss_amount': abs(position.get('pnl', 0)),
+                        'loss_pct': position.get('pnl_pct', 0),
+                        'duration_minutes': position.get('duration_minutes', 0),
+                        'strategy': position.get('strategy', 'breakout'),
+                    }
+                    
+                    # Send to Claude for analysis
+                    logger.info(f"🤖 Sending losing trade to Claude for analysis: {trade_dict['trade_id']}")
+                    self.claude_system.process_completed_trade(trade_dict)
+                    
+        except Exception as e:
+            logger.error(f"Error in Claude learning check: {e}")
 
     def _save_prediction_for_learning(self, signal: Dict, position: Dict):
         """
@@ -471,6 +603,14 @@ class EliteQuantSystem:
             logger.info(f"\n🛡️  Risk Statistics:")
             logger.info(f"   Daily PnL: ${risk_stats['daily_pnl']:.2f}")
             logger.info(f"   Daily trades: {risk_stats['daily_trades']}")
+            
+            # Claude AI stats
+            if self.claude_system:
+                claude_status = self.claude_system.get_system_status()
+                logger.info(f"\n🤖 Claude AI Statistics:")
+                logger.info(f"   Rules learned: {claude_status['learned_rules']}")
+                logger.info(f"   Trades blocked: {self.claude_blocks}")
+                logger.info(f"   Est. loss prevented: ${claude_status['estimated_prevented_loss']:.2f}")
 
         except Exception as e:
             logger.error(f"Error logging statistics: {e}")
