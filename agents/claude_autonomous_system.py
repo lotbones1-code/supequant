@@ -1,4 +1,5 @@
-"""\nClaude Autonomous Trading System
+"""
+Claude Autonomous Trading System
 AI-powered trade analysis, loss prevention, and continuous optimization
 
 Architecture:
@@ -339,7 +340,13 @@ class TradeGatekeeper:
         """Get approval statistics"""
         total = self.approval_stats['total_reviewed']
         if total == 0:
-            return {'rate': 0, 'stats': self.approval_stats}
+            # Return consistent structure even with no data
+            return {
+                'approval_rate': 0.0,
+                'rejection_rate': 0.0,
+                'estimated_prevented_loss': 0.0,
+                'stats': self.approval_stats
+            }
         
         return {
             'approval_rate': self.approval_stats['approved'] / total,
@@ -429,6 +436,7 @@ class AutonomousTradeSystem:
     def generate_daily_report(self) -> str:
         """Generate daily optimization report"""
         status = self.get_system_status()
+        approval = status['approval_stats']
         
         report = f"""
 ╔════════════════════════════════════════════════════════════╗
@@ -441,14 +449,17 @@ class AutonomousTradeSystem:
   • Estimated Loss Prevention: ${status['estimated_prevented_loss']:.2f}
 
 🎯 TRADE GATING:
-  • Approval Rate: {status['approval_stats']['approval_rate']*100:.1f}%
-  • Rejection Rate: {status['approval_stats']['rejection_rate']*100:.1f}%
-  • Total Reviewed: {status['approval_stats']['stats']['total_reviewed']}
+  • Approval Rate: {approval.get('approval_rate', 0)*100:.1f}%
+  • Rejection Rate: {approval.get('rejection_rate', 0)*100:.1f}%
+  • Total Reviewed: {approval.get('stats', {}).get('total_reviewed', 0)}
 
 🔥 TOP REJECTION RULES:
 """
         for rule in status['top_rejection_rules']:
             report += f"  • {rule['name']}: {rule['hits']} blocks (confidence: {rule['confidence']*100:.0f}%)\n"
+        
+        if not status['top_rejection_rules']:
+            report += "  • No rules learned yet\n"
         
         report += f"""
 💡 TOKEN USAGE:
