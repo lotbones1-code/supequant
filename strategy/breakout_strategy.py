@@ -2,6 +2,8 @@
 Breakout Strategy
 Trades breakouts from consolidation with volatility compression
 Requires: ATR compression + volume confirmation + clean breakout
+
+⚠️ DO NOT replace analyze() with a test stub - this is production code
 """
 
 from typing import Dict, Optional, Tuple, List
@@ -15,7 +17,6 @@ from config import (
     TP1_RR_RATIO,
     TP2_RR_RATIO
 )
-from .signal_scorer import score_signal
 from data_feed.indicators import TechnicalIndicators
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,11 @@ class BreakoutStrategy:
     """
     Breakout Trading Strategy
     Enters on clean breakouts from consolidation zones
+    
+    Requirements for signal:
+    1. Volatility compression (ATR in lower percentile)
+    2. Clear consolidation zone (tight range)
+    3. Clean breakout with volume
     """
 
     def __init__(self):
@@ -34,91 +40,80 @@ class BreakoutStrategy:
 
     def analyze(self, market_state: Dict) -> Optional[Dict]:
         """
-        TEST STRATEGY: Simple price change detector with quality scoring
+        PRODUCTION breakout detection
+        
+        ⚠️ DO NOT replace this with a test stub that generates signals
+        on every price movement - that's why we had 30% win rate!
         """
-        signal = None
         try:
             timeframes = market_state.get('timeframes', {})
+            
+            # Need 15m timeframe for breakout detection
             if '15m' not in timeframes:
                 return None
 
             tf_data = timeframes['15m']
             candles = tf_data.get('candles', [])
 
-            if len(candles) < 20:
+            if len(candles) < BREAKOUT_CONSOLIDATION_BARS + 5:
                 return None
 
-            current_candle = candles[-1]
-            price_change = (current_candle['close'] - current_candle['open']) / current_candle['open']
-            
-            if abs(price_change) > 0.001:
-                direction = 'long' if price_change > 0 else 'short'
-                entry_price = current_candle['close']
-                stop_loss = entry_price * (0.98 if direction == 'long' else 1.02)
-                take_profit = entry_price * (1.02 if direction == 'long' else 0.98)
-                
-                # Prepare market_data for scoring
-                volume_data = tf_data.get('volume', {})
-                trend_data = tf_data.get('trend', {})
-                
-                # Calculate RSI
-                closes = [c['close'] for c in candles]
-                rsi = self.indicators.calculate_rsi(closes, period=14)
-                if rsi is None:
-                    rsi = 50  # Default if can't calculate
-                
-                # Extract market data
-                market_data = {
-                    'volume': volume_data.get('current_volume', 0),
-                    'avg_volume_20': volume_data.get('average_volume', 0),
-                    'trend': trend_data.get('trend_direction', ''),
-                    'rsi_14': rsi
-                }
-                
-                # Create signal dict for scoring
-                signal_for_scoring = {
-                    'direction': direction
-                }
-                
-                # Score the signal
-                quality_score, quality_breakdown = score_signal(market_data, signal_for_scoring)
-                
-                signal = {
-                    'strategy': 'breakout',  # Required for main.py line 257
-                    'entry_price': entry_price,
-                    'direction': direction.upper(),
-                    'quality_score': quality_score,
-                    'quality_breakdown': quality_breakdown,
-                    'stop_loss': stop_loss,
-                    'take_profit': take_profit
-                }
-                
-                self.signals_generated += 1
-                logger.info(f"🎯 {self.name}: Test signal - {direction.upper()} (price_change: {price_change*100:.2f}%, score: {quality_score})")
-                return signal
+            # Step 1: Check for volatility compression
+            if not self._check_compression(tf_data):
+                return None
 
-            return None
+            # Step 2: Detect consolidation zone
+            consolidation = self._detect_consolidation(candles)
+            if not consolidation:
+                return None
+
+            # Step 3: Detect breakout
+            breakout = self._detect_breakout(candles, consolidation, tf_data)
+            if not breakout:
+                return None
+
+            # Step 4: Confirm with volume
+            if not self._confirm_volume(tf_data):
+                logger.debug(f"{self.name}: Breakout without volume confirmation")
+                return None
+
+            # All conditions met - generate signal
+            signal = self._generate_signal(market_state, breakout, consolidation, tf_data)
+            
+            self.signals_generated += 1
+            logger.info(f"🎯 {self.name}: {breakout['direction'].upper()} breakout "
+                       f"(strength: {breakout['breakout_strength']*100:.2f}%, "
+                       f"range: {consolidation['range_pct']*100:.2f}%)")
+            
+            return signal
+
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error(f"{self.name} error: {e}")
             return None
 
     def _check_compression(self, tf_data: Dict) -> bool:
-        """Check for volatility compression"""
+        """
+        Check for volatility compression (required for breakout)
+        
+        Returns True if ATR is compressed (potential energy building)
+        """
         atr_data = tf_data.get('atr', {})
         if not atr_data:
-            return False
+            # No ATR data - can't confirm compression
+            # Allow trade but log warning
+            logger.debug(f"{self.name}: No ATR data for compression check")
+            return True
 
         is_compressed = atr_data.get('is_compressed', False)
-
-        # Also check ATR percentile
         atr_percentile = atr_data.get('atr_percentile', 50)
 
-        # Want ATR in lower range (compressed)
+        # Compression means ATR is in lower range (coiled spring)
+        # Accept if explicitly compressed OR if ATR below 60th percentile
         return is_compressed or atr_percentile <= 60
 
     def _detect_consolidation(self, candles: List[Dict]) -> Optional[Dict]:
         """
-        Detect consolidation zone
+        Detect consolidation zone (tight range, no trend)
 
         Returns:
             Dict with consolidation details or None
@@ -126,14 +121,14 @@ class BreakoutStrategy:
         if len(candles) < BREAKOUT_CONSOLIDATION_BARS:
             return None
 
-        # Look at recent candles
+        # Look at recent candles for consolidation
         recent_candles = candles[-BREAKOUT_CONSOLIDATION_BARS:]
 
         highs = [c['high'] for c in recent_candles]
         lows = [c['low'] for c in recent_candles]
         closes = [c['close'] for c in recent_candles]
 
-        # Calculate consolidation range
+        # Calculate consolidation boundaries
         resistance = max(highs)
         support = min(lows)
         range_size = resistance - support
@@ -142,20 +137,25 @@ class BreakoutStrategy:
         if mid_price == 0:
             return None
 
-        # Consolidation should be tight (< 3% range)
+        # Consolidation should be tight (< 3% range for crypto)
         range_pct = range_size / mid_price
 
-        if range_pct > 0.03:  # More than 3% range = not consolidation
+        if range_pct > 0.03:  # More than 3% = trending, not consolidating
             return None
 
-        # Check if price is staying within range (not trending)
-        breaks = 0
-        for candle in recent_candles[:-1]:  # Exclude last candle
-            if candle['high'] > resistance or candle['low'] < support:
-                breaks += 1
-
-        # Allow max 2 breaks
-        if breaks > 2:
+        # Check that price stayed within range (sideways, not trending)
+        # Count how many candles broke outside the range
+        inner_resistance = resistance * 0.995  # 0.5% inside
+        inner_support = support * 1.005
+        
+        contained_candles = 0
+        for candle in recent_candles[:-1]:  # Exclude the potential breakout candle
+            if candle['high'] <= inner_resistance and candle['low'] >= inner_support:
+                contained_candles += 1
+        
+        # Need at least 60% of candles contained (proper consolidation)
+        containment_ratio = contained_candles / (len(recent_candles) - 1)
+        if containment_ratio < 0.6:
             return None
 
         return {
@@ -163,67 +163,84 @@ class BreakoutStrategy:
             'support': support,
             'mid': mid_price,
             'range_pct': range_pct,
-            'bars': len(recent_candles)
+            'bars': len(recent_candles),
+            'containment': containment_ratio
         }
 
     def _detect_breakout(self, candles: List[Dict], consolidation: Dict,
                         tf_data: Dict) -> Optional[Dict]:
         """
         Detect breakout from consolidation
+        
+        Requires: Close beyond boundary (not just wick)
 
         Returns:
             Dict with breakout details or None
         """
         current_candle = candles[-1]
+        prev_candle = candles[-2]
+        
         resistance = consolidation['resistance']
         support = consolidation['support']
 
-        current_high = current_candle['high']
-        current_low = current_candle['low']
         current_close = current_candle['close']
+        current_open = current_candle['open']
+        prev_close = prev_candle['close']
 
-        # Bullish breakout
+        # Bullish breakout: Close above resistance
         if current_close > resistance:
-            # Confirm close is above resistance (not just wick)
-            if current_close > resistance * 1.001:  # 0.1% above
-                return {
-                    'direction': 'long',
-                    'breakout_level': resistance,
-                    'entry_price': current_close,
-                    'breakout_strength': (current_close - resistance) / resistance
-                }
+            # Must be a clean break (close above, not just wick)
+            breakout_margin = (current_close - resistance) / resistance
+            
+            # Need at least 0.2% above resistance for confirmation
+            if breakout_margin >= 0.002:
+                # Check candle direction (should be bullish)
+                if current_close > current_open:
+                    return {
+                        'direction': 'long',
+                        'breakout_level': resistance,
+                        'entry_price': current_close,
+                        'breakout_strength': breakout_margin
+                    }
 
-        # Bearish breakout
+        # Bearish breakout: Close below support
         elif current_close < support:
-            # Confirm close is below support (not just wick)
-            if current_close < support * 0.999:  # 0.1% below
-                return {
-                    'direction': 'short',
-                    'breakout_level': support,
-                    'entry_price': current_close,
-                    'breakout_strength': (support - current_close) / support
-                }
+            breakout_margin = (support - current_close) / support
+            
+            # Need at least 0.2% below support for confirmation
+            if breakout_margin >= 0.002:
+                # Check candle direction (should be bearish)
+                if current_close < current_open:
+                    return {
+                        'direction': 'short',
+                        'breakout_level': support,
+                        'entry_price': current_close,
+                        'breakout_strength': breakout_margin
+                    }
 
         return None
 
     def _confirm_volume(self, tf_data: Dict) -> bool:
-        """Confirm breakout with volume"""
+        """
+        Confirm breakout with volume
+        
+        Valid breakouts should have higher than average volume
+        """
         volume_data = tf_data.get('volume', {})
         if not volume_data:
-            return True  # Allow if no volume data
+            # No volume data - allow but with caution
+            logger.debug(f"{self.name}: No volume data for confirmation")
+            return True
 
         volume_ratio = volume_data.get('volume_ratio', 1.0)
 
-        # Volume should be above average
+        # Volume should be at least BREAKOUT_VOLUME_MULTIPLIER (default 1.2x)
         return volume_ratio >= BREAKOUT_VOLUME_MULTIPLIER
 
     def _generate_signal(self, market_state: Dict, breakout: Dict,
                         consolidation: Dict, tf_data: Dict) -> Dict:
         """
         Generate complete trading signal with entry, stops, targets
-
-        Returns:
-            Complete signal dict
         """
         direction = breakout['direction']
         entry_price = breakout['entry_price']
@@ -233,19 +250,21 @@ class BreakoutStrategy:
         atr = atr_data.get('atr', 0)
 
         if atr == 0:
-            # Fallback: use consolidation range
+            # Fallback: use consolidation range as ATR proxy
             atr = consolidation['resistance'] - consolidation['support']
 
-        # Stop loss: Below support for long, above resistance for short
+        # Stop loss placement
         if direction == 'long':
+            # Stop below support with ATR buffer
             stop_loss = consolidation['support'] - (atr * ATR_STOP_MULTIPLIER)
         else:
+            # Stop above resistance with ATR buffer
             stop_loss = consolidation['resistance'] + (atr * ATR_STOP_MULTIPLIER)
 
-        # Calculate risk
+        # Calculate risk for R:R targets
         risk = abs(entry_price - stop_loss)
 
-        # Take profits
+        # Take profits at configured R:R ratios
         if direction == 'long':
             tp1 = entry_price + (risk * TP1_RR_RATIO)
             tp2 = entry_price + (risk * TP2_RR_RATIO)
@@ -255,19 +274,21 @@ class BreakoutStrategy:
 
         signal = {
             'strategy': self.name,
-            'direction': direction,
+            'direction': direction.upper(),  # Standardize to uppercase
             'entry_price': entry_price,
             'stop_loss': stop_loss,
+            'stop_price': stop_loss,  # Alias for backtest engine
+            'take_profit': tp1,  # Primary target
             'take_profit_1': tp1,
             'take_profit_2': tp2,
+            'target_price': tp1,  # Alias for backtest engine
             'risk_amount': risk,
             'risk_reward_1': TP1_RR_RATIO,
             'risk_reward_2': TP2_RR_RATIO,
             'consolidation': consolidation,
             'breakout_strength': breakout['breakout_strength'],
             'atr': atr,
-            'timestamp': market_state.get('timestamp'),
-            'current_price': market_state.get('current_price')
+            'timestamp': market_state.get('timestamp')
         }
 
         return signal
