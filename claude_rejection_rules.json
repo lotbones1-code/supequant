@@ -1,0 +1,48 @@
+[
+  {
+    "rule_name": "breakout_confirmation_filter",
+    "condition": "breakout_volume_ratio < 1.5 or price_reclaim_within_minutes <= 5 or stop_loss_missing == true",
+    "parameters": {
+      "min_volume_ratio": 1.5,
+      "volume_lookback_bars": 20,
+      "reclaim_timeout_minutes": 5,
+      "required_consecutive_bars": 2,
+      "mandatory_stop_buffer_pct": 2.0,
+      "oversold_rsi_threshold": 30
+    },
+    "confidence": 0.9,
+    "created_at": "2026-01-14T02:04:45.522299",
+    "hits": 1,
+    "last_triggered": "2026-01-14T02:04:45.522326",
+    "accuracy": 0.9
+  },
+  {
+    "rule_name": "mandatory_stop_loss",
+    "condition": "strategy == 'breakout' and stop_loss == 0",
+    "parameters": {
+      "strategy": "breakout",
+      "required_stop_loss": "> 0",
+      "max_risk_pct": 3.0
+    },
+    "confidence": 0.95,
+    "created_at": "2026-01-14T02:05:34.313761",
+    "hits": 2,
+    "last_triggered": "2026-01-14T02:07:12.533551",
+    "accuracy": 0.95
+  },
+  {
+    "rule_name": "bear_trap_confirmation",
+    "condition": "breakout_volume_ratio < 1.5 or immediate_reversal_pct > 2.0 or consecutive_candles_below < 2",
+    "parameters": {
+      "min_volume_ratio": 1.5,
+      "max_reversal_pct": 2.0,
+      "min_consecutive_candles": 2,
+      "mandatory_stop_buffer_pct": 1.5
+    },
+    "confidence": 0.9,
+    "created_at": "2026-01-14T02:12:53.419624",
+    "hits": 1,
+    "last_triggered": "2026-01-14T02:12:53.419643",
+    "accuracy": 0.9
+  }
+]

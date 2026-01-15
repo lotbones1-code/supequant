@@ -15,6 +15,8 @@ from config import (
     TP1_RR_RATIO,
     TP2_RR_RATIO
 )
+from .signal_scorer import score_signal
+from data_feed.indicators import TechnicalIndicators
 
 logger = logging.getLogger(__name__)
 
@@ -28,43 +30,73 @@ class BreakoutStrategy:
     def __init__(self):
         self.name = "Breakout"
         self.signals_generated = 0
+        self.indicators = TechnicalIndicators()
 
     def analyze(self, market_state: Dict) -> Optional[Dict]:
         """
-        TEST STRATEGY: Simple price change detector
+        TEST STRATEGY: Simple price change detector with quality scoring
         """
+        signal = None
         try:
             timeframes = market_state.get('timeframes', {})
             if '15m' not in timeframes:
                 return None
-            
+
             tf_data = timeframes['15m']
             candles = tf_data.get('candles', [])
-            
+
             if len(candles) < 20:
                 return None
-            
+
             current_candle = candles[-1]
             price_change = (current_candle['close'] - current_candle['open']) / current_candle['open']
             
             if abs(price_change) > 0.001:
                 direction = 'long' if price_change > 0 else 'short'
+                entry_price = current_candle['close']
+                stop_loss = entry_price * (0.98 if direction == 'long' else 1.02)
+                take_profit = entry_price * (1.02 if direction == 'long' else 0.98)
+                
+                # Prepare market_data for scoring
+                volume_data = tf_data.get('volume', {})
+                trend_data = tf_data.get('trend', {})
+                
+                # Calculate RSI
+                closes = [c['close'] for c in candles]
+                rsi = self.indicators.calculate_rsi(closes, period=14)
+                if rsi is None:
+                    rsi = 50  # Default if can't calculate
+                
+                # Extract market data
+                market_data = {
+                    'volume': volume_data.get('current_volume', 0),
+                    'avg_volume_20': volume_data.get('average_volume', 0),
+                    'trend': trend_data.get('trend_direction', ''),
+                    'rsi_14': rsi
+                }
+                
+                # Create signal dict for scoring
+                signal_for_scoring = {
+                    'direction': direction
+                }
+                
+                # Score the signal
+                quality_score, quality_breakdown = score_signal(market_data, signal_for_scoring)
                 
                 signal = {
-                    'strategy': self.name,
-                    'direction': direction,
-                    'entry_price': current_candle['close'],
-                    'stop_loss': current_candle['close'] * (0.98 if direction == 'long' else 1.02),
-                    'take_profit_1': current_candle['close'] * (1.02 if direction == 'long' else 0.98),
-                    'take_profit_2': current_candle['close'] * (1.03 if direction == 'long' else 0.97),
-                    'timestamp': current_candle.get('timestamp'),
-                    'current_price': current_candle['close']
+                    'strategy': 'breakout',  # Required for main.py line 257
+                    'entry_price': entry_price,
+                    'direction': direction.upper(),
+                    'quality_score': quality_score,
+                    'quality_breakdown': quality_breakdown,
+                    'stop_loss': stop_loss,
+                    'take_profit': take_profit
                 }
                 
                 self.signals_generated += 1
-                logger.info(f"🎯 {self.name}: Test signal - {direction.upper()} (price_change: {price_change*100:.2f}%)")
+                logger.info(f"🎯 {self.name}: Test signal - {direction.upper()} (price_change: {price_change*100:.2f}%, score: {quality_score})")
                 return signal
-            
+
             return None
         except Exception as e:
             logger.error(f"Error: {e}")

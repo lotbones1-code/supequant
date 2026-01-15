@@ -88,6 +88,12 @@ AI_CONFIDENCE_THRESHOLD = 40  # Was 70 - allow more trades through
 AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
+# Quality Score Threshold - Adaptive learning system
+SCORE_THRESHOLD = 45  # Start loose (45) to collect data, will auto-raise to 55 after 20+ trades
+SCORE_THRESHOLD_ADAPTIVE_ENABLED = True  # Enable adaptive threshold raising
+SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION = 20  # Need 20+ trades before raising threshold
+SCORE_THRESHOLD_ADAPTED_VALUE = 55  # Raise to 55 after enough trades
+
 # Pattern Failure Detection - LESS STRICT
 BULL_TRAP_THRESHOLD = 0.03  # Was 0.015 - more tolerance for fakeouts
 BEAR_TRAP_THRESHOLD = 0.03
@@ -180,6 +186,7 @@ ENABLE_EMERGENCY_SHUTDOWN = True
 EMERGENCY_VOLATILITY_MULTIPLIER = 6.0  # Was 5.0 - less sensitive
 EMERGENCY_DRAWDOWN_PCT = 0.08  # Was 0.05 - more headroom
 EMERGENCY_API_FAILURE_COUNT = 10  # Was 5 - more tolerance
+EXTREME_VOLATILITY_PERCENTILE = 99  # ATR percentile threshold for emergency shutdown (was 95, too sensitive for crypto)
 
 ENABLE_KILL_SWITCH = True
 KILL_SWITCH_FILE = "KILL_SWITCH.txt"

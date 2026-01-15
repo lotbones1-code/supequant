@@ -1,7 +1,7 @@
 """
 Filter Manager
 Orchestrates all filters and provides unified interface
-ALL filters must pass before a trade is allowed
+Uses scoring system for quality filters, binary for critical filters
 """
 
 from typing import Dict, Tuple, List, Optional
@@ -12,6 +12,7 @@ from .ai_rejection import AIRejectionFilter
 from .pattern_failure import PatternFailureFilter
 from .btc_sol_correlation import BTCSOLCorrelationFilter
 from .macro_driver import MacroDriverFilter
+from .signal_scorer import SignalScorer
 from research_filters import SOLPlaybookEngine, TradingChecklistFilter, DriverTierWeighting
 import config
 
@@ -25,16 +26,32 @@ class FilterManager:
     """
 
     def __init__(self):
-        # Core filters (blocking)
-        self.filters = {
+        # Critical filters (binary - must pass)
+        self.critical_filters = {
+            'pattern_failure': PatternFailureFilter(),  # Must not be a trap
+        }
+        
+        # Quality filters (scoring system)
+        self.quality_filters = {
             'market_regime': MarketRegimeFilter(),
             'multi_timeframe': MultiTimeframeFilter(),
             'ai_rejection': AIRejectionFilter(),
-            'pattern_failure': PatternFailureFilter(),
             'btc_sol_correlation': BTCSOLCorrelationFilter(),
             'macro_driver': MacroDriverFilter(),
             'checklist': TradingChecklistFilter(config)
         }
+        
+        # Signal scorer for quality metrics
+        self.signal_scorer = SignalScorer()
+        
+        # Pattern matcher for adaptive learning (similarity to winners)
+        try:
+            from strategy.pattern_matcher import PatternMatcher
+            self.pattern_matcher = PatternMatcher()
+            logger.info(f"   Pattern matcher: Enabled ({self.pattern_matcher.get_statistics()['winning_patterns']} winning patterns)")
+        except Exception as e:
+            logger.warning(f"   Pattern matcher: Disabled ({e})")
+            self.pattern_matcher = None
 
         # Research filters (advisory/enrichment)
         self.research_filters = {
@@ -46,25 +63,22 @@ class FilterManager:
             'total_checks': 0,
             'passed': 0,
             'failed': 0,
-            'failed_by_filter': {}
+            'failed_by_filter': {},
+            'score_distribution': []  # Track score distribution
         }
 
-        # Count enabled filters
-        filter_count = 6  # Base filters
-        if config.BTC_SOL_CORRELATION_ENABLED:
-            filter_count += 1
-        if config.MACRO_DRIVER_ENABLED:
-            filter_count += 1
-        if config.CHECKLIST_ENABLED:
-            filter_count += 1
-
-        logger.info(f"✅ FilterManager initialized with {filter_count} blocking filters + 2 research filters")
+        logger.info(f"✅ FilterManager initialized with scoring system")
+        logger.info(f"   Critical filters: {len(self.critical_filters)} (binary)")
+        logger.info(f"   Quality filters: {len(self.quality_filters)} (scoring)")
 
     def check_all(self, market_state: Dict, signal_direction: str,
                  strategy_name: str, btc_market_state: Optional[Dict] = None) -> Tuple[bool, Dict]:
         """
-        Run ALL filters on a trade signal
-        If ANY filter fails, trade is rejected
+        Run filters on a trade signal using scoring system
+        
+        Critical filters must pass (binary).
+        Quality filters contribute to score (0-100).
+        Trade allowed if score >= 50.
 
         Args:
             market_state: Complete market state from MarketDataFeed (for SOL)
@@ -73,25 +87,169 @@ class FilterManager:
             btc_market_state: Optional Bitcoin market state for correlation check
 
         Returns:
-            (all_passed: bool, results: Dict)
+            (passed: bool, results: Dict with score, breakdown, position_size_multiplier)
         """
-        # TEMPORARY: Bypass all filters for testing
-        logger.info("⚠️ FILTERS BYPASSED FOR TESTING - ALLOWING ALL SIGNALS")
-        return True, {'overall_pass': True, 'filter_results': {}, 'failed_filters': [], 'passed_filters': ['all_bypassed']}
-        
-        # Rest of the method below (won't execute due to return above)
         self.filter_stats['total_checks'] += 1
 
         results = {
-            'overall_pass': True,
+            'overall_pass': False,
             'filter_results': {},
             'failed_filters': [],
-            'passed_filters': []
+            'passed_filters': [],
+            'score': 0,
+            'score_breakdown': {},
+            'position_size_multiplier': 1.0
         }
 
         logger.info(f"\n{'='*60}")
         logger.info(f"🔍 FILTER CHECK: {signal_direction.upper()} {strategy_name}")
         logger.info(f"{'='*60}")
+
+        # Step 1: Check critical filters (binary - must pass)
+        for filter_name, filter_obj in self.critical_filters.items():
+            if filter_name == 'pattern_failure':
+                passed, reason = filter_obj.check(market_state, signal_direction)
+            else:
+                passed, reason = filter_obj.check(market_state)
+            
+            results['filter_results'][filter_name] = {
+                'passed': passed,
+                'reason': reason
+            }
+            
+            if not passed:
+                results['overall_pass'] = False
+                results['failed_filters'].append(filter_name)
+                self._log_failure(filter_name, reason)
+                logger.info(f"❌ CRITICAL FILTER FAILED: {filter_name} - {reason}")
+                logger.info(f"{'='*60}\n")
+                self.filter_stats['failed'] += 1
+                return False, results
+            else:
+                results['passed_filters'].append(filter_name)
+
+        # Step 2: Score quality filters
+        # Extract market data for scoring
+        timeframes = market_state.get('timeframes', {})
+        tf_15m = timeframes.get('15m', {})
+        
+        volume_data = tf_15m.get('volume', {})
+        trend_data = tf_15m.get('trend', {})
+        atr_data = tf_15m.get('atr', {})
+        
+        # Calculate RSI if not available
+        candles = tf_15m.get('candles', [])
+        rsi = None
+        if candles and len(candles) >= 14:
+            from data_feed.indicators import TechnicalIndicators
+            indicators = TechnicalIndicators()
+            closes = [c['close'] for c in candles]
+            rsi = indicators.calculate_rsi(closes, period=14)
+        
+        # Get current price from candles if not in market_state
+        current_price = market_state.get('current_price', 0)
+        if current_price == 0 and candles:
+            current_price = candles[-1].get('close', 0)
+        
+        # Prepare market data for scoring
+        market_data_for_scoring = {
+            'volume': volume_data.get('current_volume', 0),
+            'avg_volume_20': volume_data.get('average_volume', 0),
+            'trend': trend_data.get('trend_direction', 'neutral'),
+            'trend_strength': trend_data.get('trend_strength', 0),  # Add trend strength
+            'rsi_14': rsi if rsi is not None else 50,
+            'atr': atr_data.get('atr', 0),
+            'current_price': current_price
+        }
+        
+        signal_for_scoring = {
+            'direction': signal_direction
+        }
+        
+        # Score the signal
+        score, score_breakdown = self.signal_scorer.score_signal(
+            market_data_for_scoring, signal_for_scoring
+        )
+        
+        # Boost score based on similarity to winning patterns (adaptive learning)
+        if self.pattern_matcher:
+            try:
+                market_context = {
+                    'volatility': market_state.get('volatility', 0),
+                    'volume_ratio': market_state.get('volume_ratio', 1),
+                    'trend': market_state.get('trend', 'unknown')
+                }
+                pattern_score = self.pattern_matcher.score_signal(signal_for_scoring, market_context)
+                # Blend pattern score with base score (30% pattern, 70% base)
+                score = (score * 0.7) + (pattern_score * 0.3)
+                score_breakdown['pattern_similarity'] = pattern_score
+                logger.debug(f"   Pattern similarity boost: {pattern_score:.1f} (final score: {score:.1f})")
+            except Exception as e:
+                logger.debug(f"   Pattern matching failed: {e}")
+        
+        results['score'] = score
+        results['score_breakdown'] = score_breakdown
+        self.filter_stats['score_distribution'].append(score)
+        
+        # Step 3: Check if score meets threshold (adaptive - starts at 45, raises to 55 after learning)
+        score_threshold = getattr(config, 'SCORE_THRESHOLD', 45)
+        
+        # Adaptive threshold: raise after enough trades if enabled
+        if getattr(config, 'SCORE_THRESHOLD_ADAPTIVE_ENABLED', True):
+            # Check if we have enough winning patterns learned
+            if self.pattern_matcher:
+                stats = self.pattern_matcher.get_statistics()
+                total_patterns = stats.get('total_patterns', 0)
+                winning_patterns = stats.get('winning_patterns', 0)
+                
+                # Raise threshold if we have 20+ winning patterns
+                if winning_patterns >= getattr(config, 'SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION', 20):
+                    score_threshold = getattr(config, 'SCORE_THRESHOLD_ADAPTED_VALUE', 55)
+                    logger.debug(f"📈 Adaptive threshold raised: {score_threshold} (after {winning_patterns} winning patterns)")
+            else:
+                # Fallback: try to get stats from position tracker if available
+                try:
+                    from execution.position_tracker import PositionTracker
+                    import sqlite3
+                    # Try to read from database directly
+                    conn = sqlite3.connect('trading.db')
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM positions WHERE pnl > 0")
+                    winning_trades = cursor.fetchone()[0]
+                    conn.close()
+                    
+                    if winning_trades >= getattr(config, 'SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION', 20):
+                        score_threshold = getattr(config, 'SCORE_THRESHOLD_ADAPTED_VALUE', 55)
+                        logger.debug(f"📈 Adaptive threshold raised: {score_threshold} (after {winning_trades} winning trades)")
+                except:
+                    pass  # Fallback to default if can't get stats
+        
+        if score < score_threshold:
+            results['overall_pass'] = False
+            results['failed_filters'].append('quality_score')
+            logger.info(f"❌ QUALITY SCORE TOO LOW: {score}/100 (minimum: {score_threshold})")
+            logger.info(f"{'='*60}\n")
+            self.filter_stats['failed'] += 1
+            return False, results
+        
+        # Step 4: Calculate position size multiplier based on score
+        if score >= 80:
+            position_multiplier = 2.0  # 2% risk
+        elif score >= 65:
+            position_multiplier = 1.5  # 1.5% risk
+        else:
+            position_multiplier = 1.0  # 1% risk
+        
+        results['position_size_multiplier'] = position_multiplier
+        results['overall_pass'] = True
+        
+        # Log success
+        logger.info(f"✅ SIGNAL PASSED - Score: {score}/100")
+        logger.info(f"   Position size multiplier: {position_multiplier}x")
+        logger.info(f"{'='*60}\n")
+        
+        self.filter_stats['passed'] += 1
+        return True, results
 
         # Run each filter in sequence
         # Order matters: cheaper checks first

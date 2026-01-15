@@ -146,10 +146,142 @@ class HistoricalDataLoader:
                         logger.error(f"   ❌ {tf}: Failed to fetch data")
                         data[tf] = []
 
+        # Log detailed information about loaded data
+        logger.info(f"\n📊 Data Loading Summary for {symbol}:")
+        logger.info(f"   Requested Period: {start_date} to {end_date}")
+        for tf, candles in data.items():
+            if candles:
+                first_ts = datetime.fromtimestamp(candles[0]['timestamp'] / 1000)
+                last_ts = datetime.fromtimestamp(candles[-1]['timestamp'] / 1000)
+                logger.info(f"   {tf}: {len(candles)} candles")
+                logger.info(f"      Date Range: {first_ts.strftime('%Y-%m-%d %H:%M')} to {last_ts.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                logger.warning(f"   {tf}: NO DATA")
+        
         # Validate data quality
         self._validate_data(data, start_date, end_date)
 
         return data
+
+    def _fetch_candles_paginated(self, symbol: str, timeframe: str,
+                                 start_ts: int, end_ts: int) -> List[Dict]:
+        """
+        Fetch candles with pagination to get more than 300 candles
+        
+        OKX regular endpoint caps at 300 candles. This method paginates
+        using 'after' parameter to fetch all candles in the date range.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe (e.g., '15m', '1H')
+            start_ts: Start timestamp in milliseconds
+            end_ts: End timestamp in milliseconds
+            
+        Returns:
+            List of candle dicts sorted by timestamp
+        """
+        all_candles = []
+        current_end = end_ts  # Start from end timestamp
+        max_calls = 50  # Safety limit
+        call_count = 0
+        
+        # Calculate expected candles to estimate calls needed
+        timeframe_minutes = {
+            '1m': 1, '5m': 5, '15m': 15, '1H': 60, '4H': 240
+        }
+        minutes_per_candle = timeframe_minutes.get(timeframe, 15)
+        days = (end_ts - start_ts) / (1000 * 60 * 60 * 24)
+        expected_candles = (days * 24 * 60) / minutes_per_candle
+        estimated_calls = max(1, int(expected_candles / 300) + 1)
+        
+        logger.info(f"   📊 Estimated: {expected_candles:.0f} candles needed, ~{estimated_calls} API calls")
+        
+        while call_count < max_calls:
+            call_count += 1
+            
+            try:
+                # Fetch candles using 'after' parameter to paginate backwards
+                # OKX returns candles after the specified timestamp (newer candles)
+                # We'll work backwards by updating current_end to oldest timestamp
+                candles_raw = self.client.get_history_candles(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    after=str(current_end),
+                    limit=300  # Max for regular endpoint
+                )
+                
+                if not candles_raw or len(candles_raw) == 0:
+                    logger.debug(f"   No more candles returned (call {call_count})")
+                    break
+                
+                # Convert OKX format to our format
+                batch_candles = []
+                for candle in candles_raw:
+                    ts = int(candle[0])
+                    batch_candles.append({
+                        'timestamp': ts,
+                        'open': float(candle[1]),
+                        'high': float(candle[2]),
+                        'low': float(candle[3]),
+                        'close': float(candle[4]),
+                        'volume': float(candle[5])
+                    })
+                
+                # OKX returns newest first, so sort to get chronological order
+                batch_candles.sort(key=lambda x: x['timestamp'])
+                
+                # Find oldest and newest timestamps in this batch
+                if batch_candles:
+                    oldest_ts = batch_candles[0]['timestamp']
+                    newest_ts = batch_candles[-1]['timestamp']
+                    
+                    logger.info(f"   📥 Call {call_count}: Fetched {len(batch_candles)} candles "
+                              f"({datetime.fromtimestamp(oldest_ts/1000).strftime('%Y-%m-%d %H:%M')} to "
+                              f"{datetime.fromtimestamp(newest_ts/1000).strftime('%Y-%m-%d %H:%M')})")
+                    
+                    all_candles.extend(batch_candles)
+                    
+                    # If oldest candle is before or equal to start_ts, we've got all we need
+                    if oldest_ts <= start_ts:
+                        logger.info(f"   ✅ Reached start date, stopping pagination")
+                        break
+                    
+                    # Move 'after' cursor to oldest timestamp for next iteration
+                    # This gets us older candles in the next call (going backwards)
+                    current_end = oldest_ts
+                else:
+                    break
+                
+                # Rate limiting
+                time.sleep(0.15)
+                
+            except Exception as e:
+                logger.error(f"   Error in paginated fetch (call {call_count}): {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                break
+        
+        # Filter to requested date range
+        filtered_candles = [c for c in all_candles if start_ts <= c['timestamp'] <= end_ts]
+        
+        # Sort by timestamp (oldest first)
+        filtered_candles.sort(key=lambda x: x['timestamp'])
+        
+        # Deduplicate by timestamp
+        seen = set()
+        unique_candles = []
+        for c in filtered_candles:
+            if c['timestamp'] not in seen:
+                seen.add(c['timestamp'])
+                unique_candles.append(c)
+        
+        if len(unique_candles) < len(filtered_candles):
+            logger.info(f"   Removed {len(filtered_candles) - len(unique_candles)} duplicate candles")
+        
+        logger.info(f"   ✅ Paginated fetch complete: {len(unique_candles)} unique candles "
+                   f"(from {len(all_candles)} total fetched)")
+        
+        return unique_candles
 
     def _fetch_candles(self, symbol: str, timeframe: str,
                       start_date: str, end_date: str) -> List[Dict]:
@@ -188,42 +320,21 @@ class HistoricalDataLoader:
         max_retries = 50  # Prevent infinite loops
         retry_count = 0
         
-        # For recent data, call API without 'before' to get max candles
+        # For recent data, use paginated fetch to get more than 300 candles
         # For historical data, use pagination with 'before'
         if is_recent_data:
-            # For recent data: call API WITHOUT 'before' parameter to get maximum recent candles
-            # This ensures we get up to 300 candles instead of just 2-8
+            # Use paginated fetch for recent data to get all candles in date range
+            logger.info(f"   Using paginated fetch for recent data (regular endpoint, max 300 per call)")
             try:
-                logger.debug(f"   Requesting recent candles (no 'before' parameter) - limit=300")
-                # Explicitly don't pass 'before' - pass None or omit it entirely
-                # The get_history_candles method will detect this and use regular endpoint without before/after
-                candles = self.client.get_history_candles(
+                unique_candles = self._fetch_candles_paginated(
                     symbol=symbol,
                     timeframe=timeframe,
-                    before=None,  # Explicitly None - don't pass 'before' for recent data
-                    after=None,   # Explicitly None - don't pass 'after' for recent data
-                    limit=300     # Max limit for regular candles endpoint
+                    start_ts=start_ts,
+                    end_ts=end_ts
                 )
-                
-                if candles and len(candles) > 0:
-                    # Convert OKX format to our format
-                    batch_candles = []
-                    for candle in candles:
-                        ts = int(candle[0])
-                        batch_candles.append({
-                            'timestamp': ts,
-                            'open': float(candle[1]),
-                            'high': float(candle[2]),
-                            'low': float(candle[3]),
-                            'close': float(candle[4]),
-                            'volume': float(candle[5])
-                        })
-                    all_candles.extend(batch_candles)
-                    logger.info(f"   ✅ Received {len(batch_candles)} candles from recent data endpoint")
-                else:
-                    logger.warning(f"   ⚠️  No candles returned from recent data endpoint")
+                all_candles.extend(unique_candles)
             except Exception as e:
-                logger.error(f"   Error fetching recent data: {e}")
+                logger.error(f"   Error in paginated fetch: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
         else:

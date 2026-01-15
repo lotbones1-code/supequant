@@ -47,12 +47,18 @@ try:
     from agents.claude_autonomous_system import AutonomousTradeSystem
     CLAUDE_AVAILABLE = True
     logger.info("🤖 Claude AI gating enabled")
-except ImportError:
+except ImportError as e:
     CLAUDE_AVAILABLE = False
-    logger.warning("Claude AI not available - install anthropic to enable")
+    logger.warning(f"Claude AI not available - {e}")
+    import traceback
+    logger.warning(f"Import error details:")
+    traceback.print_exc()
 except Exception as e:
     CLAUDE_AVAILABLE = False
-    logger.warning(f"Claude AI disabled: {e}")
+    logger.warning(f"Claude AI init failed: {e}")
+    import traceback
+    logger.warning(f"Exception details:")
+    traceback.print_exc()
 
 # Dashboard imports (optional - won't crash if missing)
 try:
@@ -121,6 +127,9 @@ class EliteQuantSystem:
                 logger.info("✅ Claude AI gating initialized")
             except Exception as e:
                 logger.warning(f"Claude AI init failed: {e}")
+                import traceback
+                logger.warning(f"Exception details:")
+                traceback.print_exc()
                 self.claude_system = None
 
         # State
@@ -522,24 +531,27 @@ class EliteQuantSystem:
             closed_positions = self.position_tracker.get_recently_closed_positions()
             
             for position in closed_positions:
-                # Only analyze losing trades
+                trade_dict = {
+                    'trade_id': position.get('position_id'),
+                    'direction': position.get('direction'),
+                    'entry_price': position.get('entry_price', 0),
+                    'exit_price': position.get('exit_price', 0),
+                    'stop_loss': position.get('stop_loss', 0),
+                    'pnl': position.get('pnl', 0),
+                    'loss_amount': abs(position.get('pnl', 0)) if position.get('pnl', 0) < 0 else 0,
+                    'loss_pct': position.get('pnl_pct', 0),
+                    'duration_minutes': position.get('duration_minutes', 0),
+                    'strategy': position.get('strategy', 'breakout'),
+                }
+                
+                # Process all completed trades (for success rate tracking)
+                self.claude_system.process_completed_trade(trade_dict)
+                
+                # Only analyze losing trades for learning
                 if position.get('pnl', 0) < 0:
-                    trade_dict = {
-                        'trade_id': position.get('position_id'),
-                        'direction': position.get('direction'),
-                        'entry_price': position.get('entry_price', 0),
-                        'exit_price': position.get('exit_price', 0),
-                        'stop_loss': position.get('stop_loss', 0),
-                        'pnl': position.get('pnl', 0),
-                        'loss_amount': abs(position.get('pnl', 0)),
-                        'loss_pct': position.get('pnl_pct', 0),
-                        'duration_minutes': position.get('duration_minutes', 0),
-                        'strategy': position.get('strategy', 'breakout'),
-                    }
-                    
-                    # Send to Claude for analysis
                     logger.info(f"🤖 Sending losing trade to Claude for analysis: {trade_dict['trade_id']}")
-                    self.claude_system.process_completed_trade(trade_dict)
+                else:
+                    logger.info(f"✅ Recording successful trade outcome: {trade_dict['trade_id']} - PnL: ${position.get('pnl', 0):.2f}")
                     
         except Exception as e:
             logger.error(f"Error in Claude learning check: {e}")
@@ -607,10 +619,15 @@ class EliteQuantSystem:
             # Claude AI stats
             if self.claude_system:
                 claude_status = self.claude_system.get_system_status()
+                approval_stats = claude_status.get('approval_stats', {})
+                success_rate = approval_stats.get('success_rate', 0.0)
+                success_rate_acceptable = approval_stats.get('success_rate_acceptable', True)
                 logger.info(f"\n🤖 Claude AI Statistics:")
                 logger.info(f"   Rules learned: {claude_status['learned_rules']}")
                 logger.info(f"   Trades blocked: {self.claude_blocks}")
                 logger.info(f"   Est. loss prevented: ${claude_status['estimated_prevented_loss']:.2f}")
+                logger.info(f"   Success rate: {success_rate*100:.1f}% ({'✅' if success_rate_acceptable else '⚠️  BELOW 60%'})")
+                logger.info(f"   Successful trades: {approval_stats.get('successful_trades', 0)} / {approval_stats.get('total_tracked_trades', 0)}")
 
         except Exception as e:
             logger.error(f"Error logging statistics: {e}")

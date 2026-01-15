@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 import copy
 
 from strategy.breakout_strategy import BreakoutStrategy
+from strategy.breakout_strategy_v2 import BreakoutStrategyV2
 from strategy.pullback_strategy import PullbackStrategy
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -81,7 +82,7 @@ class BacktestEngine:
         self.current_capital = initial_capital
 
         # Initialize components
-        self.breakout_strategy = BreakoutStrategy()
+        self.breakout_strategy = BreakoutStrategyV2()  # Use improved v2 strategy
         self.pullback_strategy = PullbackStrategy()
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()
@@ -154,7 +155,12 @@ class BacktestEngine:
         logger.info(f"{'='*60}\n")
 
         total_candles = len(sol_candles)
-        logger.info(f"Processing {total_candles} candles ({primary_tf} timeframe)...\n")
+        logger.info(f"\n📊 Data Summary:")
+        logger.info(f"   Primary timeframe ({primary_tf}): {total_candles} candles")
+        for tf_name, candles in sol_data.items():
+            if tf_name != primary_tf:
+                logger.info(f"   {tf_name}: {len(candles)} candles")
+        logger.info(f"\n🚀 Processing {total_candles} candles ({primary_tf} timeframe)...\n")
 
         # Process each candle
         for idx, candle in enumerate(sol_candles):
@@ -190,6 +196,14 @@ class BacktestEngine:
 
         logger.info(f"\n{'='*60}")
         logger.info(f"✅ BACKTEST COMPLETE")
+        logger.info(f"{'='*60}")
+        logger.info(f"📊 Date Range Summary:")
+        logger.info(f"   Requested: {start_date} to {end_date}")
+        logger.info(f"   Actual Data: {self.actual_start_date} to {self.actual_end_date}")
+        logger.info(f"📈 Results:")
+        logger.info(f"   Signals Generated: {self.stats['total_signals']}")
+        logger.info(f"   Signals Passed Filters: {self.stats['signals_passed_filters']}")
+        logger.info(f"   Trades Executed: {len([t for t in self.trades if t.executed])}")
         logger.info(f"{'='*60}\n")
 
         return results
@@ -347,24 +361,27 @@ class BacktestEngine:
         """
         self.stats['total_signals'] += 1
 
+        # Normalize direction (LONG/long -> long, SHORT/short -> short)
+        direction = signal['direction'].lower()
+
         # Create trade object
-        # Handle key name mismatches: strategy uses stop_loss/take_profit_1, code expects stop_price/target_price
+        # Handle key name mismatches: strategy uses stop_loss/take_profit, code expects stop_price/target_price
         trade = BacktestTrade(
             signal_id=f"{strategy}_{current_time.strftime('%Y%m%d_%H%M%S')}",
             timestamp=current_time,
             symbol=config.TRADING_SYMBOL,
-            direction=signal['direction'],
+            direction=direction,
             strategy=strategy,
             entry_price=signal['entry_price'],
             stop_price=signal.get('stop_price', signal.get('stop_loss')),
-            target_price=signal.get('target_price', signal.get('take_profit_1', signal.get('tp1'))),
+            target_price=signal.get('target_price', signal.get('take_profit', signal.get('take_profit_1', signal.get('tp1')))),
             position_size=0.0  # Will calculate if filters pass
         )
 
         # Run through filters
         filters_passed, filter_results = self.filter_manager.check_all(
             sol_market_state,
-            signal['direction'],
+            direction,
             strategy,
             btc_market_state
         )
@@ -389,8 +406,12 @@ class BacktestEngine:
         """
         Execute a trade (simulate)
         """
-        # Calculate position size
-        account_risk = self.current_capital * config.MAX_RISK_PER_TRADE
+        # Get position size multiplier from filter results (based on score)
+        position_multiplier = trade.filter_results.get('position_size_multiplier', 1.0)
+        
+        # Calculate position size with multiplier
+        base_risk = config.MAX_RISK_PER_TRADE * position_multiplier
+        account_risk = self.current_capital * base_risk
         stop_distance = abs(trade.entry_price - trade.stop_price)
         position_size = account_risk / stop_distance if stop_distance > 0 else 0
 

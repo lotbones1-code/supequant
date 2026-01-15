@@ -168,6 +168,58 @@ Extract a concrete rejection rule as JSON."""
         return "\n".join(parts)
 
 
+class WinningPatternLearner:
+    """Learns winning patterns from successful trades"""
+    
+    def __init__(self, patterns_file: str = "claude_winning_patterns.json"):
+        self.patterns_file = patterns_file
+        self.patterns: List[Dict] = self._load_patterns()
+    
+    def add_winning_pattern(self, trade: Dict, market_context: Optional[Dict] = None) -> None:
+        """Add a winning pattern from a successful trade"""
+        if not trade or trade.get('pnl', 0) <= 0:
+            return
+        
+        pattern = {
+            'trade_id': trade.get('trade_id'),
+            'direction': trade.get('direction'),
+            'entry_price': trade.get('entry_price', 0),
+            'stop_loss': trade.get('stop_loss', 0),
+            'strategy': trade.get('strategy', 'unknown'),
+            'pnl': trade.get('pnl', 0),
+            'pnl_pct': trade.get('pnl_pct', 0),
+            'volatility': market_context.get('volatility', 0) if market_context else 0,
+            'volume_ratio': market_context.get('volume_ratio', 1) if market_context else 1,
+            'trend': market_context.get('trend', 'unknown') if market_context else 'unknown',
+            'created_at': datetime.now().isoformat(),
+            'success_count': 1
+        }
+        
+        self.patterns.append(pattern)
+        self._save_patterns()
+        logger.info(f"✅ Added winning pattern: {trade.get('trade_id')} (+${trade.get('pnl', 0):.2f})")
+    
+    def get_patterns(self) -> List[Dict]:
+        """Get all winning patterns"""
+        return self.patterns
+    
+    def _load_patterns(self) -> List[Dict]:
+        """Load patterns from file"""
+        if not Path(self.patterns_file).exists():
+            return []
+        
+        try:
+            with open(self.patterns_file, 'r') as f:
+                return json.load(f)
+        except:
+            return []
+    
+    def _save_patterns(self) -> None:
+        """Save patterns to file"""
+        with open(self.patterns_file, 'w') as f:
+            json.dump(self.patterns, f, indent=2, default=str)
+
+
 class PatternLearner:
     """Learns rejection patterns from losing trades"""
     
@@ -300,6 +352,10 @@ class TradeGatekeeper:
             'rejected': 0,
             'prevented_loss_estimate': 0
         }
+        # Track success rate of approved trades
+        self.approved_trades = {}  # trade_id -> decision
+        self.trade_outcomes = {}  # trade_id -> {'pnl': float, 'success': bool}
+        self.min_success_rate = 0.60  # Minimum 60% success rate required
     
     def review_trade(self, trade: Dict, market_context: Optional[Dict] = None) -> Dict:
         """Review and approve/reject a trade"""
@@ -330,11 +386,43 @@ class TradeGatekeeper:
             self.approval_stats['approved'] += 1
             decision['reasoning'].append("No rejection rules triggered")
         
+        # Track approved trades for success rate monitoring
+        if decision['approved']:
+            self.approved_trades[trade.get('trade_id')] = decision
+        
         # Log decision
         self.decisions_log.append(decision)
         self._save_decision_log()
         
         return decision
+    
+    def record_trade_outcome(self, trade_id: str, pnl: float):
+        """Record the outcome of an approved trade to track success rate"""
+        if trade_id in self.approved_trades:
+            self.trade_outcomes[trade_id] = {
+                'pnl': pnl,
+                'success': pnl > 0,
+                'timestamp': datetime.now().isoformat()
+            }
+            logger.info(f"📊 Recorded trade outcome: {trade_id} - PnL: ${pnl:.2f} ({'✅' if pnl > 0 else '❌'})")
+    
+    def get_success_rate(self) -> float:
+        """Calculate success rate of approved trades"""
+        if not self.trade_outcomes:
+            return 0.0
+        
+        successful = sum(1 for outcome in self.trade_outcomes.values() if outcome['success'])
+        total = len(self.trade_outcomes)
+        
+        if total == 0:
+            return 0.0
+        
+        return successful / total
+    
+    def is_success_rate_acceptable(self) -> bool:
+        """Check if success rate meets minimum threshold (60%)"""
+        success_rate = self.get_success_rate()
+        return success_rate >= self.min_success_rate
     
     def get_approval_rate(self) -> Dict:
         """Get approval statistics"""
@@ -345,13 +433,21 @@ class TradeGatekeeper:
                 'approval_rate': 0.0,
                 'rejection_rate': 0.0,
                 'estimated_prevented_loss': 0.0,
+                'success_rate': 0.0,
+                'success_rate_acceptable': True,
                 'stats': self.approval_stats
             }
+        
+        success_rate = self.get_success_rate()
         
         return {
             'approval_rate': self.approval_stats['approved'] / total,
             'rejection_rate': self.approval_stats['rejected'] / total,
             'estimated_prevented_loss': self.approval_stats['prevented_loss_estimate'],
+            'success_rate': success_rate,
+            'success_rate_acceptable': self.is_success_rate_acceptable(),
+            'successful_trades': sum(1 for o in self.trade_outcomes.values() if o['success']),
+            'total_tracked_trades': len(self.trade_outcomes),
             'stats': self.approval_stats
         }
     
@@ -369,19 +465,33 @@ class AutonomousTradeSystem:
     def __init__(self, api_key: Optional[str] = None):
         self.analyzer = TradeAnalyzer(api_key)
         self.learner = PatternLearner()
+        self.winning_learner = WinningPatternLearner()
         self.gatekeeper = TradeGatekeeper(self.analyzer, self.learner)
         self.performance_log = []
     
     def process_completed_trade(self, trade: Dict, market_context: Optional[Dict] = None) -> Dict:
         """Process a completed trade: analyze if lost, extract rules, learn patterns"""
+        trade_id = trade.get('trade_id')
+        pnl = trade.get('pnl', 0)
+        
+        # Record outcome for success rate tracking
+        self.gatekeeper.record_trade_outcome(trade_id, pnl)
+        
         result = {
-            'trade_id': trade.get('trade_id'),
+            'trade_id': trade_id,
             'action': 'analyzed',
-            'is_loss': trade.get('pnl', 0) < 0,
+            'is_loss': pnl < 0,
+            'is_win': pnl > 0,
             'timestamp': datetime.now().isoformat()
         }
         
-        # Only analyze losing trades
+        # Track winning trades for pattern learning
+        if result['is_win']:
+            logger.info(f"✅ Recording winning trade {trade.get('trade_id')}...")
+            self.winning_learner.add_winning_pattern(trade, market_context)
+            result['pnl'] = trade.get('pnl', 0)
+        
+        # Analyze losing trades for rejection rules
         if result['is_loss']:
             logger.info(f"🔍 Analyzing losing trade {trade.get('trade_id')}...")
             
@@ -398,8 +508,6 @@ class AutonomousTradeSystem:
                 result['rule_confidence'] = rule.get('confidence', 0.5)
             else:
                 result['rule_added'] = None
-        else:
-            result['pnl'] = trade.get('pnl', 0)
         
         self.performance_log.append(result)
         return result
@@ -426,6 +534,8 @@ class AutonomousTradeSystem:
             'total_blocks': rule_stats['total_blocks'],
             'estimated_prevented_loss': rule_stats['estimated_prevented_loss'],
             'approval_stats': approval_stats,
+            'success_rate': approval_stats.get('success_rate', 0.0),
+            'success_rate_acceptable': approval_stats.get('success_rate_acceptable', True),
             'token_usage': self.analyzer.token_usage,
             'top_rejection_rules': [
                 {'name': r['rule_name'], 'hits': r.get('hits', 0), 'confidence': r.get('confidence', 0)}
@@ -466,6 +576,11 @@ class AutonomousTradeSystem:
   • Input Tokens: {status['token_usage']['input']}
   • Output Tokens: {status['token_usage']['output']}
   • Requests: {status['token_usage']['requests']}
+
+📈 SUCCESS RATE:
+  • Success Rate: {status.get('success_rate', 0)*100:.1f}%
+  • Successful Trades: {approval.get('successful_trades', 0)} / {approval.get('total_tracked_trades', 0)}
+  • Status: {'✅ ACCEPTABLE' if status.get('success_rate_acceptable', True) else '⚠️  BELOW 60%'}
 """
         return report
 

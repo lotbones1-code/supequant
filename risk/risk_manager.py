@@ -21,7 +21,8 @@ from config import (
     EMERGENCY_VOLATILITY_MULTIPLIER,
     EMERGENCY_DRAWDOWN_PCT,
     ENABLE_KILL_SWITCH,
-    KILL_SWITCH_FILE
+    KILL_SWITCH_FILE,
+    EXTREME_VOLATILITY_PERCENTILE
 )
 import os
 
@@ -147,8 +148,8 @@ class RiskManager:
             atr_percentile = atr_data.get('atr_percentile', 50)
 
             # If ATR is in extreme territory
-            if atr_percentile > 95:
-                return True, f"Extreme volatility detected (ATR {atr_percentile}th percentile)"
+            if atr_percentile > EXTREME_VOLATILITY_PERCENTILE:
+                return True, f"Extreme volatility detected (ATR {atr_percentile}th percentile > {EXTREME_VOLATILITY_PERCENTILE}th)"
 
         # Check 2: Account drawdown
         if self.starting_balance and self.current_balance:

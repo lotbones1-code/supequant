@@ -43,6 +43,9 @@ class StrategyManager:
             try:
                 signal = strategy.analyze(market_state)
                 if signal:
+                    # Ensure signal has 'strategy' key (fallback if strategy doesn't add it)
+                    if 'strategy' not in signal:
+                        signal['strategy'] = strategy_name
                     logger.info(f"📊 {strategy_name.upper()}: Signal detected")
                     signals.append(signal)
             except Exception as e:
@@ -78,9 +81,10 @@ class StrategyManager:
         if len(signals) == 1:
             return signals[0]
 
-        # Prefer breakout
+        # Prefer breakout (check for 'breakout' or 'BreakoutV2')
         for signal in signals:
-            if signal['strategy'] == 'Breakout':
+            strategy_name = signal.get('strategy', '').lower()
+            if 'breakout' in strategy_name:
                 logger.info("🎯 Selected BREAKOUT signal")
                 return signal
 
