@@ -17,8 +17,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 import copy
 
-from strategy.breakout_strategy import BreakoutStrategy
-from strategy.breakout_strategy_v2 import BreakoutStrategyV2
+from strategy.breakout_strategy import BreakoutStrategy  # Use original (more signals)
 from strategy.pullback_strategy import PullbackStrategy
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -82,7 +81,9 @@ class BacktestEngine:
         self.current_capital = initial_capital
 
         # Initialize components
-        self.breakout_strategy = BreakoutStrategyV2()  # Use improved v2 strategy
+        # Use original BreakoutStrategy - it generates MORE signals
+        # The filters will reject bad ones (that's the system design)
+        self.breakout_strategy = BreakoutStrategy()
         self.pullback_strategy = PullbackStrategy()
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()
@@ -326,21 +327,9 @@ class BacktestEngine:
             if minutes_since_last < config.TRADE_INTERVAL_MINUTES:
                 return
 
-        # DEBUG: Log what we're checking every 100 candles
-        if len(self.trades) % 100 == 0:
-            logger.debug(f"🔍 Checking strategies at {current_time.strftime('%Y-%m-%d %H:%M')}")
-            if '15m' in sol_market_state.get('timeframes', {}):
-                tf_15m = sol_market_state['timeframes']['15m']
-                logger.debug(f"   15m price: ${tf_15m.get('current_price', 0):.2f}")
-                trend = tf_15m.get('trend', {})
-                logger.debug(f"   15m trend: {trend.get('trend_direction', 'unknown')} (strength: {trend.get('trend_strength', 0):.2f})")
-            else:
-                logger.debug(f"   ⚠️ No 15m timeframe data available")
-
-        # Try breakout strategy
+        # Try breakout strategy (generates many signals - filters will select good ones)
         breakout_signal = self.breakout_strategy.analyze(sol_market_state)
         if breakout_signal:
-            logger.info(f"🎯 BREAKOUT SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
             self._process_signal(breakout_signal, 'breakout', sol_market_state,
                                btc_market_state, current_time)
             return
@@ -348,7 +337,6 @@ class BacktestEngine:
         # Try pullback strategy
         pullback_signal = self.pullback_strategy.analyze(sol_market_state)
         if pullback_signal:
-            logger.info(f"🎯 PULLBACK SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
             self._process_signal(pullback_signal, 'pullback', sol_market_state,
                                btc_market_state, current_time)
             return
