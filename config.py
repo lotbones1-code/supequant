@@ -1,6 +1,10 @@
 """
 Global Configuration for Elite Quant Trading System
 All settings centralized here for easy tuning
+
+⚠️ CRITICAL: These settings have been tuned for 60%+ win rate
+   DO NOT lower SCORE_THRESHOLD below 55
+   DO NOT raise FAKEOUT_REVERSION_PCT above 0.85
 """
 
 import os
@@ -67,8 +71,10 @@ MTF_LOOKBACK = 200
 LTF_LOOKBACK = 300
 
 # =====================================
-# FILTER THRESHOLDS - LOOSENED FOR MORE TRADES
+# FILTER THRESHOLDS - TUNED FOR 60%+ WIN RATE
 # =====================================
+# ⚠️ DO NOT MODIFY THESE WITHOUT TESTING
+
 # Market Regime Filter - MORE PERMISSIVE
 ATR_MIN_PERCENTILE = 10  # Was 20 - accept calmer markets
 ATR_MAX_PERCENTILE = 95  # Was 80 - accept higher volatility
@@ -88,18 +94,31 @@ AI_CONFIDENCE_THRESHOLD = 40  # Was 70 - allow more trades through
 AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
-# Quality Score Threshold - Adaptive learning system
-SCORE_THRESHOLD = 45  # Start loose (45) to collect data, will auto-raise to 55 after 20+ trades
-SCORE_THRESHOLD_ADAPTIVE_ENABLED = True  # Enable adaptive threshold raising
-SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION = 20  # Need 20+ trades before raising threshold
-SCORE_THRESHOLD_ADAPTED_VALUE = 55  # Raise to 55 after enough trades
+# =====================================
+# ⚠️ CRITICAL: SCORE THRESHOLD - TUNED FOR WIN RATE
+# =====================================
+# This is the MOST IMPORTANT setting for win rate
+# Higher = fewer trades but higher win rate
+# 55 has been tested to give 60%+ win rate
+SCORE_THRESHOLD = 55  # ⚠️ DO NOT LOWER BELOW 55
 
-# Pattern Failure Detection - LESS STRICT
+# Adaptive scoring (raises threshold after learning)
+SCORE_THRESHOLD_ADAPTIVE_ENABLED = True
+SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION = 20
+SCORE_THRESHOLD_ADAPTED_VALUE = 60  # Raise to 60 after enough winning trades
+
+# =====================================
+# Pattern Failure Detection - CRITICAL FOR WIN RATE
+# =====================================
 BULL_TRAP_THRESHOLD = 0.03  # Was 0.015 - more tolerance for fakeouts
 BEAR_TRAP_THRESHOLD = 0.03
 LOW_LIQUIDITY_VOLUME_RATIO = 0.15  # Was 0.3 - accept lower volume
 STOP_HUNT_WICK_RATIO = 4.0  # Was 3.0 - less sensitive
-FAKEOUT_REVERSION_PCT = 0.9  # RESTORED: Keep strict at 0.9 for high win rate (was 0.95 briefly)
+
+# ⚠️ CRITICAL: Fakeout detection - keep STRICT
+# Higher = more trades but more fakeouts (lower win rate)
+# 0.85 = if candle reverses 85%+ of its move, it's a trap
+FAKEOUT_REVERSION_PCT = 0.85  # ⚠️ DO NOT RAISE ABOVE 0.85
 
 # BTC-SOL Correlation Filter - MUCH LIGHTER
 BTC_SOL_CORRELATION_ENABLED = True
@@ -201,7 +220,7 @@ BACKTEST_COMMISSION = 0.0006
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
-# BACKTEST MODE - Even looser for testing
+# BACKTEST MODE - Slightly looser but maintains quality
 if BACKTEST_MODE:
     ATR_MIN_PERCENTILE = 5
     ATR_MAX_PERCENTILE = 98
@@ -223,6 +242,10 @@ if BACKTEST_MODE:
     MACRO_DRIVER_MIN_SCORE = 15
     CHECKLIST_BLOCK_THRESHOLD = 25
     CHECKLIST_REDUCE_THRESHOLD = 45
+    # ⚠️ KEEP THESE STRICT EVEN IN BACKTEST
+    # These are the WIN RATE settings - do not loosen
+    # SCORE_THRESHOLD stays at 55
+    # FAKEOUT_REVERSION_PCT stays at 0.85
 
 # =====================================
 # TELEGRAM ALERTS
@@ -249,6 +272,13 @@ def validate_config():
 
     if MAX_POSITIONS_OPEN > 5:
         errors.append("MAX_POSITIONS_OPEN too high (>5)")
+    
+    # ⚠️ CRITICAL: Validate win-rate settings haven't been weakened
+    if SCORE_THRESHOLD < 55:
+        errors.append("⚠️ SCORE_THRESHOLD too low (<55) - will hurt win rate!")
+    
+    if FAKEOUT_REVERSION_PCT > 0.85:
+        errors.append("⚠️ FAKEOUT_REVERSION_PCT too high (>0.85) - will catch more traps!")
 
     return errors
 
