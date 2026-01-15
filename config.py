@@ -99,7 +99,7 @@ BULL_TRAP_THRESHOLD = 0.03  # Was 0.015 - more tolerance for fakeouts
 BEAR_TRAP_THRESHOLD = 0.03
 LOW_LIQUIDITY_VOLUME_RATIO = 0.15  # Was 0.3 - accept lower volume
 STOP_HUNT_WICK_RATIO = 4.0  # Was 3.0 - less sensitive
-FAKEOUT_REVERSION_PCT = 0.9  # Was 0.8 - need stronger confirmation
+FAKEOUT_REVERSION_PCT = 0.95  # FIXED: Was 0.9 - need 95%+ confidence to block (not 90%+)
 
 # BTC-SOL Correlation Filter - MUCH LIGHTER
 BTC_SOL_CORRELATION_ENABLED = True
