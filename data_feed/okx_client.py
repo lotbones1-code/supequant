@@ -169,9 +169,8 @@ class OKXClient:
         """
         Get candlestick data - PUBLIC endpoint, works in DRY_RUN
         
-        IMPORTANT: For the regular /market/candles endpoint, do NOT pass 'before' or 'after'
-        parameters as they limit results to only 2-8 candles instead of the full 300.
-        Just use instId, bar, and limit to get maximum recent candles.
+        For maximum recent candles without pagination, don't pass before/after.
+        For pagination, pass 'after' to get older candles (candles with ts < after).
         """
         endpoint = '/api/v5/market/candles'
         params = {
@@ -180,10 +179,11 @@ class OKXClient:
             'limit': min(limit, 300)
         }
 
-        # DO NOT add before/after for regular candles endpoint - it limits results
-        # The regular endpoint returns the most recent candles (up to limit)
-        # Only use before/after if you specifically need pagination (which limits results)
-        # For maximum candles, just use instId, bar, and limit
+        # Add pagination params if provided
+        if after:
+            params['after'] = after
+        if before:
+            params['before'] = before
 
         response = self._request('GET', endpoint, params=params, authenticated=False)
         if response and response.get('data'):
@@ -201,9 +201,14 @@ class OKXClient:
         
         This method automatically selects the correct endpoint based on the date range.
         
-        Parameters:
-        - 'before': Get candles BEFORE (older than) this timestamp (for paginating backwards)
-        - 'after': Get candles AFTER (newer than) this timestamp (for paginating forwards)
+        OKX Pagination Parameters (IMPORTANT - naming is counterintuitive!):
+        - 'after': Pagination key. Returns records with timestamp EARLIER than 'after' (older data)
+        - 'before': Pagination key. Returns records with timestamp LATER than 'before' (newer data)
+        
+        To paginate backwards in time (get older candles):
+        1. First call without after/before to get most recent candles
+        2. Take the OLDEST timestamp from results
+        3. Pass that as 'after' to get candles even older than that
         
         OKX_SIMULATED does NOT affect this - it's a public endpoint and always returns real data.
         """
@@ -214,32 +219,22 @@ class OKXClient:
         use_history_endpoint = False
         
         # Check if we're requesting data older than 3 months
-        # IMPORTANT: If before=None or after=None, treat as "not provided" and use regular endpoint
-        if before and before is not None:
-            try:
-                before_ts = int(before)
-                if before_ts < three_months_ago_ms:
-                    use_history_endpoint = True
-                    logger.debug(f"   Using history-candles endpoint (data older than 3 months)")
-                else:
-                    logger.debug(f"   Using regular candles endpoint (recent data, last 3 months)")
-            except (ValueError, TypeError):
-                # Invalid before value, use regular endpoint
-                logger.debug(f"   Invalid 'before' value, using regular candles endpoint")
-        elif after and after is not None:
+        if after and after is not None:
             try:
                 after_ts = int(after)
                 if after_ts < three_months_ago_ms:
                     use_history_endpoint = True
                     logger.debug(f"   Using history-candles endpoint (data older than 3 months)")
-                else:
-                    logger.debug(f"   Using regular candles endpoint (recent data, last 3 months)")
             except (ValueError, TypeError):
-                # Invalid after value, use regular endpoint
-                logger.debug(f"   Invalid 'after' value, using regular candles endpoint")
-        else:
-            # No timestamp provided (or None explicitly passed) - use regular endpoint for maximum recent candles
-            logger.debug(f"   No timestamp provided, using regular candles endpoint (recent data, max 300 candles)")
+                pass
+        elif before and before is not None:
+            try:
+                before_ts = int(before)
+                if before_ts < three_months_ago_ms:
+                    use_history_endpoint = True
+                    logger.debug(f"   Using history-candles endpoint (data older than 3 months)")
+            except (ValueError, TypeError):
+                pass
         
         # Select appropriate endpoint
         if use_history_endpoint:
@@ -255,28 +250,18 @@ class OKXClient:
             'limit': min(limit, max_limit)
         }
 
-        # For history-candles, use before/after for pagination
-        # For regular candles endpoint, DO NOT pass before/after - it limits results
-        # The regular endpoint returns the most recent candles (up to limit)
-        if use_history_endpoint:
-            # Only add before/after if they are valid (not None)
-            if after and after is not None:
-                params['after'] = after
-            if before and before is not None:
-                params['before'] = before
-        else:
-            # For regular /market/candles endpoint: NEVER pass before/after
-            # This endpoint returns the most recent candles, and passing before/after
-            # limits the results to only 2-8 candles instead of the full 300
-            # Just request with instId, bar, and limit only to get maximum recent candles
-            # Explicitly do NOT add before/after params - this is critical for getting 300 candles
-            pass  # Don't add before/after params for regular candles endpoint
+        # ALWAYS pass pagination params if provided - this enables pagination!
+        # The previous code incorrectly skipped these for regular candles endpoint,
+        # which broke pagination completely.
+        if after and after is not None:
+            params['after'] = after
+        if before and before is not None:
+            params['before'] = before
 
         # Log request details for debugging
-        logger.debug(f"📡 OKX {endpoint.split('/')[-1]} request: symbol={symbol}, timeframe={timeframe}, before={before}, after={after}, limit={params['limit']}")
+        logger.debug(f"📡 OKX {endpoint.split('/')[-1]} request: symbol={symbol}, timeframe={timeframe}, after={after}, before={before}, limit={params['limit']}")
 
         # Explicitly use authenticated=False for public endpoint
-        # OKX_SIMULATED does not affect public endpoints - they always return real data
         response = self._request('GET', endpoint, params=params, authenticated=False)
         
         if response:
@@ -287,15 +272,14 @@ class OKXClient:
             if data and len(data) > 0:
                 logger.debug(f"✅ OKX {endpoint.split('/')[-1]}: Received {len(data)} candles (code: {response_code})")
                 
-                # Log data range for debugging (but accept all candles regardless of recency)
-                first_ts = int(data[0][0])  # First candle timestamp
+                # Log data range for debugging
+                first_ts = int(data[0][0])
                 first_dt = datetime.fromtimestamp(first_ts / 1000)
-                last_ts = int(data[-1][0])  # Last candle timestamp
+                last_ts = int(data[-1][0])
                 last_dt = datetime.fromtimestamp(last_ts / 1000)
                 
                 logger.debug(f"   Data range: {first_dt} to {last_dt}")
                 
-                # Accept all candles returned by API - no validation based on recency
                 return data
             else:
                 logger.warning(f"⚠️  OKX {endpoint.split('/')[-1]}: API returned success but NO DATA")
@@ -398,11 +382,6 @@ class OKXClient:
             logger.info(f"   Size: {size}")
             logger.info(f"   Type: {order_type}")
             logger.info(f"   Order ID: {order_id}")
-            
-            # Update simulated balance
-            if price:
-                notional = float(size) * float(price)
-                # Just track it, don't deduct (we'll track PnL separately)
             
             return {
                 'ordId': order_id,
