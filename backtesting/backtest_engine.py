@@ -450,6 +450,14 @@ class BacktestEngine:
                 logger.warning("⚠️ Fear & Greed: Failed to load data, disabled")
                 self.use_fear_greed = False
         
+        # Apply backtest confidence multiplier overrides if set
+        if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
+            config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
+        if getattr(config, 'BACKTEST_CONF_HIGH_MULT', None):
+            config.CONF_V2_HIGH_MULTIPLIER = config.BACKTEST_CONF_HIGH_MULT
+        if getattr(config, 'BACKTEST_CONF_ELITE_MULT', None):
+            config.CONF_V2_ELITE_MULTIPLIER = config.BACKTEST_CONF_ELITE_MULT
+        
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()
 
