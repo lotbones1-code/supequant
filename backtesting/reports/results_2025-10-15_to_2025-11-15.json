@@ -1,98 +1,99 @@
 {
   "run_name": "2025-10-15_to_2025-11-15",
-  "generated": "2026-01-20T15:53:30.353836",
+  "generated": "2026-01-20T15:56:08.074442",
   "results": {
     "summary": {
       "initial_capital": 10000.0,
-      "final_capital": 9701.23088004962,
-      "total_pnl": -298.7691199503799,
-      "total_return_pct": -2.9876911995038062,
-      "max_drawdown_pct": 8.113208193546734,
+      "final_capital": 9364.788702288333,
+      "total_pnl": -635.211297711666,
+      "total_return_pct": -6.352112977116667,
+      "max_drawdown_pct": 10.533672437677215,
       "requested_start_date": "2025-10-15",
       "requested_end_date": "2025-11-15",
       "actual_start_date": "2025-10-15",
       "actual_end_date": "2025-11-15"
     },
     "signals": {
-      "total_signals": 71,
-      "signals_passed_filters": 9,
-      "signals_rejected": 62,
-      "filter_pass_rate": 12.676056338028168
+      "total_signals": 84,
+      "signals_passed_filters": 11,
+      "signals_rejected": 73,
+      "filter_pass_rate": 13.095238095238097
     },
     "trades": {
-      "total_trades": 9,
+      "total_trades": 11,
       "wins": 3,
-      "losses": 6,
+      "losses": 8,
       "breakevens": 0,
-      "win_rate": 33.33333333333333
+      "win_rate": 27.27272727272727
     },
     "performance": {
-      "avg_win": 307.4534026636258,
+      "avg_win": 298.1682474756359,
       "avg_win_pct": 2.2779554533864643,
-      "largest_win": 317.3384675135953,
-      "avg_loss": -203.52155465687622,
-      "avg_loss_pct": -1.1621079388317324,
-      "largest_loss": -209.19762320408807,
-      "profit_factor": 0.7553337610406223
+      "largest_win": 306.3330552707772,
+      "avg_loss": -191.2145050173217,
+      "avg_loss_pct": -1.1487391610238022,
+      "largest_loss": -206.0040637602952,
+      "profit_factor": 0.5847521493896845
     },
     "filter_rejections": {
-      "pattern_failure": 24,
-      "quality_score": 38
+      "pattern_failure": 28,
+      "quality_score": 45
     }
   },
   "metrics": {
     "returns": {
-      "total_return_pct": -2.9876911995038062,
-      "total_return_dollar": -298.7691199503806,
-      "cagr": -35.77976782308371,
+      "total_return_pct": -6.352112977116667,
+      "total_return_dollar": -635.2112977116667,
+      "cagr": -61.6407109467918,
       "days_traded": 25,
       "years": 0.07
     },
     "risk": {
-      "volatility_pct": 1.72,
-      "sharpe_ratio": -0.14,
-      "sortino_ratio": -0.2,
-      "max_drawdown_pct": 8.11,
-      "calmar_ratio": -4.41
+      "volatility_pct": 1.62,
+      "sharpe_ratio": -2.1,
+      "sortino_ratio": -2.82,
+      "max_drawdown_pct": 10.53,
+      "calmar_ratio": -5.85
     },
     "trade_stats": {
-      "total_trades": 9,
+      "total_trades": 11,
       "wins": 3,
-      "losses": 6,
+      "losses": 8,
       "breakevens": 0,
-      "win_rate_pct": 33.33,
-      "avg_win_dollar": 307.45,
-      "avg_loss_dollar": -203.52,
-      "profit_factor": 0.76,
-      "expectancy_dollar": -33.2,
-      "kelly_pct": -10.8,
-      "largest_win": 317.34,
-      "largest_loss": -209.2,
+      "win_rate_pct": 27.27,
+      "avg_win_dollar": 298.17,
+      "avg_loss_dollar": -191.21,
+      "profit_factor": 0.58,
+      "expectancy_dollar": -57.75,
+      "kelly_pct": -19.37,
+      "largest_win": 306.33,
+      "largest_loss": -206.0,
       "max_consecutive_wins": 1,
-      "max_consecutive_losses": 4
+      "max_consecutive_losses": 5
     },
     "risk_reward": {
-      "avg_risk_reward": 1.21,
-      "avg_mfe_pct": 1.34,
-      "avg_mae_pct": 1.15,
-      "mfe_mae_ratio": 1.17
+      "avg_risk_reward": 1.15,
+      "avg_mfe_pct": 1.25,
+      "avg_mae_pct": 1.22,
+      "mfe_mae_ratio": 1.03
     },
     "consistency": {
-      "total_trading_days": 6,
+      "total_trading_days": 8,
       "winning_days": 3,
-      "losing_days": 3,
-      "daily_win_rate_pct": 50.0,
-      "avg_daily_pnl": -49.79,
-      "best_day": 317.34,
-      "worst_day": -611.18
+      "losing_days": 5,
+      "daily_win_rate_pct": 37.5,
+      "avg_daily_pnl": -79.4,
+      "best_day": 306.33,
+      "worst_day": -598.63
     },
     "time_analysis": {
-      "avg_trade_duration_bars": 9.1,
+      "avg_trade_duration_bars": 16.2,
       "avg_win_duration_bars": 9.3,
-      "avg_loss_duration_bars": 9.0,
+      "avg_loss_duration_bars": 18.8,
       "exit_reasons": {
-        "stop": 6,
-        "target": 3
+        "stop": 7,
+        "target": 3,
+        "timeout": 1
       }
     }
   }
