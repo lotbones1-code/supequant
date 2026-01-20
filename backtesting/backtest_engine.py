@@ -467,6 +467,31 @@ class BacktestEngine:
             logger.info("   - Ranging: MR enabled, TF disabled")
             logger.info("   - Choppy: Minimal trading")
         
+        # TREND FILTERS: Various methods to detect and filter trending markets
+        self.adx_filter = None
+        self.htf_filter = None
+        self.strict_rsi_filter = None
+        self.price_structure_filter = None
+        
+        if getattr(config, 'BACKTEST_ADX_FILTER', False):
+            threshold = getattr(config, 'BACKTEST_ADX_THRESHOLD', 25)
+            self.adx_filter = create_adx_filter(threshold=threshold)
+            logger.info(f"📊 ADX TREND FILTER: ENABLED (threshold: {threshold})")
+            
+        if getattr(config, 'BACKTEST_HTF_FILTER', False):
+            self.htf_filter = create_htf_filter()
+            logger.info("📊 4H TREND FILTER: ENABLED")
+            
+        if getattr(config, 'BACKTEST_STRICT_RSI', False):
+            oversold = getattr(config, 'BACKTEST_RSI_OVERSOLD', 20)
+            overbought = getattr(config, 'BACKTEST_RSI_OVERBOUGHT', 80)
+            self.strict_rsi_filter = create_strict_rsi_filter(oversold, overbought)
+            logger.info(f"📊 STRICT RSI FILTER: ENABLED ({oversold}/{overbought})")
+            
+        if getattr(config, 'BACKTEST_PRICE_STRUCTURE', False):
+            self.price_structure_filter = create_price_structure_filter()
+            logger.info("📊 PRICE STRUCTURE FILTER: ENABLED")
+        
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
             config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
@@ -888,6 +913,18 @@ class BacktestEngine:
                     logger.debug(f"📊 MR SKIPPED: trend_strength {current_trend_strength:.2f} > {max_trend}")
             
             if not skip_mr_trend:
+                # ADX TREND FILTER: Skip MR if ADX indicates trending market
+                if self.adx_filter:
+                    allow_mr, adx_val, adx_reason = self.adx_filter.should_allow_mr(sol_market_state)
+                    if not allow_mr:
+                        if not hasattr(self, 'adx_blocks'):
+                            self.adx_blocks = 0
+                        self.adx_blocks += 1
+                        logger.debug(f"📊 ADX BLOCK: {adx_reason}")
+                        config.MR_RSI_OVERSOLD = orig_oversold
+                        config.MR_RSI_OVERBOUGHT = orig_overbought
+                        return  # Skip to next candle
+                
                 # ELITE: Check regime before generating signal
                 regime_allowed, regime_confidence = self.elite_regime_checker.check(sol_market_state)
                 
