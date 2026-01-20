@@ -1,7 +1,7 @@
 ================================================================================
 BACKTEST FULL REPORT
 ================================================================================
-Generated: 2026-01-20 13:36:07
+Generated: 2026-01-20 13:38:02
 Run Name: 2025-10-15_to_2025-11-15
 ================================================================================
 
@@ -12,11 +12,11 @@ EXECUTIVE SUMMARY
 
 💰 CAPITAL & RETURNS:
   Initial Capital: $10,000.00
-  Final Capital: $9,376.61
-  Total PnL: $-623.39
-  Total Return: -6.23%
-  CAGR: -60.93%
-  Max Drawdown: 10.79%
+  Final Capital: $9,586.08
+  Total PnL: $-413.92
+  Total Return: -4.14%
+  CAGR: -46.05%
+  Max Drawdown: 9.16%
 
 📈 TRADE PERFORMANCE:
   Total Signals: 90
@@ -26,9 +26,9 @@ EXECUTIVE SUMMARY
   Win Rate: 25.00%
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: -2.02
-  Profit Factor: 0.60
-  Expectancy: $-51.95/trade
+  Sharpe Ratio: -1.01
+  Profit Factor: 0.71
+  Expectancy: $-34.49/trade
 
 🎯 ASSESSMENT:
   ⚠️  Insufficient data (< 30 trades) - Results inconclusive
@@ -39,45 +39,45 @@ PERFORMANCE METRICS REPORT
 ============================================================
 
 📈 RETURNS:
-  Total Return: $-623.39 (-6.23%)
-  CAGR: -60.93%
+  Total Return: $-413.92 (-4.14%)
+  CAGR: -46.05%
   Period: 25 days (0.07 years)
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: -2.02
-  Sortino Ratio: -2.85
-  Max Drawdown: 10.79%
+  Sharpe Ratio: -1.01
+  Sortino Ratio: -1.57
+  Max Drawdown: 9.16%
   Volatility: 1.57%
-  Calmar Ratio: -5.65
+  Calmar Ratio: -5.03
 
 📊 TRADE STATISTICS:
   Total Trades: 12
   Wins: 3 | Losses: 9 | BE: 0
   Win Rate: 25.00%
-  Profit Factor: 0.60
-  Expectancy: $-51.95 per trade
-  Kelly %: -16.61%
-  Avg Win: $312.81
-  Avg Loss: $-173.54
-  Largest Win: $316.96
-  Largest Loss: $-191.09
+  Profit Factor: 0.71
+  Expectancy: $-34.49 per trade
+  Kelly %: -10.39%
+  Avg Win: $332.08
+  Avg Loss: $-156.68
+  Largest Win: $339.02
+  Largest Loss: $-177.87
   Max Win Streak: 1
   Max Loss Streak: 6
 
 💰 RISK/REWARD ANALYSIS:
-  Avg R:R Achieved: 1.19
-  Avg MFE: 1.37%
-  Avg MAE: 1.15%
-  MFE/MAE Ratio: 1.19
+  Avg R:R Achieved: 1.26
+  Avg MFE: 1.47%
+  Avg MAE: 1.06%
+  MFE/MAE Ratio: 1.39
 
 🎯 CONSISTENCY:
   Trading Days: 9
   Winning Days: 3
   Losing Days: 6
   Daily Win Rate: 33.33%
-  Avg Daily PnL: $-69.27
-  Best Day: $+315.35
-  Worst Day: $-527.72
+  Avg Daily PnL: $-45.99
+  Best Day: $+331.19
+  Worst Day: $-455.52
 
 ⏱️  TIME ANALYSIS:
   Avg Trade Duration: 16.0 bars
@@ -110,19 +110,19 @@ TRADE ANALYSIS
   MEAN_REVERSION:
     Trades: 12
     Wins: 3 (25.0%)
-    PnL: $-623.39
+    PnL: $-413.92
 
 📊 PERFORMANCE BY DIRECTION:
 
   LONG:
     Trades: 8
     Wins: 1 (12.5%)
-    PnL: $-883.15
+    PnL: $-760.87
 
   SHORT:
     Trades: 4
     Wins: 2 (50.0%)
-    PnL: $+259.77
+    PnL: $+346.95
 
 
 

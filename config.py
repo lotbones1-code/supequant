@@ -576,7 +576,7 @@ BACKTEST_CONF_ELITE_MULT = None
 BACKTEST_MR_MAX_TREND_STRENGTH = None  # Disabled (no effect - MR only triggers when trend is weak anyway)
 
 # TEST #3: Better entry timing (simulate limit order entry)
-BACKTEST_ENTRY_IMPROVEMENT = 0.002    # 0.2% better entry (limit order)
+BACKTEST_ENTRY_IMPROVEMENT = None     # Disabled (test only - real implementation needs limit orders)
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
