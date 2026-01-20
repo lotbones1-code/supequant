@@ -591,6 +591,21 @@ BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
 
+# =====================================
+# REGIME-ADAPTIVE SYSTEM (Backtest Only)
+# =====================================
+# Automatically detects market regime and adjusts strategy settings
+# - TRENDING: Disable MR, enable TF, wider stops
+# - RANGING: Enable MR, disable TF, normal settings
+# - CHOPPY: Minimal trading, reduced size
+BACKTEST_REGIME_ADAPTIVE = True       # Enable regime-adaptive system
+
+# Regime detection thresholds
+BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending
+BACKTEST_REGIME_STRONG_TREND = 0.6         # trend_strength > this = strong trend
+BACKTEST_REGIME_VOLATILITY_HIGH = 70       # ATR percentile > this = high vol
+BACKTEST_REGIME_VOLATILITY_LOW = 30        # ATR percentile < this = low vol
+
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
 # BACKTEST MODE - Even looser for testing

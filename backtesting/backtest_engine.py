@@ -34,6 +34,8 @@ from backtesting.smart_mtf_checker import create_mtf_checker
 from backtesting.ml_trade_scorer import create_ml_scorer
 # Fear & Greed Index (backtest only)
 from backtesting.fear_greed_backtest import create_fear_greed_backtester
+# Regime-Adaptive System (backtest only)
+from backtesting.regime_adaptive import create_regime_router, MarketRegime
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
