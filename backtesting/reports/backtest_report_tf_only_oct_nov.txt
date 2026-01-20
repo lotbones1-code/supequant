@@ -1,0 +1,72 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-19 16:50:29
+Run Name: tf_only_oct_nov
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $10,000.00
+  Total PnL: $+0.00
+  Total Return: +0.00%
+  Max Drawdown: 0.00%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 4
+  Signals Passed Filters: 0 (0.0%)
+  Trades Executed: 0
+  Wins: 0 | Losses: 0 | BE: 0
+  Win Rate: 0.00%
+
+🎯 ASSESSMENT:
+  ⚠️  Insufficient data (< 30 trades) - Results inconclusive
+
+No metrics available
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  pattern_failure: 2 rejections (50.0%)
+  quality_score: 2 rejections (50.0%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: pattern_failure (2 rejections)
+  ⚠️  WARNING: Very low filter pass rate (<10%)
+     Consider loosening filter thresholds
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+  No trades executed
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+🔧 FILTER TUNING: Pass rate is very low (<10%). Consider:
+   - Loosening threshold requirements
+   - Disabling overly restrictive filters
+   - Reviewing filter logic for false rejections
+📉 LOW WIN RATE: Win rate is below 40%. Consider:
+   - Reviewing entry criteria
+   - Adjusting stop loss placement
+   - Checking if market conditions suit strategies
+⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
+   - Results may not be statistically significant
+   - Test on longer time period
+   - Minimum 100 trades recommended for validation
+
+
+================================================================================
+END OF REPORT
+================================================================================

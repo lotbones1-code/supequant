@@ -1,0 +1,6 @@
+#!/bin/bash
+# Simple run script - always uses venv Python
+
+cd "$(dirname "$0")"
+source .venv/bin/activate
+python main.py

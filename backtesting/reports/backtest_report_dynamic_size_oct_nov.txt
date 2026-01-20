@@ -1,0 +1,157 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-19 16:54:10
+Run Name: dynamic_size_oct_nov
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $8,986.44
+  Total PnL: $-1,013.56
+  Total Return: -10.14%
+  CAGR: -81.66%
+  Max Drawdown: 13.07%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 95
+  Signals Passed Filters: 8 (8.4%)
+  Trades Executed: 8
+  Wins: 1 | Losses: 7 | BE: 0
+  Win Rate: 12.50%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: -12.05
+  Profit Factor: 0.22
+  Expectancy: $-126.69/trade
+
+🎯 ASSESSMENT:
+  ⚠️  Insufficient data (< 30 trades) - Results inconclusive
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $-1,013.56 (-10.14%)
+  CAGR: -81.66%
+  Period: 23 days (0.06 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: -12.05
+  Sortino Ratio: -10.38
+  Max Drawdown: 13.07%
+  Volatility: 1.05%
+  Calmar Ratio: -6.25
+
+📊 TRADE STATISTICS:
+  Total Trades: 8
+  Wins: 1 | Losses: 7 | BE: 0
+  Win Rate: 12.50%
+  Profit Factor: 0.22
+  Expectancy: $-126.69 per trade
+  Kelly %: -43.20%
+  Avg Win: $293.25
+  Avg Loss: $-186.69
+  Largest Win: $293.25
+  Largest Loss: $-206.00
+  Max Win Streak: 1
+  Max Loss Streak: 7
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.06
+  Avg MFE: 1.00%
+  Avg MAE: 1.43%
+  MFE/MAE Ratio: 0.70
+
+🎯 CONSISTENCY:
+  Trading Days: 7
+  Winning Days: 1
+  Losing Days: 6
+  Daily Win Rate: 14.29%
+  Avg Daily PnL: $-144.79
+  Best Day: $+293.25
+  Worst Day: $-389.18
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 21.9 bars
+  Avg Win Duration: 15.0 bars
+  Avg Loss Duration: 22.9 bars
+  Exit Reasons: {'stop': 6, 'timeout': 1, 'target': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 54 rejections (62.1%)
+  pattern_failure: 33 rejections (37.9%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (54 rejections)
+  ⚠️  WARNING: Very low filter pass rate (<10%)
+     Consider loosening filter thresholds
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  MEAN_REVERSION:
+    Trades: 8
+    Wins: 1 (12.5%)
+    PnL: $-1,013.56
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 6
+    Wins: 0 (0.0%)
+    PnL: $-1,100.80
+
+  SHORT:
+    Trades: 2
+    Wins: 1 (50.0%)
+    PnL: $+87.24
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+🔧 FILTER TUNING: Pass rate is very low (<10%). Consider:
+   - Loosening threshold requirements
+   - Disabling overly restrictive filters
+   - Reviewing filter logic for false rejections
+📉 LOW WIN RATE: Win rate is below 40%. Consider:
+   - Reviewing entry criteria
+   - Adjusting stop loss placement
+   - Checking if market conditions suit strategies
+❌ NEGATIVE EXPECTANCY: Profit factor < 1.0
+   - System is losing money
+   - DO NOT trade this live
+   - Major strategy revision needed
+⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
+   - Results may not be statistically significant
+   - Test on longer time period
+   - Minimum 100 trades recommended for validation
+📊 LOW RISK-ADJUSTED RETURNS: Sharpe < 1.0
+   - Returns not adequate for risk taken
+   - Consider less risky instruments
+
+
+================================================================================
+END OF REPORT
+================================================================================

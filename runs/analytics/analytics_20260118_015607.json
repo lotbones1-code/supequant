@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-01-18T01:56:07.474620+00:00",
+  "period": {
+    "start": "2025-12-19",
+    "end": "2026-01-18",
+    "days": 30
+  },
+  "overall": {
+    "total_trades": 1,
+    "winning_trades": 1,
+    "losing_trades": 0,
+    "win_rate": 1.0,
+    "win_rate_pct": 100.0,
+    "total_pnl": 0.41,
+    "gross_profit": 0.41,
+    "gross_loss": 0,
+    "avg_win": 0.41,
+    "avg_loss": 0,
+    "profit_factor": "inf",
+    "expectancy": 0.41,
+    "max_drawdown": 0,
+    "avg_trade_duration_minutes": 60.0
+  },
+  "by_confidence": {
+    "high": {
+      "trade_count": 0,
+      "win_rate": 0,
+      "win_rate_pct": 0,
+      "avg_pnl": 0,
+      "total_pnl": 0,
+      "profit_factor": 0
+    },
+    "medium": {
+      "trade_count": 0,
+      "win_rate": 0,
+      "win_rate_pct": 0,
+      "avg_pnl": 0,
+      "total_pnl": 0,
+      "profit_factor": 0
+    },
+    "low": {
+      "trade_count": 0,
+      "win_rate": 0,
+      "win_rate_pct": 0,
+      "avg_pnl": 0,
+      "total_pnl": 0,
+      "profit_factor": 0
+    },
+    "very_low": {
+      "trade_count": 0,
+      "win_rate": 0,
+      "win_rate_pct": 0,
+      "avg_pnl": 0,
+      "total_pnl": 0,
+      "profit_factor": 0
+    },
+    "unknown": {
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "win_rate_pct": 100.0,
+      "avg_pnl": 0.41,
+      "total_pnl": 0.41,
+      "profit_factor": "inf"
+    }
+  },
+  "by_strategy": {
+    "test_strategy": {
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "win_rate_pct": 100.0,
+      "avg_pnl": 0.41,
+      "total_pnl": 0.41,
+      "profit_factor": "inf"
+    }
+  },
+  "by_close_reason": {
+    "tp1": {
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "win_rate_pct": 100.0,
+      "avg_pnl": 0.41,
+      "total_pnl": 0.41,
+      "profit_factor": "inf"
+    }
+  },
+  "by_day_of_week": {
+    "Saturday": {
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "win_rate_pct": 100.0,
+      "avg_pnl": 0.41,
+      "total_pnl": 0.41,
+      "profit_factor": "inf"
+    }
+  },
+  "validation": {
+    "confidence_correlation_valid": null,
+    "note": "True if higher confidence ranges have higher win rates (when data available)"
+  }
+}

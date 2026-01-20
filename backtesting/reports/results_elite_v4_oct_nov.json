@@ -1,0 +1,36 @@
+{
+  "run_name": "elite_v4_oct_nov",
+  "generated": "2026-01-19T17:14:14.895181",
+  "results": {
+    "summary": {
+      "initial_capital": 10000.0,
+      "final_capital": 10000.0,
+      "total_pnl": 0.0,
+      "total_return_pct": 0.0,
+      "max_drawdown_pct": 0.0,
+      "requested_start_date": "2025-10-15",
+      "requested_end_date": "2025-11-15",
+      "actual_start_date": "2025-10-15",
+      "actual_end_date": "2025-11-15"
+    },
+    "signals": {
+      "total_signals": 7,
+      "signals_passed_filters": 0,
+      "signals_rejected": 7,
+      "filter_pass_rate": 0.0
+    },
+    "trades": {
+      "total_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "breakevens": 0,
+      "win_rate": 0
+    },
+    "performance": {},
+    "filter_rejections": {
+      "pattern_failure": 2,
+      "quality_score": 5
+    }
+  },
+  "metrics": {}
+}

@@ -1,0 +1,36 @@
+{
+  "run_name": "2025-12-20_to_2025-12-27",
+  "generated": "2026-01-19T17:37:27.853219",
+  "results": {
+    "summary": {
+      "initial_capital": 10000.0,
+      "final_capital": 10000.0,
+      "total_pnl": 0.0,
+      "total_return_pct": 0.0,
+      "max_drawdown_pct": 0.0,
+      "requested_start_date": "2025-12-20",
+      "requested_end_date": "2025-12-27",
+      "actual_start_date": "2025-12-20",
+      "actual_end_date": "2025-12-27"
+    },
+    "signals": {
+      "total_signals": 18,
+      "signals_passed_filters": 0,
+      "signals_rejected": 18,
+      "filter_pass_rate": 0.0
+    },
+    "trades": {
+      "total_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "breakevens": 0,
+      "win_rate": 0
+    },
+    "performance": {},
+    "filter_rejections": {
+      "quality_score": 10,
+      "pattern_failure": 7
+    }
+  },
+  "metrics": {}
+}

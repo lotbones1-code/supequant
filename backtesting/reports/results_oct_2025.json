@@ -1,0 +1,33 @@
+{
+  "run_name": "oct_2025",
+  "generated": "2026-01-14T23:09:28.218875",
+  "results": {
+    "summary": {
+      "initial_capital": 10000.0,
+      "final_capital": 10000.0,
+      "total_pnl": 0.0,
+      "total_return_pct": 0.0,
+      "max_drawdown_pct": 0.0,
+      "requested_start_date": "2025-10-15",
+      "requested_end_date": "2025-10-31",
+      "actual_start_date": "2025-10-15",
+      "actual_end_date": "2025-10-31"
+    },
+    "signals": {
+      "total_signals": 0,
+      "signals_passed_filters": 0,
+      "signals_rejected": 0,
+      "filter_pass_rate": 0
+    },
+    "trades": {
+      "total_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "breakevens": 0,
+      "win_rate": 0
+    },
+    "performance": {},
+    "filter_rejections": {}
+  },
+  "metrics": {}
+}

@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SupeQuant | Elite Trading System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body { background: #121212; min-height: 100vh; }
+        
+        /* OKX-style dark theme */
+        .card { 
+            background: #1b1b1b; 
+            border: 1px solid #2a2a2a; 
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+        .card:hover { border-color: #3a3a3a; }
+        
+        /* Accent colors */
+        .text-profit { color: #00c076; }
+        .text-loss { color: #ff5353; }
+        .bg-profit { background: rgba(0, 192, 118, 0.1); }
+        .bg-loss { background: rgba(255, 83, 83, 0.1); }
+        
+        /* Badge styles */
+        .badge { 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            font-weight: 500;
+        }
+        .badge-green { background: rgba(0, 192, 118, 0.15); color: #00c076; }
+        .badge-yellow { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
+        .badge-orange { background: rgba(255, 152, 0, 0.15); color: #ff9800; }
+        .badge-red { background: rgba(255, 83, 83, 0.15); color: #ff5353; }
+        .badge-gray { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
+        
+        /* Progress bars */
+        .progress-bar { background: #2a2a2a; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .fill-green { background: linear-gradient(90deg, #00c076, #00a060); }
+        .fill-yellow { background: linear-gradient(90deg, #ffc107, #e6ac00); }
+        .fill-orange { background: linear-gradient(90deg, #ff9800, #e68900); }
+        .fill-red { background: linear-gradient(90deg, #ff5353, #e64545); }
+        
+        /* Table styles */
+        .table-row { 
+            border-bottom: 1px solid #2a2a2a; 
+            transition: background 0.15s ease;
+        }
+        .table-row:hover { background: #1f1f1f; }
+        
+        /* Pulse animation */
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 
+            0%, 100% { opacity: 1; transform: scale(1); } 
+            50% { opacity: 0.5; transform: scale(0.95); } 
+        }
+        
+        /* Status indicator */
+        .status-live { 
+            background: #00c076; 
+            box-shadow: 0 0 8px rgba(0, 192, 118, 0.5);
+        }
+        .status-offline { background: #ff5353; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1b1b1b; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+    </style>
+</head>
+<body class="text-white p-6" x-data="dashboard()" x-init="init()">
+    <!-- Header -->
+    <header class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center font-bold text-lg">
+                SQ
+            </div>
+            <div>
+                <h1 class="text-xl font-semibold text-white">SupeQuant</h1>
+                <p class="text-gray-500 text-sm">Elite Trading System</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full" :class="connected ? 'status-live pulse-dot' : 'status-offline'"></div>
+                <span class="text-sm text-gray-400" x-text="connected ? 'Connected' : 'Offline'"></span>
+            </div>
+            <div class="text-gray-500 text-sm" x-text="lastUpdate"></div>
+        </div>
+    </header>
+
+    <!-- Main Stats Row -->
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+        <!-- Total Portfolio (SOL + USDT) -->
+        <div class="card p-5 col-span-2 lg:col-span-1 border-l-2 border-emerald-500">
+            <div class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Portfolio Value</div>
+            <div class="text-2xl font-bold text-white" x-text="'$' + equity.toFixed(2)"></div>
+            <div class="text-xs text-gray-500 mt-1">SOL + USDT</div>
+        </div>
+        
+        <!-- USDT Balance -->
+        <div class="card p-5 col-span-1">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400">₮</div>
+                <span class="text-gray-500 text-xs font-medium uppercase tracking-wide">USDT</span>
+            </div>
+            <div class="text-xl font-semibold text-white" x-text="usdtBalance.toFixed(2)"></div>
+            <div class="text-xs text-emerald-400/70 mt-1" x-text="'≈ $' + usdtEquityUsd.toFixed(2)"></div>
+        </div>
+        
+        <!-- SOL Balance -->
+        <div class="card p-5 col-span-1">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 flex items-center justify-center">
+                    <span class="text-[10px] font-bold text-purple-300">◎</span>
+                </div>
+                <span class="text-gray-500 text-xs font-medium uppercase tracking-wide">SOL</span>
+            </div>
+            <div class="text-xl font-semibold text-white" x-text="solBalance.toFixed(4)"></div>
+            <div class="text-xs text-purple-400/70 mt-1" x-text="'≈ $' + solEquityUsd.toFixed(2)"></div>
+        </div>
+        
+        <!-- SOL Price -->
+        <div class="card p-5 col-span-1">
+            <div class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">SOL Price</div>
+            <div class="text-xl font-semibold text-white" x-text="'$' + solPrice.toFixed(2)"></div>
+            <div class="text-xs text-gray-500 mt-1">USDT Perp</div>
+        </div>
+        
+        <!-- BTC Price -->
+        <div class="card p-5 col-span-1">
+            <div class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">BTC Price</div>
+            <div class="text-xl font-semibold text-white" x-text="'$' + formatNumber(btcPrice)"></div>
+            <div class="text-xs text-gray-500 mt-1">Reference</div>
+        </div>
+        
+        <!-- Today's Stats -->
+        <div class="card p-5 col-span-2 lg:col-span-1">
+            <div class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Today's PnL</div>
+            <div class="text-xl font-semibold" :class="dailySummary.pnl_today >= 0 ? 'text-profit' : 'text-loss'" x-text="(dailySummary.pnl_today >= 0 ? '+' : '') + '$' + Math.abs(dailySummary.pnl_today).toFixed(2)"></div>
+            <div class="text-xs text-gray-500 mt-1" x-text="dailySummary.trades_today + ' trades | ' + dailySummary.win_rate_today.toFixed(0) + '% win'"></div>
+        </div>
+    </div>
+
+    <!-- Two Column Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Left Column: Positions -->
+        <div class="lg:col-span-2">
+            <!-- Open Positions -->
+            <div class="card p-5 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-semibold text-white">Open Positions</h2>
+                    <span class="text-xs text-gray-500" x-text="positions.length + ' active'"></span>
+                </div>
+                <template x-if="positions.length === 0">
+                    <div class="text-gray-500 text-center py-8 text-sm">No open positions</div>
+                </template>
+                <template x-if="positions.length > 0">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-gray-500 text-xs uppercase tracking-wide">
+                                    <th class="text-left py-2 font-medium">Symbol</th>
+                                    <th class="text-left py-2 font-medium">Side</th>
+                                    <th class="text-right py-2 font-medium">Size</th>
+                                    <th class="text-right py-2 font-medium">Entry</th>
+                                    <th class="text-right py-2 font-medium">Mark</th>
+                                    <th class="text-right py-2 font-medium">PnL</th>
+                                    <th class="text-center py-2 font-medium">Conf</th>
+                                    <th class="text-right py-2 font-medium">TP/SL</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="pos in positions" :key="pos.symbol + pos.entry_time">
+                                    <tr class="table-row">
+                                        <td class="py-3 font-medium text-white" x-text="pos.symbol.replace('-USDT-SWAP', '')"></td>
+                                        <td class="py-3">
+                                            <span class="badge" :class="pos.direction === 'long' ? 'badge-green' : 'badge-red'" x-text="pos.direction.toUpperCase()"></span>
+                                        </td>
+                                        <td class="py-3 text-right text-gray-300" x-text="pos.size"></td>
+                                        <td class="py-3 text-right text-gray-300" x-text="'$' + (pos.entry_price || 0).toFixed(2)"></td>
+                                        <td class="py-3 text-right text-white" x-text="'$' + (pos.current_price || 0).toFixed(2)"></td>
+                                        <td class="py-3 text-right">
+                                            <span :class="pos.pnl >= 0 ? 'text-profit' : 'text-loss'" x-text="(pos.pnl >= 0 ? '+' : '') + '$' + Math.abs(pos.pnl || 0).toFixed(2)"></span>
+                                            <span class="text-gray-500 text-xs ml-1" x-text="'(' + (pos.pnl_pct >= 0 ? '+' : '') + (pos.pnl_pct || 0).toFixed(1) + '%)'"></span>
+                                        </td>
+                                        <td class="py-3 text-center">
+                                            <span class="badge" :class="'badge-' + (pos.confidence_color || 'gray')" x-text="pos.confidence ? pos.confidence + '%' : '-'"></span>
+                                        </td>
+                                        <td class="py-3 text-right text-xs">
+                                            <span class="text-profit" x-text="pos.tp1 ? pos.tp1.toFixed(1) : '-'"></span>
+                                            <span class="text-gray-600 mx-1">/</span>
+                                            <span class="text-loss" x-text="pos.sl ? pos.sl.toFixed(1) : '-'"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Trade History -->
+            <div class="card p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-semibold text-white">Trade History</h2>
+                    <span class="text-xs text-gray-500" x-text="tradeHistory.length + ' trades'"></span>
+                </div>
+                <template x-if="tradeHistory.length === 0">
+                    <div class="text-gray-500 text-center py-8 text-sm">No trade history</div>
+                </template>
+                <template x-if="tradeHistory.length > 0">
+                    <div class="overflow-x-auto max-h-80 overflow-y-auto">
+                        <table class="w-full text-sm">
+                            <thead class="sticky top-0 bg-[#1b1b1b]">
+                                <tr class="text-gray-500 text-xs uppercase tracking-wide">
+                                    <th class="text-left py-2 font-medium">Time</th>
+                                    <th class="text-left py-2 font-medium">Pair</th>
+                                    <th class="text-left py-2 font-medium">Side</th>
+                                    <th class="text-right py-2 font-medium">Entry</th>
+                                    <th class="text-right py-2 font-medium">Exit</th>
+                                    <th class="text-right py-2 font-medium">PnL</th>
+                                    <th class="text-center py-2 font-medium">Conf</th>
+                                    <th class="text-left py-2 font-medium">Exit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="trade in tradeHistory" :key="trade.timestamp">
+                                    <tr class="table-row">
+                                        <td class="py-2.5 text-gray-500 text-xs" x-text="formatTime(trade.timestamp)"></td>
+                                        <td class="py-2.5 font-medium text-white text-xs" x-text="(trade.symbol || 'SOL').replace('-USDT-SWAP', '')"></td>
+                                        <td class="py-2.5">
+                                            <span class="badge text-xs" :class="trade.direction === 'long' ? 'badge-green' : 'badge-red'" x-text="(trade.direction || '-').toUpperCase()"></span>
+                                        </td>
+                                        <td class="py-2.5 text-right text-gray-400 text-xs" x-text="'$' + (trade.entry_price || 0).toFixed(2)"></td>
+                                        <td class="py-2.5 text-right text-gray-300 text-xs" x-text="'$' + (trade.exit_price || 0).toFixed(2)"></td>
+                                        <td class="py-2.5 text-right">
+                                            <span class="text-xs" :class="trade.pnl_abs >= 0 ? 'text-profit' : 'text-loss'" x-text="(trade.pnl_abs >= 0 ? '+' : '') + '$' + Math.abs(trade.pnl_abs || 0).toFixed(2)"></span>
+                                        </td>
+                                        <td class="py-2.5 text-center">
+                                            <span class="badge text-xs" :class="'badge-' + (trade.confidence_color || 'gray')" x-text="trade.confidence ? trade.confidence + '%' : '-'"></span>
+                                        </td>
+                                        <td class="py-2.5">
+                                            <span class="badge text-xs" 
+                                                :class="(trade.close_reason === 'tp1' || trade.close_reason === 'tp2') ? 'badge-green' : trade.close_reason === 'sl' ? 'badge-red' : 'badge-gray'"
+                                                x-text="(trade.close_reason || '-').toUpperCase()"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Right Column: Stats -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- Performance Card -->
+            <div class="card p-5">
+                <h2 class="font-semibold text-white mb-4">Performance</h2>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500 text-sm">Win Rate</span>
+                        <span class="text-white font-medium" :class="winRate >= 50 ? 'text-profit' : 'text-loss'" x-text="winRate.toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500 text-sm">Total Trades</span>
+                        <span class="text-white font-medium" x-text="totalTrades"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500 text-sm">Wins / Losses</span>
+                        <span>
+                            <span class="text-profit font-medium" x-text="winningTrades"></span>
+                            <span class="text-gray-600 mx-1">/</span>
+                            <span class="text-loss font-medium" x-text="losingTrades"></span>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-500 text-sm">Market</span>
+                        <span class="badge" :class="regime === 'bullish' ? 'badge-green' : regime === 'bearish' ? 'badge-red' : 'badge-yellow'" x-text="regime.toUpperCase()"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Confidence Breakdown -->
+            <div class="card p-5">
+                <h2 class="font-semibold text-white mb-4">Confidence Breakdown</h2>
+                <template x-if="Object.keys(confidenceBreakdown).length === 0">
+                    <div class="text-gray-500 text-center py-4 text-sm">No data yet</div>
+                </template>
+                <template x-if="Object.keys(confidenceBreakdown).length > 0">
+                    <div class="space-y-3">
+                        <template x-if="confidenceBreakdown.high">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">High (90%+)</span>
+                                    <span class="text-gray-500" x-text="confidenceBreakdown.high.count + ' | ' + confidenceBreakdown.high.win_rate + '% WR'"></span>
+                                </div>
+                                <div class="progress-bar h-2">
+                                    <div class="progress-fill fill-green" :style="'width: ' + Math.max(confidenceBreakdown.high.percentage, 2) + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="confidenceBreakdown.medium">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">Medium (70-89%)</span>
+                                    <span class="text-gray-500" x-text="confidenceBreakdown.medium.count + ' | ' + confidenceBreakdown.medium.win_rate + '% WR'"></span>
+                                </div>
+                                <div class="progress-bar h-2">
+                                    <div class="progress-fill fill-yellow" :style="'width: ' + Math.max(confidenceBreakdown.medium.percentage, 2) + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="confidenceBreakdown.low">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">Low (50-69%)</span>
+                                    <span class="text-gray-500" x-text="confidenceBreakdown.low.count + ' | ' + confidenceBreakdown.low.win_rate + '% WR'"></span>
+                                </div>
+                                <div class="progress-bar h-2">
+                                    <div class="progress-fill fill-orange" :style="'width: ' + Math.max(confidenceBreakdown.low.percentage, 2) + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="confidenceBreakdown.unknown && confidenceBreakdown.unknown.count > 0">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">Unknown</span>
+                                    <span class="text-gray-500" x-text="confidenceBreakdown.unknown.count + ' trades'"></span>
+                                </div>
+                                <div class="progress-bar h-2">
+                                    <div class="progress-fill bg-gray-600" :style="'width: ' + Math.max(confidenceBreakdown.unknown.percentage, 2) + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Recent Signals -->
+            <div class="card p-5">
+                <h2 class="font-semibold text-white mb-4">Recent Signals</h2>
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                    <template x-if="signals.length === 0">
+                        <div class="text-gray-500 text-center py-4 text-sm">Waiting for signals...</div>
+                    </template>
+                    <template x-for="signal in signals.slice(-10).reverse()" :key="signal.timestamp">
+                        <div class="flex justify-between items-center py-2 border-b border-gray-800 last:border-0">
+                            <div class="flex items-center gap-2">
+                                <span class="badge text-xs" :class="signal.direction === 'long' ? 'badge-green' : signal.direction === 'short' ? 'badge-red' : 'badge-gray'" x-text="(signal.direction || signal.type || '-').toUpperCase()"></span>
+                                <span class="text-gray-400 text-xs truncate max-w-24" x-text="signal.reason || signal.strategy || ''"></span>
+                            </div>
+                            <span class="text-gray-600 text-xs" x-text="formatTime(signal.timestamp)"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 1.5 Analytics Section -->
+    <div class="mt-6 mb-6">
+        <div class="flex items-center justify-between mb-4 cursor-pointer" @click="showAnalytics = !showAnalytics">
+            <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                <span>📊</span> System Analytics
+                <span class="text-xs text-gray-500">(Phase 1.5)</span>
+            </h2>
+            <span class="text-gray-500" x-text="showAnalytics ? '▼' : '▶'"></span>
+        </div>
+        
+        <div x-show="showAnalytics" x-collapse class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- System Health Panel -->
+            <div class="card p-5">
+                <h3 class="font-semibold text-white mb-3 flex items-center gap-2">
+                    <span x-text="analytics.health.status === 'HEALTHY' ? '✅' : analytics.health.status === 'WARNING' ? '🟡' : '❌'"></span>
+                    System Health
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Status</span>
+                        <span class="font-medium" :class="analytics.health.status === 'HEALTHY' ? 'text-profit' : 'text-loss'" x-text="analytics.health.status || 'Loading...'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Uptime</span>
+                        <span class="text-white" x-text="analytics.health.uptime || '-'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Error Rate</span>
+                        <span class="text-white" x-text="(analytics.health.error_rate || 0) + '/hr'"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Risk Exposure Panel -->
+            <div class="card p-5">
+                <h3 class="font-semibold text-white mb-3 flex items-center gap-2">
+                    <span x-text="analytics.risk.status === 'SAFE' || analytics.risk.status === 'NO_POSITION' ? '✅' : analytics.risk.status === 'WATCH' ? '🟡' : '❌'"></span>
+                    Risk Exposure
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Position</span>
+                        <span class="text-white" x-text="analytics.risk.has_position ? 'OPEN' : 'None'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Risk %</span>
+                        <span :class="analytics.risk.risk_percent > 3 ? 'text-loss' : 'text-profit'" x-text="(analytics.risk.risk_percent || 0).toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Status</span>
+                        <span class="text-white" x-text="analytics.risk.status || '-'"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Trade Quality Panel -->
+            <div class="card p-5">
+                <h3 class="font-semibold text-white mb-3 flex items-center gap-2">
+                    <span x-text="analytics.quality.win_rate >= 50 ? '✅' : '🟡'"></span>
+                    Trade Quality
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Trades Analyzed</span>
+                        <span class="text-white" x-text="analytics.quality.total_trades || 0"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Win Rate</span>
+                        <span :class="analytics.quality.win_rate >= 50 ? 'text-profit' : 'text-loss'" x-text="(analytics.quality.win_rate || 0).toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Total PnL</span>
+                        <span :class="analytics.quality.total_pnl >= 0 ? 'text-profit' : 'text-loss'" x-text="'$' + (analytics.quality.total_pnl || 0).toFixed(2)"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filter Scores Panel -->
+            <div class="card p-5">
+                <h3 class="font-semibold text-white mb-3 flex items-center gap-2">
+                    <span x-text="analytics.filters.warning > 0 ? '⚠️' : '✅'"></span>
+                    Filter Effectiveness
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Filters Tracked</span>
+                        <span class="text-white" x-text="analytics.filters.filters_analyzed || 0"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Effective</span>
+                        <span class="text-profit" x-text="analytics.filters.effective || 0"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Need Attention</span>
+                        <span :class="analytics.filters.warning > 0 ? 'text-loss' : 'text-gray-500'" x-text="analytics.filters.warning || 0"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <template x-if="!showAnalytics">
+            <p class="text-gray-600 text-sm">Click to expand analytics panels</p>
+        </template>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center text-gray-600 text-xs py-4">
+        SupeQuant Elite Trading System v1.5 | Connected to OKX | Phase 1.5 Analytics Active
+    </footer>
+
+    <script>
+        function dashboard() {
+            return {
+                // Connection state
+                connected: false,
+                lastUpdate: 'Connecting...',
+                
+                // Account data (SOL + USDT only)
+                usdtBalance: 0,
+                usdtEquityUsd: 0,
+                solBalance: 0,
+                solEquityUsd: 0,
+                equity: 0,
+                unrealizedPnl: 0,
+                dailyPnl: 0,
+                dailyPnlPct: 0,
+                
+                // Market data
+                solPrice: 0,
+                btcPrice: 0,
+                regime: 'unknown',
+                
+                // Trading stats
+                winRate: 0,
+                totalTrades: 0,
+                winningTrades: 0,
+                losingTrades: 0,
+                
+                // Lists
+                positions: [],
+                tradeHistory: [],
+                signals: [],
+                
+                // Analytics
+                dailySummary: {
+                    trades_today: 0,
+                    wins_today: 0,
+                    losses_today: 0,
+                    win_rate_today: 0,
+                    pnl_today: 0
+                },
+                confidenceBreakdown: {},
+                
+                // Phase 1.5 Analytics
+                showAnalytics: false,
+                analytics: {
+                    health: { status: 'Loading...', uptime: '-', error_rate: 0 },
+                    risk: { has_position: false, risk_percent: 0, status: '-' },
+                    quality: { total_trades: 0, win_rate: 0, total_pnl: 0 },
+                    filters: { filters_analyzed: 0, effective: 0, warning: 0 }
+                },
+                
+                init() {
+                    // Initial fetch
+                    this.fetchLiveData();
+                    this.fetchPositions();
+                    this.fetchTradeHistory();
+                    this.fetchConfidenceBreakdown();
+                    this.fetchDailySummary();
+                    this.fetchSignals();
+                    this.fetchAnalytics();
+                    
+                    // Polling intervals
+                    setInterval(() => this.fetchLiveData(), 5000);        // Live data: 5s
+                    setInterval(() => this.fetchPositions(), 10000);      // Positions: 10s
+                    setInterval(() => this.fetchTradeHistory(), 30000);   // History: 30s
+                    setInterval(() => this.fetchConfidenceBreakdown(), 60000); // Analytics: 60s
+                    setInterval(() => this.fetchDailySummary(), 30000);   // Daily: 30s
+                    setInterval(() => this.fetchSignals(), 5000);         // Signals: 5s
+                    setInterval(() => this.fetchAnalytics(), 60000);      // Phase 1.5 Analytics: 60s
+                },
+                
+                async fetchLiveData() {
+                    try {
+                        const response = await fetch('/api/live');
+                        const data = await response.json();
+                        
+                        this.connected = data.connected !== false;
+                        this.usdtBalance = data.usdt_balance || 0;
+                        this.usdtEquityUsd = data.usdt_equity_usd || 0;
+                        this.solBalance = data.sol_balance || 0;
+                        this.solEquityUsd = data.sol_equity_usd || 0;
+                        this.equity = data.total_equity || 0; // Now SOL + USDT only
+                        this.solPrice = data.sol_price || 0;
+                        this.btcPrice = data.btc_price || 0;
+                        this.lastUpdate = data.last_update ? this.formatDateTime(data.last_update) : 'Offline';
+                        
+                        // Also get positions from live if available
+                        if (data.positions && data.positions.length > 0) {
+                            this.positions = data.positions;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch live data:', e);
+                        this.connected = false;
+                    }
+                },
+                
+                async fetchPositions() {
+                    try {
+                        const response = await fetch('/api/positions');
+                        const data = await response.json();
+                        if (data.positions) {
+                            this.positions = data.positions;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch positions:', e);
+                    }
+                },
+                
+                async fetchTradeHistory() {
+                    try {
+                        const response = await fetch('/api/trade-history');
+                        const data = await response.json();
+                        this.tradeHistory = data.trades || [];
+                    } catch (e) {
+                        console.error('Failed to fetch trade history:', e);
+                    }
+                },
+                
+                async fetchConfidenceBreakdown() {
+                    try {
+                        const response = await fetch('/api/confidence-breakdown');
+                        const data = await response.json();
+                        this.confidenceBreakdown = data.breakdown || {};
+                    } catch (e) {
+                        console.error('Failed to fetch confidence breakdown:', e);
+                    }
+                },
+                
+                async fetchDailySummary() {
+                    try {
+                        const response = await fetch('/api/daily-summary');
+                        const data = await response.json();
+                        this.dailySummary = {
+                            trades_today: data.trades_today || 0,
+                            wins_today: data.wins_today || 0,
+                            losses_today: data.losses_today || 0,
+                            win_rate_today: data.win_rate_today || 0,
+                            pnl_today: data.pnl_today || 0
+                        };
+                    } catch (e) {
+                        console.error('Failed to fetch daily summary:', e);
+                    }
+                },
+                
+                async fetchSignals() {
+                    try {
+                        const response = await fetch('/api/all');
+                        const data = await response.json();
+                        
+                        this.regime = data.market_regime || 'unknown';
+                        this.winRate = data.win_rate || 0;
+                        this.totalTrades = data.total_trades || 0;
+                        this.winningTrades = data.winning_trades || 0;
+                        this.losingTrades = data.losing_trades || 0;
+                        this.signals = data.signals || [];
+                        this.unrealizedPnl = data.unrealized_pnl || 0;
+                        this.dailyPnl = data.daily_pnl || 0;
+                        this.dailyPnlPct = data.daily_pnl_pct || 0;
+                    } catch (e) {
+                        console.error('Failed to fetch signals:', e);
+                    }
+                },
+                
+                async fetchAnalytics() {
+                    try {
+                        const response = await fetch('/api/analytics-summary');
+                        const data = await response.json();
+                        
+                        // System Health
+                        if (data.system_health) {
+                            this.analytics.health = {
+                                status: data.system_health.status || 'unknown',
+                                uptime: data.system_health.uptime || '-',
+                                error_rate: data.system_health.error_rate || 0
+                            };
+                        }
+                        
+                        // Risk Exposure
+                        if (data.risk_exposure) {
+                            this.analytics.risk = {
+                                has_position: data.risk_exposure.has_position || false,
+                                risk_percent: data.risk_exposure.risk_percent || 0,
+                                status: data.risk_exposure.status || '-'
+                            };
+                        }
+                        
+                        // Trade Quality
+                        if (data.trade_quality) {
+                            this.analytics.quality = {
+                                total_trades: data.trade_quality.total_trades || 0,
+                                win_rate: data.trade_quality.win_rate || 0,
+                                total_pnl: data.trade_quality.total_pnl || 0
+                            };
+                        }
+                        
+                        // Filter Scores
+                        if (data.filter_scores) {
+                            this.analytics.filters = {
+                                filters_analyzed: data.filter_scores.filters_analyzed || 0,
+                                effective: data.filter_scores.effective || 0,
+                                warning: data.filter_scores.warning || 0
+                            };
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch analytics:', e);
+                    }
+                },
+                
+                formatNumber(num) {
+                    if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+                    if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+                    return num.toFixed(2);
+                },
+                
+                formatTime(isoString) {
+                    if (!isoString) return '';
+                    const date = new Date(isoString);
+                    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                },
+                
+                formatDateTime(isoString) {
+                    if (!isoString) return '';
+                    const date = new Date(isoString);
+                    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
