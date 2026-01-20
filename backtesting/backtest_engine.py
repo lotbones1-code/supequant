@@ -768,6 +768,14 @@ class BacktestEngine:
         
         # Try mean reversion strategy (ELITE: with strict regime checking)
         if self.mean_reversion_strategy:
+            # Apply backtest RSI overrides if set
+            orig_oversold = config.MR_RSI_OVERSOLD
+            orig_overbought = config.MR_RSI_OVERBOUGHT
+            if getattr(config, 'BACKTEST_MR_RSI_OVERSOLD', None):
+                config.MR_RSI_OVERSOLD = config.BACKTEST_MR_RSI_OVERSOLD
+            if getattr(config, 'BACKTEST_MR_RSI_OVERBOUGHT', None):
+                config.MR_RSI_OVERBOUGHT = config.BACKTEST_MR_RSI_OVERBOUGHT
+            
             # ELITE: Check regime before generating signal
             regime_allowed, regime_confidence = self.elite_regime_checker.check(sol_market_state)
             
@@ -810,7 +818,14 @@ class BacktestEngine:
                     
                     self._process_signal(mr_signal, 'mean_reversion', sol_market_state,
                                        btc_market_state, current_time)
+                    # Restore original RSI values
+                    config.MR_RSI_OVERSOLD = orig_oversold
+                    config.MR_RSI_OVERBOUGHT = orig_overbought
                     return
+            
+            # Restore original RSI values
+            config.MR_RSI_OVERSOLD = orig_oversold
+            config.MR_RSI_OVERBOUGHT = orig_overbought
         
         # Try momentum strategy
         if self.momentum_strategy:
