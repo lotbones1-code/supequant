@@ -306,24 +306,26 @@ class ProperRegimeDetector:
         # Classify based on scores - TIGHTER thresholds to avoid bad trend signals
         total_score = bullish_score + bearish_score
         
-        # Strong trend: VERY high ADX + VERY clear direction (conservative)
+        # Strong trend: VERY high ADX + VERY clear direction
+        # SKIP trading entirely in strong trends - MR fails here
         if bullish_score >= 6 and adx > 40:
             regime = Regime.STRONG_UPTREND
             confidence = min(0.9, 0.5 + bullish_score * 0.05)
-            recommendation = 'trend_following'
+            recommendation = 'skip'  # Don't trade strong trends
         elif bearish_score >= 6 and adx > 40:
             regime = Regime.STRONG_DOWNTREND
             confidence = min(0.9, 0.5 + bearish_score * 0.05)
-            recommendation = 'trend_following'
+            recommendation = 'skip'  # Don't trade strong trends
         # Moderate trend: high ADX + clear direction
+        # Also skip - safer than trying trend following
         elif bullish_score >= 5 and bullish_score > bearish_score + 2 and adx > 35:
             regime = Regime.UPTREND
             confidence = 0.6 + bullish_score * 0.03
-            recommendation = 'trend_following'
+            recommendation = 'skip'  # Skip moderate trends too
         elif bearish_score >= 5 and bearish_score > bullish_score + 2 and adx > 35:
             regime = Regime.DOWNTREND
             confidence = 0.6 + bearish_score * 0.03
-            recommendation = 'trend_following'
+            recommendation = 'skip'  # Skip moderate trends too
         # High volatility + no direction = choppy
         elif vol_percentile > 70 and abs(bullish_score - bearish_score) <= 1:
             regime = Regime.CHOPPY
