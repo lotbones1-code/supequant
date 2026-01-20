@@ -179,6 +179,29 @@ class EliteQuantSystem:
                 notifier=self.notifier
             )
             logger.info("✅ Production Order Manager enabled (auto-cleanup, smart TPs, trade journal, notifications)")
+            
+            # Set up callback for adaptive threshold learning
+            def on_trade_complete(trade_data):
+                if self.adaptive_threshold:
+                    trade_result = TradeResult(
+                        timestamp=datetime.now(),
+                        direction=trade_data.get('direction', 'unknown'),
+                        strategy=trade_data.get('strategy', 'unknown'),
+                        entry_score=50,  # Default score
+                        pnl=trade_data.get('pnl', 0),
+                        is_win=trade_data.get('is_win', False)
+                    )
+                    self.adaptive_threshold.record_trade(trade_result)
+                    logger.info(f"🎚️ Adaptive threshold updated: {self.adaptive_threshold.current_threshold:.0f}")
+                
+                # Also notify enhanced telegram bot
+                if self.telegram_bot:
+                    try:
+                        self.telegram_bot.send_trade_closed(trade_data)
+                    except:
+                        pass
+            
+            self.production_manager._on_trade_close = on_trade_complete
 
         # Initialize AI gating (Hybrid AI preferred, fallback to Claude-only)
         self.claude_system = None

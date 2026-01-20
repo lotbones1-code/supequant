@@ -139,6 +139,7 @@ class ProductionOrderManager:
         # Callbacks
         self._on_tp_hit: Optional[Callable] = None
         self._on_sl_hit: Optional[Callable] = None
+        self._on_trade_close: Optional[Callable] = None  # Called when any trade completes
         
         journal_status = "enabled" if trade_journal else "disabled"
         notifier_status = "enabled" if notifier else "disabled"
@@ -1002,6 +1003,22 @@ class ProductionOrderManager:
                 self.notifier.send_position_closed(position.__dict__)
             except Exception as e:
                 logger.warning(f"Failed to send position closed notification: {e}")
+        
+        # Call trade close callback (for adaptive threshold, etc.)
+        if self._on_trade_close:
+            try:
+                trade_data = {
+                    'pnl': position.realized_pnl,
+                    'is_win': position.realized_pnl > 0,
+                    'direction': position.direction,
+                    'strategy': position.strategy,
+                    'close_reason': reason,
+                    'entry_price': position.entry_price,
+                    'exit_price': exit_price,
+                }
+                self._on_trade_close(trade_data)
+            except Exception as e:
+                logger.warning(f"Trade close callback error: {e}")
         
         # Log summary
         logger.info("\n" + "="*60)
