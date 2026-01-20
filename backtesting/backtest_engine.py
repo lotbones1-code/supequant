@@ -818,64 +818,68 @@ class BacktestEngine:
             
             # BACKTEST: Skip MR in strong trends (regime-aware)
             max_trend = getattr(config, 'BACKTEST_MR_MAX_TREND_STRENGTH', None)
+            skip_mr_trend = False
             if max_trend:
                 trend_data = sol_market_state.get('timeframes', {}).get('15m', {}).get('trend', {})
                 current_trend_strength = trend_data.get('trend_strength', 0)
                 if current_trend_strength > max_trend:
+                    skip_mr_trend = True
                     if not hasattr(self, 'mr_trend_skips'):
                         self.mr_trend_skips = 0
                     self.mr_trend_skips += 1
-                    # Restore RSI values and skip
-                    config.MR_RSI_OVERSOLD = orig_oversold
-                    config.MR_RSI_OVERBOUGHT = orig_overbought
-                    # Don't return - let other strategies try (momentum, etc.)
+                    logger.debug(f"📊 MR SKIPPED: trend_strength {current_trend_strength:.2f} > {max_trend}")
             
-            # ELITE: Check regime before generating signal
-            regime_allowed, regime_confidence = self.elite_regime_checker.check(sol_market_state)
-            
-            if not regime_allowed:
-                # Track blocked signals
-                if not hasattr(self, 'mr_elite_blocks'):
-                    self.mr_elite_blocks = 0
-                self.mr_elite_blocks += 1
-            else:
-                mr_signal = self.mean_reversion_strategy.analyze(sol_market_state)
-                if mr_signal:
-                    # ELITE: Check for confirmation candle
-                    if getattr(config, 'ELITE_BACKTEST_MODE', False) and getattr(config, 'ELITE_REQUIRE_CONFIRMATION', False):
-                        candles = sol_market_state.get('timeframes', {}).get('15m', {}).get('candles', [])
-                        direction = mr_signal.get('direction', 'long')
-                        if not self.elite_confirmation_checker.check_confirmation(candles, direction):
-                            self.elite_stats['confirmation_fails'] += 1
-                            logger.debug(f"🚫 MR signal needs confirmation - waiting")
-                            return
-                    
-                    # ELITE: Apply adaptive position sizing based on confidence
-                    elite_sizing = getattr(config, 'ELITE_ADAPTIVE_SIZING', False)
-                    if elite_sizing and getattr(config, 'ELITE_BACKTEST_MODE', False):
-                        if regime_confidence >= 0.5:
-                            mr_signal['position_size_mult'] = getattr(config, 'ELITE_SIZE_FULL', 1.0)
-                            size_label = "FULL"
-                        elif regime_confidence >= 0.2:
-                            mr_signal['position_size_mult'] = getattr(config, 'ELITE_SIZE_HALF', 0.5)
-                            size_label = "HALF"
-                        else:
-                            mr_signal['position_size_mult'] = getattr(config, 'ELITE_SIZE_SKIP', 0.0)
-                            size_label = "SKIP"
-                            logger.info(f"🚫 MR signal SKIPPED - very low confidence ({regime_confidence:.2f})")
-                            return
+            if not skip_mr_trend:
+                # ELITE: Check regime before generating signal
+                regime_allowed, regime_confidence = self.elite_regime_checker.check(sol_market_state)
+                
+                if not regime_allowed:
+                    # Track blocked signals
+                    if not hasattr(self, 'mr_elite_blocks'):
+                        self.mr_elite_blocks = 0
+                    self.mr_elite_blocks += 1
+                else:
+                    mr_signal = self.mean_reversion_strategy.analyze(sol_market_state)
+                    if mr_signal:
+                        # ELITE: Check for confirmation candle
+                        if getattr(config, 'ELITE_BACKTEST_MODE', False) and getattr(config, 'ELITE_REQUIRE_CONFIRMATION', False):
+                            candles = sol_market_state.get('timeframes', {}).get('15m', {}).get('candles', [])
+                            direction = mr_signal.get('direction', 'long')
+                            if not self.elite_confirmation_checker.check_confirmation(candles, direction):
+                                self.elite_stats['confirmation_fails'] += 1
+                                logger.debug(f"🚫 MR signal needs confirmation - waiting")
+                                config.MR_RSI_OVERSOLD = orig_oversold
+                                config.MR_RSI_OVERBOUGHT = orig_overbought
+                                return
                         
-                        logger.info(f"🎯 MEAN REVERSION ({size_label}) at {current_time.strftime('%Y-%m-%d %H:%M')} (conf: {regime_confidence:.2f})")
-                    else:
-                        mr_signal['position_size_mult'] = 1.0
-                        logger.info(f"🎯 MEAN REVERSION SIGNAL at {current_time.strftime('%Y-%m-%d %H:%M')}")
-                    
-                    self._process_signal(mr_signal, 'mean_reversion', sol_market_state,
-                                       btc_market_state, current_time)
-                    # Restore original RSI values
-                    config.MR_RSI_OVERSOLD = orig_oversold
-                    config.MR_RSI_OVERBOUGHT = orig_overbought
-                    return
+                        # ELITE: Apply adaptive position sizing based on confidence
+                        elite_sizing = getattr(config, 'ELITE_ADAPTIVE_SIZING', False)
+                        if elite_sizing and getattr(config, 'ELITE_BACKTEST_MODE', False):
+                            if regime_confidence >= 0.5:
+                                mr_signal['position_size_mult'] = getattr(config, 'ELITE_SIZE_FULL', 1.0)
+                                size_label = "FULL"
+                            elif regime_confidence >= 0.2:
+                                mr_signal['position_size_mult'] = getattr(config, 'ELITE_SIZE_HALF', 0.5)
+                                size_label = "HALF"
+                            else:
+                                mr_signal['position_size_mult'] = getattr(config, 'ELITE_SIZE_SKIP', 0.0)
+                                size_label = "SKIP"
+                                logger.info(f"🚫 MR signal SKIPPED - very low confidence ({regime_confidence:.2f})")
+                                config.MR_RSI_OVERSOLD = orig_oversold
+                                config.MR_RSI_OVERBOUGHT = orig_overbought
+                                return
+                            
+                            logger.info(f"🎯 MEAN REVERSION ({size_label}) at {current_time.strftime('%Y-%m-%d %H:%M')} (conf: {regime_confidence:.2f})")
+                        else:
+                            mr_signal['position_size_mult'] = 1.0
+                            logger.info(f"🎯 MEAN REVERSION SIGNAL at {current_time.strftime('%Y-%m-%d %H:%M')}")
+                        
+                        self._process_signal(mr_signal, 'mean_reversion', sol_market_state,
+                                           btc_market_state, current_time)
+                        # Restore original RSI values
+                        config.MR_RSI_OVERSOLD = orig_oversold
+                        config.MR_RSI_OVERBOUGHT = orig_overbought
+                        return
             
             # Restore original RSI values
             config.MR_RSI_OVERSOLD = orig_oversold
