@@ -608,13 +608,13 @@ BACKTEST_ADX_THRESHOLD = 35           # Best threshold found
 # Test 2: 4H timeframe trend (disabled)
 BACKTEST_HTF_FILTER = False
 
-# Test 3: Strict RSI - only trade at extreme levels
-BACKTEST_STRICT_RSI = True
+# Test 3: Strict RSI (too strict - blocked all trades)
+BACKTEST_STRICT_RSI = False
 BACKTEST_RSI_OVERSOLD = 25
 BACKTEST_RSI_OVERBOUGHT = 75
 
-# Test 4: Price structure (disabled)
-BACKTEST_PRICE_STRUCTURE = False
+# Test 4: Price structure - don't trade against trend
+BACKTEST_PRICE_STRUCTURE = True
 
 # Regime detection thresholds
 BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending

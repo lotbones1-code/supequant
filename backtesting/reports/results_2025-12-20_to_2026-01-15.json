@@ -1,93 +1,98 @@
 {
   "run_name": "2025-12-20_to_2026-01-15",
-  "generated": "2026-01-20T14:37:00.052804",
+  "generated": "2026-01-20T14:39:04.251579",
   "results": {
     "summary": {
       "initial_capital": 10000.0,
-      "final_capital": 11146.292995442454,
-      "total_pnl": 895.7365693453697,
-      "total_return_pct": 11.462929954424544,
-      "max_drawdown_pct": 1.2124148841127316,
+      "final_capital": 14025.47295250057,
+      "total_pnl": 3734.6735830964526,
+      "total_return_pct": 40.25472952500569,
+      "max_drawdown_pct": 1.2124148841127296,
       "requested_start_date": "2025-12-20",
       "requested_end_date": "2026-01-15",
       "actual_start_date": "2025-12-20",
       "actual_end_date": "2026-01-15"
     },
     "signals": {
-      "total_signals": 2,
-      "signals_passed_filters": 2,
-      "signals_rejected": 0,
-      "filter_pass_rate": 100.0
+      "total_signals": 35,
+      "signals_passed_filters": 8,
+      "signals_rejected": 27,
+      "filter_pass_rate": 22.857142857142858
     },
     "trades": {
-      "total_trades": 2,
-      "wins": 1,
+      "total_trades": 8,
+      "wins": 7,
       "losses": 1,
       "breakevens": 0,
-      "win_rate": 50.0
+      "win_rate": 87.5
     },
     "performance": {
-      "avg_win": 1009.8908949528856,
-      "avg_win_pct": 2.5085406437184243,
-      "largest_win": 1009.8908949528856,
-      "avg_loss": -114.15432560751586,
+      "avg_win": 552.4518178624998,
+      "avg_win_pct": 2.2976497355698804,
+      "largest_win": 1172.0938073464772,
+      "avg_loss": -132.4891419410459,
       "avg_loss_pct": -0.6041670361868561,
-      "largest_loss": -114.15432560751586,
-      "profit_factor": 8.846715966113113
+      "largest_loss": -132.4891419410459,
+      "profit_factor": 29.18852570392736
     },
-    "filter_rejections": {}
+    "filter_rejections": {
+      "pattern_failure": 7,
+      "quality_score": 20
+    }
   },
   "metrics": {
     "returns": {
-      "total_return_pct": 11.462929954424544,
-      "total_return_dollar": 1146.2929954424544,
-      "cagr": 11.462929954424549,
-      "days_traded": 0,
-      "years": 1.0
+      "total_return_pct": 40.25472952500569,
+      "total_return_dollar": 4025.4729525005696,
+      "cagr": 66329.7760363117,
+      "days_traded": 19,
+      "years": 0.05
     },
     "risk": {
-      "volatility_pct": 1.56,
-      "sharpe_ratio": 9.71,
-      "sortino_ratio": 25.02,
+      "volatility_pct": 1.05,
+      "sharpe_ratio": 29.21,
+      "sortino_ratio": 50.84,
       "max_drawdown_pct": 1.21,
-      "calmar_ratio": 9.45
+      "calmar_ratio": 54708.81
     },
     "trade_stats": {
-      "total_trades": 2,
-      "wins": 1,
+      "total_trades": 8,
+      "wins": 7,
       "losses": 1,
       "breakevens": 0,
-      "win_rate_pct": 50.0,
-      "avg_win_dollar": 1009.89,
-      "avg_loss_dollar": -114.15,
-      "profit_factor": 8.85,
-      "expectancy_dollar": 447.87,
-      "kelly_pct": 44.35,
-      "largest_win": 1009.89,
-      "largest_loss": -114.15,
-      "max_consecutive_wins": 1,
+      "win_rate_pct": 87.5,
+      "avg_win_dollar": 552.45,
+      "avg_loss_dollar": -132.49,
+      "profit_factor": 29.19,
+      "expectancy_dollar": 466.83,
+      "kelly_pct": 84.5,
+      "largest_win": 1172.09,
+      "largest_loss": -132.49,
+      "max_consecutive_wins": 4,
       "max_consecutive_losses": 1
     },
     "risk_reward": {
-      "avg_risk_reward": 1.95,
-      "avg_mfe_pct": 1.77,
-      "avg_mae_pct": 0.69,
-      "mfe_mae_ratio": 2.57
+      "avg_risk_reward": 1.92,
+      "avg_mfe_pct": 2.4,
+      "avg_mae_pct": 0.53,
+      "mfe_mae_ratio": 4.5
     },
     "consistency": {
-      "total_trading_days": 1,
-      "winning_days": 1,
+      "total_trading_days": 6,
+      "winning_days": 6,
       "losing_days": 0,
       "daily_win_rate_pct": 100.0,
-      "avg_daily_pnl": 895.74,
-      "best_day": 895.74,
-      "worst_day": 895.74
+      "avg_daily_pnl": 622.45,
+      "best_day": 1039.6,
+      "worst_day": 319.74
     },
     "time_analysis": {
-      "avg_trade_duration_bars": 7.5,
-      "avg_win_duration_bars": 11.0,
+      "avg_trade_duration_bars": 24.5,
+      "avg_win_duration_bars": 27.4,
       "avg_loss_duration_bars": 4.0,
       "exit_reasons": {
+        "timeout": 1,
+        "target": 5,
         "stop": 1,
         "tp3_complete": 1
       }

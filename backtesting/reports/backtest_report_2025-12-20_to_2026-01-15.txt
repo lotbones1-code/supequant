@@ -1,7 +1,7 @@
 ================================================================================
 BACKTEST FULL REPORT
 ================================================================================
-Generated: 2026-01-20 14:37:00
+Generated: 2026-01-20 14:39:04
 Run Name: 2025-12-20_to_2026-01-15
 ================================================================================
 
@@ -12,23 +12,23 @@ EXECUTIVE SUMMARY
 
 💰 CAPITAL & RETURNS:
   Initial Capital: $10,000.00
-  Final Capital: $11,146.29
-  Total PnL: $+895.74
-  Total Return: +11.46%
-  CAGR: 11.46%
+  Final Capital: $14,025.47
+  Total PnL: $+3,734.67
+  Total Return: +40.25%
+  CAGR: 66329.78%
   Max Drawdown: 1.21%
 
 📈 TRADE PERFORMANCE:
-  Total Signals: 2
-  Signals Passed Filters: 2 (100.0%)
-  Trades Executed: 2
-  Wins: 1 | Losses: 1 | BE: 0
-  Win Rate: 50.00%
+  Total Signals: 35
+  Signals Passed Filters: 8 (22.9%)
+  Trades Executed: 8
+  Wins: 7 | Losses: 1 | BE: 0
+  Win Rate: 87.50%
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: 9.71
-  Profit Factor: 8.85
-  Expectancy: $447.87/trade
+  Sharpe Ratio: 29.21
+  Profit Factor: 29.19
+  Expectancy: $466.83/trade
 
 🎯 ASSESSMENT:
   ⚠️  Insufficient data (< 30 trades) - Results inconclusive
@@ -39,51 +39,51 @@ PERFORMANCE METRICS REPORT
 ============================================================
 
 📈 RETURNS:
-  Total Return: $+1,146.29 (+11.46%)
-  CAGR: 11.46%
-  Period: 0 days (1.00 years)
+  Total Return: $+4,025.47 (+40.25%)
+  CAGR: 66329.78%
+  Period: 19 days (0.05 years)
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: 9.71
-  Sortino Ratio: 25.02
+  Sharpe Ratio: 29.21
+  Sortino Ratio: 50.84
   Max Drawdown: 1.21%
-  Volatility: 1.56%
-  Calmar Ratio: 9.45
+  Volatility: 1.05%
+  Calmar Ratio: 54708.81
 
 📊 TRADE STATISTICS:
-  Total Trades: 2
-  Wins: 1 | Losses: 1 | BE: 0
-  Win Rate: 50.00%
-  Profit Factor: 8.85
-  Expectancy: $447.87 per trade
-  Kelly %: 44.35%
-  Avg Win: $1009.89
-  Avg Loss: $-114.15
-  Largest Win: $1009.89
-  Largest Loss: $-114.15
-  Max Win Streak: 1
+  Total Trades: 8
+  Wins: 7 | Losses: 1 | BE: 0
+  Win Rate: 87.50%
+  Profit Factor: 29.19
+  Expectancy: $466.83 per trade
+  Kelly %: 84.50%
+  Avg Win: $552.45
+  Avg Loss: $-132.49
+  Largest Win: $1172.09
+  Largest Loss: $-132.49
+  Max Win Streak: 4
   Max Loss Streak: 1
 
 💰 RISK/REWARD ANALYSIS:
-  Avg R:R Achieved: 1.95
-  Avg MFE: 1.77%
-  Avg MAE: 0.69%
-  MFE/MAE Ratio: 2.57
+  Avg R:R Achieved: 1.92
+  Avg MFE: 2.40%
+  Avg MAE: 0.53%
+  MFE/MAE Ratio: 4.50
 
 🎯 CONSISTENCY:
-  Trading Days: 1
-  Winning Days: 1
+  Trading Days: 6
+  Winning Days: 6
   Losing Days: 0
   Daily Win Rate: 100.00%
-  Avg Daily PnL: $+895.74
-  Best Day: $+895.74
-  Worst Day: $+895.74
+  Avg Daily PnL: $+622.45
+  Best Day: $+1039.60
+  Worst Day: $+319.74
 
 ⏱️  TIME ANALYSIS:
-  Avg Trade Duration: 7.5 bars
-  Avg Win Duration: 11.0 bars
+  Avg Trade Duration: 24.5 bars
+  Avg Win Duration: 27.4 bars
   Avg Loss Duration: 4.0 bars
-  Exit Reasons: {'stop': 1, 'tp3_complete': 1}
+  Exit Reasons: {'timeout': 1, 'target': 5, 'stop': 1, 'tp3_complete': 1}
 
 ============================================================
 
@@ -93,7 +93,13 @@ FILTER ANALYSIS
 
 📊 FILTER REJECTION BREAKDOWN:
 
-  ✅ All signals passed filters (no rejections)
+  quality_score: 20 rejections (74.1%)
+  pattern_failure: 7 rejections (25.9%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (20 rejections)
+  ✅ Filter pass rate (22.9%) is reasonable
+
 
 ================================================================================
 TRADE ANALYSIS
@@ -101,17 +107,27 @@ TRADE ANALYSIS
 
 📊 PERFORMANCE BY STRATEGY:
 
+  MEAN_REVERSION:
+    Trades: 6
+    Wins: 6 (100.0%)
+    PnL: $+2,695.07
+
   BREAKOUT:
     Trades: 2
     Wins: 1 (50.0%)
-    PnL: $+895.74
+    PnL: $+1,039.60
 
 📊 PERFORMANCE BY DIRECTION:
 
   LONG:
-    Trades: 2
-    Wins: 1 (50.0%)
-    PnL: $+895.74
+    Trades: 5
+    Wins: 4 (80.0%)
+    PnL: $+2,547.20
+
+  SHORT:
+    Trades: 3
+    Wins: 3 (100.0%)
+    PnL: $+1,187.48
 
 
 
@@ -119,6 +135,10 @@ TRADE ANALYSIS
 RECOMMENDATIONS
 ================================================================================
 
+⚠️  SUSPICIOUSLY HIGH WIN RATE: >70% may indicate:
+   - Overfitting to historical data
+   - Stops too wide (cutting winners too early)
+   - Need for out-of-sample testing
 ⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
    - Results may not be statistically significant
    - Test on longer time period
