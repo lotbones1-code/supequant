@@ -421,6 +421,26 @@ class EliteQuantSystem:
                     'reason': f"Raw signal from {signal['strategy']}"
                 })
 
+            # Step 5.5: 4H Trend Filter (skip MR in strong trends)
+            # Backtest showed this improves trending market performance
+            if config.HTF_TREND_FILTER_ENABLED and signal['strategy'] == 'mean_reversion':
+                htf_data = sol_market_state.get('timeframes', {}).get('4H', {})
+                htf_trend = htf_data.get('trend', {})
+                htf_strength = htf_trend.get('trend_strength', 0)
+                htf_alignment = abs(htf_trend.get('ema_alignment', 0))
+                
+                threshold = config.HTF_TREND_BLOCK_THRESHOLD
+                if htf_strength > threshold or htf_alignment > threshold:
+                    logger.warning(f"🚫 4H TREND FILTER: Blocking MR signal")
+                    logger.warning(f"   4H trend_strength: {htf_strength:.2f}, ema_alignment: {htf_alignment:.2f}")
+                    if DASHBOARD_AVAILABLE:
+                        add_signal({
+                            'type': 'rejected',
+                            'direction': signal['direction'],
+                            'reason': f"4H trend too strong ({htf_strength:.2f})"
+                        })
+                    return
+
             # Step 6: Run ALL filters (most important step!)
             filters_passed, filter_results = self.filter_manager.check_all(
                 sol_market_state,
