@@ -279,33 +279,38 @@ class ProperRegimeDetector:
         elif ll_count >= 1:
             bearish_score += 1
         
-        # Classify based on scores
+        # Classify based on scores (lowered thresholds for easier trend detection)
         total_score = bullish_score + bearish_score
         
-        if bullish_score >= 6:
+        # Strong trend: high ADX + clear direction
+        if bullish_score >= 5 and adx > 30:
             regime = Regime.STRONG_UPTREND
             confidence = min(0.9, 0.5 + bullish_score * 0.05)
             recommendation = 'trend_following'
-        elif bullish_score >= 4 and bullish_score > bearish_score + 1:
-            regime = Regime.UPTREND
-            confidence = 0.6 + bullish_score * 0.03
-            recommendation = 'trend_following'
-        elif bearish_score >= 6:
+        elif bearish_score >= 5 and adx > 30:
             regime = Regime.STRONG_DOWNTREND
             confidence = min(0.9, 0.5 + bearish_score * 0.05)
             recommendation = 'trend_following'
-        elif bearish_score >= 4 and bearish_score > bullish_score + 1:
+        # Moderate trend: decent ADX + direction
+        elif bullish_score >= 3 and bullish_score > bearish_score and adx > 25:
+            regime = Regime.UPTREND
+            confidence = 0.6 + bullish_score * 0.03
+            recommendation = 'trend_following'
+        elif bearish_score >= 3 and bearish_score > bullish_score and adx > 25:
             regime = Regime.DOWNTREND
             confidence = 0.6 + bearish_score * 0.03
             recommendation = 'trend_following'
-        elif total_score <= 3 and adx < 25:
+        # Low ADX = ranging
+        elif adx < 20:
             regime = Regime.RANGING
-            confidence = 0.7 - adx * 0.01
+            confidence = 0.7
             recommendation = 'mean_reversion'
-        elif vol_percentile > 70 and abs(bullish_score - bearish_score) <= 2:
+        # High volatility + no direction = choppy
+        elif vol_percentile > 70 and abs(bullish_score - bearish_score) <= 1:
             regime = Regime.CHOPPY
             confidence = 0.5
             recommendation = 'skip'
+        # Default to ranging
         else:
             regime = Regime.RANGING
             confidence = 0.55
