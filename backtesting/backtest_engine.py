@@ -1159,7 +1159,7 @@ class BacktestEngine:
             strategy=strategy,
             entry_price=signal['entry_price'],
             stop_price=signal.get('stop_price', signal.get('stop_loss')),
-            target_price=signal.get('target_price', signal.get('take_profit', signal.get('take_profit_1', signal.get('tp1')))),
+            target_price=signal.get('target_price', signal.get('take_profit', signal.get('take_profit_1', signal.get('tp1', signal.get('target'))))),
             take_profit_1=signal.get('take_profit_1', signal.get('tp1')),
             take_profit_2=signal.get('take_profit_2', signal.get('tp2')),
             take_profit_3=signal.get('take_profit_3', signal.get('tp3')),
