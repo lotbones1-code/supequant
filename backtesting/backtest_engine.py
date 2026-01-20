@@ -422,6 +422,16 @@ class BacktestEngine:
             )
             logger.info("📊 SmartMTF Backtest: ENABLED (Strategy-Aware)")
         
+        # ML SCORING: Machine learning trade evaluation (backtest only)
+        self.use_ml_scoring = getattr(config, 'BACKTEST_USE_ML_SCORING', False)
+        self.ml_scorer = None
+        if self.use_ml_scoring:
+            self.ml_scorer = create_ml_scorer(
+                min_score=getattr(config, 'BACKTEST_ML_MIN_SCORE', 0.4),
+                adaptive=getattr(config, 'BACKTEST_ML_ADAPTIVE', True)
+            )
+            logger.info("🤖 ML Trade Scoring: ENABLED")
+        
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()
 
@@ -860,6 +870,25 @@ class BacktestEngine:
                     # Apply MTF confidence to position sizing
                     signal['mtf_confidence'] = mtf_analysis.confidence
                     logger.debug(f"📊 MTF APPROVED [{strategy}]: alignment={mtf_analysis.alignment_score:.2f}, conf={mtf_analysis.confidence:.2f}")
+            
+            # ML SCORING: Machine learning based trade evaluation
+            ml_approved = True
+            if self.use_ml_scoring and self.ml_scorer:
+                ml_prediction = self.ml_scorer.score_signal(signal, sol_market_state)
+                if not ml_prediction.should_trade:
+                    logger.info(f"🤖 ML BLOCKED: {ml_prediction.reason} (score: {ml_prediction.score:.2f})")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['ml_blocked'] = True
+                    trade.filter_results['ml_score'] = ml_prediction.score
+                    trade.filter_results['ml_reason'] = ml_prediction.reason
+                    self.trades.append(trade)
+                    return
+                else:
+                    # Apply ML confidence to signal
+                    signal['ml_score'] = ml_prediction.score
+                    signal['ml_confidence'] = ml_prediction.confidence
+                    logger.debug(f"🤖 ML APPROVED: score={ml_prediction.score:.2f}, conf={ml_prediction.confidence:.2f}")
             
             # FAIR AI BACKTEST: Ask AI to evaluate (without future data)
             ai_approved = True
