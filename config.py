@@ -598,7 +598,7 @@ BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
 # - TRENDING: Disable MR, enable TF, wider stops
 # - RANGING: Enable MR, disable TF, normal settings
 # - CHOPPY: Minimal trading, reduced size
-BACKTEST_REGIME_ADAPTIVE = True       # Enable regime-adaptive system
+BACKTEST_REGIME_ADAPTIVE = False      # Disabled - not detecting trends properly yet
 
 # Regime detection thresholds
 BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending

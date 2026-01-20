@@ -1,6 +1,6 @@
 {
   "run_name": "2025-10-15_to_2025-11-15",
-  "generated": "2026-01-20T14:12:39.851837",
+  "generated": "2026-01-20T14:18:00.134195",
   "results": {
     "summary": {
       "initial_capital": 10000.0,
@@ -14,10 +14,10 @@
       "actual_end_date": "2025-11-15"
     },
     "signals": {
-      "total_signals": 89,
+      "total_signals": 82,
       "signals_passed_filters": 12,
-      "signals_rejected": 77,
-      "filter_pass_rate": 13.48314606741573
+      "signals_rejected": 70,
+      "filter_pass_rate": 14.634146341463413
     },
     "trades": {
       "total_trades": 12,
@@ -36,8 +36,8 @@
       "profit_factor": 0.5155600041927697
     },
     "filter_rejections": {
-      "pattern_failure": 30,
-      "quality_score": 47
+      "pattern_failure": 29,
+      "quality_score": 41
     }
   },
   "metrics": {
