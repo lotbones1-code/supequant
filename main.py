@@ -693,8 +693,8 @@ class EliteQuantSystem:
         Legacy trade execution using OrderManager
         (Used when ProductionOrderManager is disabled)
         """
-        # Place market order
-        entry_order = self.order_manager.place_market_order(signal, position_size)
+        # Place entry order (limit or market based on config)
+        entry_order = self.order_manager.place_limit_entry_order(signal, position_size)
 
         if not entry_order:
             logger.error("❌ Failed to place entry order")

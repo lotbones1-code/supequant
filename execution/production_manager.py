@@ -362,17 +362,83 @@ class ProductionOrderManager:
             logger.info(f"   TP1: ${position.tp1_price:.2f}")
             logger.info(f"   TP2: ${position.tp2_price:.2f}")
             
-            # Place entry order
-            logger.info(f"\n📤 Placing entry order...")
+            # Place entry order (limit or market)
             position.state = PositionState.ENTRY_PLACED
+            side = 'buy' if signal['direction'] == 'long' else 'sell'
             
-            entry_result = self.client.place_order(
-                symbol=symbol,
-                side='buy' if signal['direction'] == 'long' else 'sell',
-                order_type='market',
-                size=str(round(actual_size, 4)),
-                tdMode='cash'
-            )
+            entry_result = None
+            used_limit = False
+            
+            # Try limit order for better entry if enabled
+            if LIMIT_ORDER_ENTRY_ENABLED and current_price > 0:
+                logger.info(f"\n📤 Placing LIMIT entry order for better price...")
+                
+                # Calculate limit price with improvement
+                improvement = LIMIT_ORDER_IMPROVEMENT
+                if signal['direction'] == 'long':
+                    limit_price = current_price * (1 - improvement)
+                else:
+                    limit_price = current_price * (1 + improvement)
+                limit_price = round(limit_price, 2)
+                
+                logger.info(f"   Target improvement: {improvement*100:.2f}%")
+                logger.info(f"   Current: ${current_price:.2f} → Limit: ${limit_price:.2f}")
+                
+                entry_result = self.client.place_order(
+                    symbol=symbol,
+                    side=side,
+                    order_type='limit',
+                    size=str(round(actual_size, 4)),
+                    price=str(limit_price),
+                    tdMode='cash'
+                )
+                
+                if entry_result:
+                    used_limit = True
+                    order_id = entry_result.get('ordId', '')
+                    logger.info(f"   ⏳ Limit order placed: {order_id}, waiting for fill...")
+                    
+                    # Wait for fill with timeout
+                    timeout = LIMIT_ORDER_TIMEOUT
+                    start_time = time.time()
+                    filled = False
+                    
+                    while time.time() - start_time < timeout:
+                        time.sleep(1)
+                        order_status = self.client.get_order(symbol, order_id)
+                        if order_status:
+                            state = order_status.get('state', '')
+                            if state == 'filled':
+                                filled = True
+                                fill_price = float(order_status.get('avgPx', limit_price))
+                                actual_improvement = abs(current_price - fill_price) / current_price * 100
+                                logger.info(f"   ✅ Limit FILLED @ ${fill_price:.2f}")
+                                logger.info(f"   💰 Entry improvement: {actual_improvement:.3f}%")
+                                break
+                            elif state in ['canceled', 'cancelled']:
+                                logger.warning("   ⚠️  Limit order cancelled externally")
+                                break
+                    
+                    if not filled:
+                        # Cancel unfilled limit order
+                        logger.info(f"   ⏰ Timeout ({timeout}s), cancelling limit order...")
+                        self.client.cancel_order(symbol, order_id)
+                        entry_result = None  # Will fallback to market
+            
+            # Fallback to market order if limit not used or failed
+            if not entry_result:
+                if used_limit and LIMIT_ORDER_MARKET_FALLBACK:
+                    logger.info(f"   🔄 Falling back to market order...")
+                else:
+                    logger.info(f"\n📤 Placing market entry order...")
+                
+                entry_result = self.client.place_order(
+                    symbol=symbol,
+                    side=side,
+                    order_type='market',
+                    size=str(round(actual_size, 4)),
+                    tdMode='cash'
+                )
             
             if not entry_result:
                 logger.error("❌ Failed to place entry order")
