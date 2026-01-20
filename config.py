@@ -526,6 +526,13 @@ BACKTEST_AI_USE_OPENAI = False     # Use OpenAI for evaluation (set True for hyb
 BACKTEST_AI_MODE = "VETO_ONLY"     # Less conservative - only veto high risk
 BACKTEST_AI_VETO_THRESHOLD = 0.30  # Only reject if AI confidence < 30%
 
+# SMART MULTI-TIMEFRAME INTELLIGENCE (Backtest Only)
+# Checks higher timeframes before allowing trades
+BACKTEST_USE_MTF = True            # Enable multi-timeframe checking
+BACKTEST_MTF_REQUIRE_1H = True     # Require 1H trend alignment
+BACKTEST_MTF_REQUIRE_4H = False    # Require 4H trend alignment (stricter)
+BACKTEST_MTF_MIN_ALIGNMENT = 0.3   # Minimum alignment score (0-1)
+
 # Legacy regime settings (keeping for reference)
 BACKTEST_REGIME_SWITCHING = False  # Old system - disabled
 REGIME_WINDOW_SIZE = 48

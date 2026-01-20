@@ -28,6 +28,8 @@ from strategy.structure_strategy import StructureStrategy
 from backtesting.trend_following_strategy import TrendFollowingStrategy
 # Fair AI evaluation (no future data cheating)
 from backtesting.ai_backtest_fair import create_fair_ai_evaluator
+# Smart Multi-Timeframe Intelligence (backtest only)
+from backtesting.smart_mtf_checker import create_mtf_checker
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -404,6 +406,17 @@ class BacktestEngine:
             else:
                 logger.warning("⚠️ FairAI Backtest: Failed to initialize, disabled")
                 self.use_fair_ai = False
+        
+        # SMART MTF: Multi-Timeframe Intelligence (backtest only)
+        self.use_mtf = getattr(config, 'BACKTEST_USE_MTF', False)
+        self.mtf_checker = None
+        if self.use_mtf:
+            self.mtf_checker = create_mtf_checker(
+                require_1h=getattr(config, 'BACKTEST_MTF_REQUIRE_1H', True),
+                require_4h=getattr(config, 'BACKTEST_MTF_REQUIRE_4H', False),
+                min_alignment=getattr(config, 'BACKTEST_MTF_MIN_ALIGNMENT', 0.3)
+            )
+            logger.info("📊 SmartMTF Backtest: ENABLED")
         
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()
