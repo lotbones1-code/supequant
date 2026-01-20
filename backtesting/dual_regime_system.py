@@ -167,6 +167,9 @@ class ProperRegimeDetector:
         candles_15m = tf_15m.get('candles', [])
         trend_15m = tf_15m.get('trend', {})
         volatility_15m = tf_15m.get('volatility', {})
+        # Handle both 'atr' dict and 'volatility' dict formats
+        if not volatility_15m:
+            volatility_15m = tf_15m.get('atr', {})
         
         # Get 4H data
         tf_4h = market_state.get('timeframes', {}).get('4H', {})
@@ -175,13 +178,31 @@ class ProperRegimeDetector:
         # Calculate ADX
         adx = self.calculate_adx(candles_15m) if len(candles_15m) > 20 else 0
         
-        # Get EMA alignments
+        # Calculate EMA alignment from EMA values (handle missing ema_alignment field)
+        ema_20_15m = trend_15m.get('ema_20', 0)
+        ema_50_15m = trend_15m.get('ema_50', 0)
         ema_align_15m = trend_15m.get('ema_alignment', 0)
-        ema_align_4h = trend_4h.get('ema_alignment', 0)
+        if ema_align_15m == 0 and ema_50_15m > 0:
+            ema_align_15m = (ema_20_15m - ema_50_15m) / ema_50_15m
         
-        # Get trend direction
+        ema_20_4h = trend_4h.get('ema_20', 0)
+        ema_50_4h = trend_4h.get('ema_50', 0)
+        ema_align_4h = trend_4h.get('ema_alignment', 0)
+        if ema_align_4h == 0 and ema_50_4h > 0:
+            ema_align_4h = (ema_20_4h - ema_50_4h) / ema_50_4h
+        
+        # Get trend direction (handle 'up'/'down' format from backtest)
         trend_dir_15m = trend_15m.get('trend_direction', 'neutral')
+        if trend_dir_15m == 'up':
+            trend_dir_15m = 'bullish'
+        elif trend_dir_15m == 'down':
+            trend_dir_15m = 'bearish'
+            
         trend_dir_4h = trend_4h.get('trend_direction', 'neutral')
+        if trend_dir_4h == 'up':
+            trend_dir_4h = 'bullish'
+        elif trend_dir_4h == 'down':
+            trend_dir_4h = 'bearish'
         
         # Count structure
         hh_count, ll_count = self.count_structure(candles_15m)
