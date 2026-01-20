@@ -722,6 +722,22 @@ class BacktestEngine:
         daily_count = self.daily_trades_count.get(today_str, 0)
         if daily_count >= config.MAX_DAILY_TRADES:
             return
+        
+        # BACKTEST: Drawdown circuit breaker
+        drawdown_limit = getattr(config, 'BACKTEST_DRAWDOWN_LIMIT', None)
+        if drawdown_limit:
+            # Track peak capital
+            if not hasattr(self, 'peak_capital'):
+                self.peak_capital = self.initial_capital
+            self.peak_capital = max(self.peak_capital, self.current_capital)
+            
+            # Calculate current drawdown
+            current_drawdown = (self.peak_capital - self.current_capital) / self.peak_capital
+            if current_drawdown >= drawdown_limit:
+                if not hasattr(self, 'drawdown_triggered'):
+                    self.drawdown_triggered = True
+                    logger.warning(f"🛑 DRAWDOWN CIRCUIT BREAKER: {current_drawdown:.1%} drawdown - STOPPING TRADING")
+                return
 
         # Check trade interval (with backtest override)
         trade_interval = getattr(config, 'BACKTEST_TRADE_INTERVAL', None) or config.TRADE_INTERVAL_MINUTES
