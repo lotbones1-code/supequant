@@ -603,7 +603,7 @@ BACKTEST_REGIME_ADAPTIVE = False      # Disabled - not detecting trends properly
 # TREND FILTER TESTS (one at a time)
 # Test 1: ADX-based trend detection
 BACKTEST_ADX_FILTER = True            # Use ADX to detect trends
-BACKTEST_ADX_THRESHOLD = 35           # ADX > this = trending (skip MR)
+BACKTEST_ADX_THRESHOLD = 40           # ADX > this = trending (skip MR)
 
 # Test 2: 4H timeframe trend (disabled)
 BACKTEST_HTF_FILTER = False
