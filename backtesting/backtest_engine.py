@@ -1187,8 +1187,12 @@ class BacktestEngine:
             trade.tp1_exited = True
             split_pct = trade.position_split.get(1, 0.5)
             
-            # ELITE: Move stop to breakeven after TP1
-            if getattr(config, 'ELITE_BACKTEST_MODE', False) and getattr(config, 'ELITE_BREAKEVEN_AFTER_TP1', False):
+            # Move stop to breakeven after TP1 (ELITE mode OR backtest test)
+            use_breakeven = (
+                (getattr(config, 'ELITE_BACKTEST_MODE', False) and getattr(config, 'ELITE_BREAKEVEN_AFTER_TP1', False))
+                or getattr(config, 'BACKTEST_BREAKEVEN_AFTER_TP1', False)
+            )
+            if use_breakeven:
                 buffer = getattr(config, 'ELITE_BREAKEVEN_BUFFER', 0.001)
                 old_stop = trade.stop_price
                 if trade.direction == 'long':
