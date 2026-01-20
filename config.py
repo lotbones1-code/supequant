@@ -621,6 +621,20 @@ BACKTEST_RSI_OVERBOUGHT = 75
 # Test 4: Price structure (tested)
 BACKTEST_PRICE_STRUCTURE = False
 
+# =====================================
+# TRENDING MARKET TESTS (Backtest Only)
+# =====================================
+# Test A: Simple Trend Following in trending markets
+BACKTEST_SIMPLE_TREND = True          # Enable simple trend strategy
+BACKTEST_SIMPLE_TREND_MIN_STRENGTH = 0.3
+
+# Test B: Skip trading entirely when ADX > threshold
+BACKTEST_SKIP_TRENDING = False
+BACKTEST_SKIP_ADX_THRESHOLD = 30
+
+# Test C: Use both MR and TF based on regime
+BACKTEST_DUAL_STRATEGY = False
+
 # Regime detection thresholds
 BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending
 BACKTEST_REGIME_STRONG_TREND = 0.6         # trend_strength > this = strong trend

@@ -41,6 +41,7 @@ from backtesting.trend_filter import (
     create_adx_filter, create_htf_filter, 
     create_strict_rsi_filter, create_price_structure_filter
 )
+from backtesting.simple_trend_strategy import create_simple_trend_strategy
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -491,6 +492,21 @@ class BacktestEngine:
         if getattr(config, 'BACKTEST_PRICE_STRUCTURE', False):
             self.price_structure_filter = create_price_structure_filter()
             logger.info("📊 PRICE STRUCTURE FILTER: ENABLED")
+        
+        # SIMPLE TREND STRATEGY: For trending markets
+        self.simple_trend_strategy = None
+        if getattr(config, 'BACKTEST_SIMPLE_TREND', False):
+            min_strength = getattr(config, 'BACKTEST_SIMPLE_TREND_MIN_STRENGTH', 0.3)
+            self.simple_trend_strategy = create_simple_trend_strategy(min_strength)
+            logger.info(f"📈 SIMPLE TREND STRATEGY: ENABLED (min_strength: {min_strength})")
+        
+        # SKIP TRENDING: Don't trade at all when market is trending
+        self.skip_trending_enabled = getattr(config, 'BACKTEST_SKIP_TRENDING', False)
+        self.skip_adx_threshold = getattr(config, 'BACKTEST_SKIP_ADX_THRESHOLD', 30)
+        if self.skip_trending_enabled:
+            if not self.adx_filter:
+                self.adx_filter = create_adx_filter(threshold=self.skip_adx_threshold)
+            logger.info(f"🚫 SKIP TRENDING: ENABLED (ADX > {self.skip_adx_threshold})")
         
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
