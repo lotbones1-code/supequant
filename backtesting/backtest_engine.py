@@ -860,9 +860,13 @@ class BacktestEngine:
         )
 
         # Run through filters
-        # TF strategy uses looser quality threshold (different signal characteristics)
+        # Apply backtest-specific threshold override if set
         original_score_threshold = getattr(config, 'SCORE_THRESHOLD', 50)
-        if strategy.lower() in ['trendfollowing', 'trend_following']:
+        backtest_threshold = getattr(config, 'BACKTEST_SCORE_THRESHOLD', None)
+        
+        if backtest_threshold is not None:
+            config.SCORE_THRESHOLD = backtest_threshold
+        elif strategy.lower() in ['trendfollowing', 'trend_following']:
             config.SCORE_THRESHOLD = getattr(config, 'BACKTEST_TF_MIN_SCORE', 35)
         
         filters_passed, filter_results = self.filter_manager.check_all(

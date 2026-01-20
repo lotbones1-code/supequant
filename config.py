@@ -556,8 +556,13 @@ BACKTEST_ML_ADAPTIVE = True        # Auto-adjust threshold based on performance
 BACKTEST_REGIME_SWITCHING = False  # Old system - disabled
 REGIME_WINDOW_SIZE = 48
 REGIME_TREND_THRESHOLD = 0.20
-BACKTEST_TREND_FOLLOWING = True    # Enable Trend Following to complement Mean Reversion
-BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (it has different signal characteristics)
+BACKTEST_TREND_FOLLOWING = False   # Disabled - didn't improve results
+BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when disabled)
+
+# ============================================================================
+# BACKTEST TUNING OPTIONS (test one at a time!)
+# ============================================================================
+BACKTEST_SCORE_THRESHOLD = 45      # TEST #1: Lower threshold (was 50)
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
