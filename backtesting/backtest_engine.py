@@ -723,10 +723,11 @@ class BacktestEngine:
         if daily_count >= config.MAX_DAILY_TRADES:
             return
 
-        # Check trade interval
+        # Check trade interval (with backtest override)
+        trade_interval = getattr(config, 'BACKTEST_TRADE_INTERVAL', None) or config.TRADE_INTERVAL_MINUTES
         if self.last_trade_time:
             minutes_since_last = (current_time - self.last_trade_time).total_seconds() / 60
-            if minutes_since_last < config.TRADE_INTERVAL_MINUTES:
+            if minutes_since_last < trade_interval:
                 return
 
         # DEBUG: Log what we're checking every 100 candles
