@@ -1211,7 +1211,11 @@ class BacktestEngine:
         original_score_threshold = getattr(config, 'SCORE_THRESHOLD', 50)
         backtest_threshold = getattr(config, 'BACKTEST_SCORE_THRESHOLD', None)
         
-        if backtest_threshold is not None:
+        # ADAPTIVE THRESHOLD: Use learned threshold if enabled
+        if self.adaptive_threshold:
+            adaptive_thresh = self.adaptive_threshold.get_threshold(current_time)
+            config.SCORE_THRESHOLD = adaptive_thresh
+        elif backtest_threshold is not None:
             config.SCORE_THRESHOLD = backtest_threshold
         elif strategy.lower() in ['trendfollowing', 'trend_following']:
             config.SCORE_THRESHOLD = getattr(config, 'BACKTEST_TF_MIN_SCORE', 35)
@@ -1651,6 +1655,42 @@ class BacktestEngine:
         # Record regime trade result for adaptive learning
         if self.use_regime_adaptive and self.regime_router and hasattr(trade, 'regime_trade_id'):
             self.regime_router.record_trade_result(trade.regime_trade_id, pnl_dollar)
+        
+        # =================================================================
+        # ADAPTIVE SYSTEMS: Record trade results for learning
+        # =================================================================
+        
+        # Get filter scores from trade results if available
+        filter_scores = {}
+        if hasattr(trade, 'filter_results') and trade.filter_results:
+            # Extract individual filter scores
+            for filter_name, result in trade.filter_results.items():
+                if isinstance(result, dict) and 'score' in result:
+                    filter_scores[filter_name] = result['score']
+        
+        # System 1: Adaptive Threshold - learn from this trade's outcome
+        if self.adaptive_threshold:
+            from backtesting.adaptive_systems import TradeResult
+            trade_result = TradeResult(
+                timestamp=current_time,
+                direction=trade.direction,
+                strategy=trade.strategy,
+                entry_score=getattr(trade, 'entry_score', 50),
+                pnl=pnl_dollar,
+                is_win=trade.win,
+                regime=getattr(trade, 'entry_regime', 'unknown'),
+                filter_scores=filter_scores
+            )
+            self.adaptive_threshold.record_trade(trade_result)
+        
+        # System 2: Rolling Regime - track performance by regime
+        if self.rolling_regime:
+            regime_name = self.rolling_regime.current_regime.value
+            self.rolling_regime.record_trade(regime_name, pnl_dollar, trade.win)
+        
+        # System 3: Filter Learning - learn which filters predict wins
+        if self.filter_learner and filter_scores:
+            self.filter_learner.record_trade(filter_scores, pnl_dollar, trade.win)
         
         # Log
         result_emoji = "✅" if trade.win else "❌"
