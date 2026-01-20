@@ -573,7 +573,7 @@ BACKTEST_CONF_HIGH_MULT = None
 BACKTEST_CONF_ELITE_MULT = None
 
 # TEST #2: Skip MR when trend is too strong
-BACKTEST_MR_MAX_TREND_STRENGTH = 0.5  # Skip MR if trend_strength > this
+BACKTEST_MR_MAX_TREND_STRENGTH = 0.35  # Skip MR if trend_strength > this (lowered from 0.5)
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
