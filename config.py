@@ -124,7 +124,7 @@ AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
 # Quality Score Threshold - Adaptive learning system
-SCORE_THRESHOLD = 50  # Base threshold - balanced quality vs frequency
+SCORE_THRESHOLD = 45  # Optimized from backtesting (was 50) - more trades, better returns
 SCORE_THRESHOLD_ADAPTIVE_ENABLED = True  # Enable adaptive threshold raising
 SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION = 20  # Need 20+ trades before raising threshold
 SCORE_THRESHOLD_ADAPTED_VALUE = 55  # Raise to 55 after enough winning trades
@@ -562,7 +562,7 @@ BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when
 # ============================================================================
 # BACKTEST TUNING OPTIONS (test one at a time!)
 # ============================================================================
-BACKTEST_SCORE_THRESHOLD = None    # Reset to baseline (None = use live value)
+BACKTEST_SCORE_THRESHOLD = None    # Override for testing (None = use live value)
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
