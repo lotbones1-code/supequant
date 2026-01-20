@@ -921,6 +921,32 @@ class BacktestEngine:
             else:
                 logger.debug(f"   ⚠️ No 15m timeframe data available")
 
+        # =================================================================
+        # ROLLING REGIME DETECTOR: Detect regime changes and get config
+        # =================================================================
+        rolling_regime_config = None
+        if self.rolling_regime:
+            candles = sol_market_state.get('timeframes', {}).get('15m', {}).get('candles', [])
+            if candles and len(candles) >= 50:
+                current_regime, rolling_regime_config = self.rolling_regime.analyze(candles, current_time)
+                
+                # Track regime for stats
+                if not hasattr(self, 'rolling_regime_counts'):
+                    self.rolling_regime_counts = {}
+                self.rolling_regime_counts[current_regime.value] = \
+                    self.rolling_regime_counts.get(current_regime.value, 0) + 1
+                
+                # Apply regime-specific config
+                if rolling_regime_config:
+                    # Skip trading in certain regimes
+                    if rolling_regime_config.description and 'disabled' in rolling_regime_config.description.lower():
+                        if not rolling_regime_config.enable_mean_reversion and not rolling_regime_config.enable_momentum:
+                            # Both disabled = skip trading
+                            if not hasattr(self, 'rolling_skips'):
+                                self.rolling_skips = 0
+                            self.rolling_skips += 1
+                            return
+        
         # REGIME-ADAPTIVE: Get current regime and adjust settings
         regime_config = None
         if self.use_regime_adaptive and self.regime_router:
