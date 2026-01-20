@@ -140,6 +140,21 @@ AI_FEATURE_WINDOW = 50
 
 # Quality Score Threshold - Adaptive learning system
 SCORE_THRESHOLD = 45  # Optimized from backtesting (was 50) - more trades, better returns
+
+# =============================================================================
+# ADAPTIVE THRESHOLD SYSTEM (LIVE) - Auto-adjusts based on recent performance
+# =============================================================================
+# When winning: lowers threshold to catch more trades
+# When losing: raises threshold to be more selective
+ADAPTIVE_THRESHOLD_ENABLED = True  # Enable the smart adaptive system
+ADAPTIVE_THRESHOLD_BASE = 45       # Starting threshold
+ADAPTIVE_THRESHOLD_MIN = 35        # Never go below this (catch good trades in good markets)
+ADAPTIVE_THRESHOLD_MAX = 65        # Never go above this (don't miss everything)
+ADAPTIVE_THRESHOLD_TARGET_WR = 0.48  # Target 48% win rate
+ADAPTIVE_THRESHOLD_LOOKBACK = 15   # Look at last 15 trades to decide
+ADAPTIVE_THRESHOLD_SPEED = 0.15    # How fast to adjust (0.15 = 15% adjustment per check)
+
+# Legacy adaptive config (keeping for compatibility)
 SCORE_THRESHOLD_ADAPTIVE_ENABLED = True  # Enable adaptive threshold raising
 SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION = 20  # Need 20+ trades before raising threshold
 SCORE_THRESHOLD_ADAPTED_VALUE = 55  # Raise to 55 after enough winning trades
