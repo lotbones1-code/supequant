@@ -145,10 +145,10 @@ class RegimeClassifier:
     """
     
     def __init__(self, 
-                 trend_threshold: float = 0.4,
-                 strong_trend_threshold: float = 0.6,
-                 volatility_high: float = 70,
-                 volatility_low: float = 30,
+                 trend_threshold: float = 0.25,      # Lowered from 0.4
+                 strong_trend_threshold: float = 0.4, # Lowered from 0.6
+                 volatility_high: float = 65,
+                 volatility_low: float = 35,
                  lookback_periods: int = 20):
         """
         Args:
