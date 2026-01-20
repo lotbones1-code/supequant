@@ -813,6 +813,12 @@ class BacktestEngine:
             'volume_ratio': volumes[-1] / avg_volume if avg_volume > 0 else 1.0
         }
 
+        # RSI for momentum
+        rsi = self.indicators.calculate_rsi(closes, period=14)
+        indicators['momentum'] = {
+            'rsi': rsi if rsi else 50
+        }
+
         return indicators
 
     def _check_for_signals(self, sol_market_state: Dict, btc_market_state: Dict,
