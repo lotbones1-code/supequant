@@ -533,7 +533,7 @@ BACKTEST_USE_MTF = True            # Enable multi-timeframe checking
 BACKTEST_MTF_REQUIRE_1H = True     # Require 1H trend alignment (for trend following)
 BACKTEST_MTF_REQUIRE_4H = False    # Require 4H trend alignment (stricter, for trend following)
 BACKTEST_MTF_MIN_ALIGNMENT = 0.3   # Minimum alignment score (for trend following)
-BACKTEST_MTF_MR_THRESHOLD = 0.7    # For Mean Reversion: only block if trend strength > this
+BACKTEST_MTF_MR_THRESHOLD = 0.5    # For Mean Reversion: only block if trend strength > this (lower = more aggressive)
 
 # Legacy regime settings (keeping for reference)
 BACKTEST_REGIME_SWITCHING = False  # Old system - disabled
