@@ -908,6 +908,26 @@ class BacktestEngine:
                     signal['ml_confidence'] = ml_prediction.confidence
                     logger.debug(f"🤖 ML APPROVED: score={ml_prediction.score:.2f}, conf={ml_prediction.confidence:.2f}")
             
+            # FEAR & GREED: Sentiment-based filtering
+            fg_approved = True
+            if self.use_fear_greed and self.fear_greed_backtester:
+                fg_allowed, fg_multiplier, fg_reason = self.fear_greed_backtester.evaluate_signal(
+                    direction, trade.timestamp, strategy
+                )
+                if not fg_allowed:
+                    logger.info(f"😱 F&G BLOCKED: {fg_reason}")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['fg_blocked'] = True
+                    trade.filter_results['fg_reason'] = fg_reason
+                    self.trades.append(trade)
+                    return
+                else:
+                    # Apply F&G confidence multiplier
+                    signal['fg_multiplier'] = fg_multiplier
+                    if fg_multiplier != 1.0:
+                        logger.info(f"😱 F&G: {fg_reason}")
+            
             # FAIR AI BACKTEST: Ask AI to evaluate (without future data)
             ai_approved = True
             if self.use_fair_ai and self.fair_ai_evaluator:
