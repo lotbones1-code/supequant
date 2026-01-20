@@ -1086,10 +1086,16 @@ class BacktestEngine:
 
         # Apply slippage (0.02% = 2 basis points)
         slippage_pct = 0.0002
+        
+        # BACKTEST: Entry improvement (simulate limit order fill at better price)
+        entry_improvement = getattr(config, 'BACKTEST_ENTRY_IMPROVEMENT', 0)
+        
         if trade.direction == 'long':
-            actual_entry = trade.entry_price * (1 + slippage_pct)
+            # Better entry for long = lower price
+            actual_entry = trade.entry_price * (1 + slippage_pct - entry_improvement)
         else:
-            actual_entry = trade.entry_price * (1 - slippage_pct)
+            # Better entry for short = higher price
+            actual_entry = trade.entry_price * (1 - slippage_pct + entry_improvement)
 
         trade.executed = True
         trade.position_size = position_size
