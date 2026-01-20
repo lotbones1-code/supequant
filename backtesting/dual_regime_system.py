@@ -444,38 +444,27 @@ class ProperTrendStrategy:
                            ema_50: float, atr: float, rsi: float, candles: List[Dict]) -> Optional[Dict]:
         """
         Entry on pullback to EMA 20 in a trend.
+        LOOSENED CONDITIONS for more signals.
         """
-        # Check EMA alignment
-        if direction == 'long' and ema_20 <= ema_50:
-            return None
-        if direction == 'short' and ema_20 >= ema_50:
-            return None
+        # Skip EMA alignment check - regime already confirmed trend
         
-        # Check price near EMA 20 (within 0.5 ATR)
+        # Check price near EMA 20 (within 1.5 ATR - loosened from 0.5)
         distance_to_ema = abs(price - ema_20)
-        if distance_to_ema > atr * 0.5:
+        if distance_to_ema > atr * 1.5:
             return None
         
-        # Check RSI not extreme
-        if direction == 'long' and rsi > 70:
+        # RSI check - loosened
+        if direction == 'long' and rsi > 75:  # Was 70
             return None
-        if direction == 'short' and rsi < 30:
+        if direction == 'short' and rsi < 25:  # Was 30
             return None
         
-        # Check recent candle shows rejection (wick in trend direction)
-        last_candle = candles[-1]
-        body = abs(last_candle['close'] - last_candle['open'])
+        # Skip wick check - too restrictive
         
         if direction == 'long':
-            lower_wick = last_candle['open'] - last_candle['low'] if last_candle['close'] > last_candle['open'] else last_candle['close'] - last_candle['low']
-            if lower_wick < body * 0.3:  # Need some lower wick (rejection)
-                return None
             stop = price - atr * 1.5
             target = price + atr * 2.5
         else:
-            upper_wick = last_candle['high'] - last_candle['close'] if last_candle['close'] < last_candle['open'] else last_candle['high'] - last_candle['open']
-            if upper_wick < body * 0.3:
-                return None
             stop = price + atr * 1.5
             target = price - atr * 2.5
         
@@ -491,29 +480,29 @@ class ProperTrendStrategy:
     def _check_breakout(self, direction: str, price: float, atr: float, 
                        candles: List[Dict]) -> Optional[Dict]:
         """
-        Entry on breakout to new high/low after consolidation.
+        Entry on breakout continuation.
+        LOOSENED: Just check if price made new high/low recently.
         """
-        if len(candles) < 20:
+        if len(candles) < 10:
             return None
         
-        # Find recent range (last 10 candles)
+        # Check for continuation (recent high/low break)
         recent = candles[-10:]
-        range_high = max(c['high'] for c in recent[:-1])  # Exclude current candle
-        range_low = min(c['low'] for c in recent[:-1])
+        recent_high = max(c['high'] for c in recent[:-3])  # Exclude last 3
+        recent_low = min(c['low'] for c in recent[:-3])
         
-        # Check for breakout
         if direction == 'long':
-            if price <= range_high:
+            # Price broke above recent high and still above it
+            if price < recent_high * 0.995:  # Within 0.5% of high
                 return None
-            # Breakout above range
-            stop = range_low - atr * 0.5
-            target = price + (price - range_low) * 1.5  # Measured move
+            stop = price - atr * 2
+            target = price + atr * 3
         else:
-            if price >= range_low:
+            # Price broke below recent low and still below it
+            if price > recent_low * 1.005:
                 return None
-            # Breakdown below range
-            stop = range_high + atr * 0.5
-            target = price - (range_high - price) * 1.5
+            stop = price + atr * 2
+            target = price - atr * 3
         
         return {
             'direction': direction,
@@ -526,10 +515,11 @@ class ProperTrendStrategy:
     def _check_momentum(self, direction: str, price: float, atr: float,
                        candles: List[Dict], regime: RegimeAnalysis) -> Optional[Dict]:
         """
-        Entry on strong momentum bar in trend direction.
-        Only in strong trends.
+        Entry on momentum in trend direction.
+        LOOSENED: Works in any trending regime, lower bar for momentum.
         """
-        if regime.regime not in [Regime.STRONG_UPTREND, Regime.STRONG_DOWNTREND]:
+        # Allow in any trending regime (not just strong)
+        if regime.regime in [Regime.RANGING, Regime.CHOPPY]:
             return None
         
         if len(candles) < 5:
@@ -541,8 +531,8 @@ class ProperTrendStrategy:
         # Average body size of last 10 candles
         avg_body = np.mean([abs(c['close'] - c['open']) for c in candles[-10:]])
         
-        # Need a strong momentum candle (2x average body)
-        if body_size < avg_body * 2:
+        # Need above-average momentum candle (1.2x average - was 2x)
+        if body_size < avg_body * 1.2:
             return None
         
         # Check direction matches
