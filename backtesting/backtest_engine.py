@@ -816,6 +816,20 @@ class BacktestEngine:
             if getattr(config, 'BACKTEST_MR_RSI_OVERBOUGHT', None):
                 config.MR_RSI_OVERBOUGHT = config.BACKTEST_MR_RSI_OVERBOUGHT
             
+            # BACKTEST: Skip MR in strong trends (regime-aware)
+            max_trend = getattr(config, 'BACKTEST_MR_MAX_TREND_STRENGTH', None)
+            if max_trend:
+                trend_data = sol_market_state.get('timeframes', {}).get('15m', {}).get('trend', {})
+                current_trend_strength = trend_data.get('trend_strength', 0)
+                if current_trend_strength > max_trend:
+                    if not hasattr(self, 'mr_trend_skips'):
+                        self.mr_trend_skips = 0
+                    self.mr_trend_skips += 1
+                    # Restore RSI values and skip
+                    config.MR_RSI_OVERSOLD = orig_oversold
+                    config.MR_RSI_OVERBOUGHT = orig_overbought
+                    # Don't return - let other strategies try (momentum, etc.)
+            
             # ELITE: Check regime before generating signal
             regime_allowed, regime_confidence = self.elite_regime_checker.check(sol_market_state)
             
