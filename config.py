@@ -529,7 +529,7 @@ BACKTEST_AI_VETO_THRESHOLD = 0.30  # Only reject if AI confidence < 30%
 # SMART MULTI-TIMEFRAME INTELLIGENCE (Backtest Only)
 # Checks higher timeframes before allowing trades
 # Now STRATEGY-AWARE: Different logic for Mean Reversion vs Trend Following
-BACKTEST_USE_MTF = True            # Enable multi-timeframe checking
+BACKTEST_USE_MTF = False           # Disabled - didn't improve results
 BACKTEST_MTF_REQUIRE_1H = True     # Require 1H trend alignment (for trend following)
 BACKTEST_MTF_REQUIRE_4H = False    # Require 4H trend alignment (stricter, for trend following)
 BACKTEST_MTF_MIN_ALIGNMENT = 0.3   # Minimum alignment score (for trend following)
