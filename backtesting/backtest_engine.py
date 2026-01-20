@@ -696,6 +696,21 @@ class BacktestEngine:
                 for regime, count in sorted(self.regime_candle_count.items()):
                     pct = count / total_candles * 100 if total_candles > 0 else 0
                     logger.info(f"   {regime.upper()}: {count} candles ({pct:.1f}%)")
+        
+        # Print dual regime system report if enabled
+        if self.dual_regime_system:
+            logger.info(self.dual_regime_system.get_report())
+            
+            # Log regime distribution
+            if hasattr(self, 'dual_regime_counts'):
+                total = sum(self.dual_regime_counts.values())
+                logger.info("\n📊 DUAL REGIME DISTRIBUTION:")
+                for regime, count in sorted(self.dual_regime_counts.items()):
+                    pct = count / total * 100 if total > 0 else 0
+                    logger.info(f"   {regime}: {count} candles ({pct:.1f}%)")
+            
+            if hasattr(self, 'dual_regime_skips'):
+                logger.info(f"   Skipped (choppy): {self.dual_regime_skips} candles")
 
         return results
 
