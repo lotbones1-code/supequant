@@ -628,6 +628,18 @@ class BacktestEngine:
         logger.info(f"   Signals Passed Filters: {self.stats['signals_passed_filters']}")
         logger.info(f"   Trades Executed: {len([t for t in self.trades if t.executed])}")
         logger.info(f"{'='*60}\n")
+        
+        # Print regime-adaptive report if enabled
+        if self.use_regime_adaptive and self.regime_router:
+            logger.info(self.regime_router.get_regime_report())
+            
+            # Also log regime distribution
+            if hasattr(self, 'regime_candle_count'):
+                total_candles = sum(self.regime_candle_count.values())
+                logger.info("\n📊 REGIME DISTRIBUTION:")
+                for regime, count in sorted(self.regime_candle_count.items()):
+                    pct = count / total_candles * 100 if total_candles > 0 else 0
+                    logger.info(f"   {regime.upper()}: {count} candles ({pct:.1f}%)")
 
         return results
 
