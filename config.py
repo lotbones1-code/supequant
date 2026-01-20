@@ -562,7 +562,8 @@ BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when
 # ============================================================================
 # BACKTEST TUNING OPTIONS (test one at a time!)
 # ============================================================================
-BACKTEST_SCORE_THRESHOLD = 45      # TEST #1: Lower threshold (was 50)
+BACKTEST_SCORE_THRESHOLD = None    # Reset to baseline (None = use live value)
+BACKTEST_TRADE_INTERVAL = None     # Override trade interval (None = use live value of 30 min)
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
