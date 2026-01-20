@@ -634,7 +634,7 @@ BACKTEST_SKIP_ADX_THRESHOLD = 30
 
 # Test C: Dual Regime System - Proper implementation
 # Uses multiple indicators for regime detection + real trend strategy
-BACKTEST_DUAL_REGIME_SYSTEM = True
+BACKTEST_DUAL_REGIME_SYSTEM = False  # Disabled - doesn't outperform simple 4H filter
 
 # Regime detection thresholds
 BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending
