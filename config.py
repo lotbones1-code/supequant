@@ -602,14 +602,14 @@ BACKTEST_REGIME_ADAPTIVE = False      # Disabled - not detecting trends properly
 
 # TREND FILTER TESTS (one at a time)
 # Test 1: ADX-based trend detection
-BACKTEST_ADX_FILTER = True            # Use ADX to detect trends
-BACKTEST_ADX_THRESHOLD = 40           # ADX > this = trending (skip MR)
+BACKTEST_ADX_FILTER = False           # Disabled for now
+BACKTEST_ADX_THRESHOLD = 35           # Best threshold found
 
 # Test 2: 4H timeframe trend (disabled)
 BACKTEST_HTF_FILTER = False
 
-# Test 3: Strict RSI (disabled)
-BACKTEST_STRICT_RSI = False
+# Test 3: Strict RSI - only trade at extreme levels
+BACKTEST_STRICT_RSI = True
 BACKTEST_RSI_OVERSOLD = 20
 BACKTEST_RSI_OVERBOUGHT = 80
 

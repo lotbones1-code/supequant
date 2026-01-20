@@ -936,6 +936,30 @@ class BacktestEngine:
                 else:
                     mr_signal = self.mean_reversion_strategy.analyze(sol_market_state)
                     if mr_signal:
+                        # STRICT RSI FILTER: Only allow very extreme RSI
+                        if self.strict_rsi_filter:
+                            allow, rsi_reason = self.strict_rsi_filter.should_allow_signal(mr_signal, sol_market_state)
+                            if not allow:
+                                if not hasattr(self, 'strict_rsi_blocks'):
+                                    self.strict_rsi_blocks = 0
+                                self.strict_rsi_blocks += 1
+                                logger.debug(f"📊 STRICT RSI BLOCK: {rsi_reason}")
+                                config.MR_RSI_OVERSOLD = orig_oversold
+                                config.MR_RSI_OVERBOUGHT = orig_overbought
+                                return
+                        
+                        # PRICE STRUCTURE FILTER: Check trend direction
+                        if self.price_structure_filter:
+                            allow, struct_reason = self.price_structure_filter.should_allow_signal(mr_signal, sol_market_state)
+                            if not allow:
+                                if not hasattr(self, 'structure_blocks'):
+                                    self.structure_blocks = 0
+                                self.structure_blocks += 1
+                                logger.debug(f"📊 STRUCTURE BLOCK: {struct_reason}")
+                                config.MR_RSI_OVERSOLD = orig_oversold
+                                config.MR_RSI_OVERBOUGHT = orig_overbought
+                                return
+                        
                         # ELITE: Check for confirmation candle
                         if getattr(config, 'ELITE_BACKTEST_MODE', False) and getattr(config, 'ELITE_REQUIRE_CONFIRMATION', False):
                             candles = sol_market_state.get('timeframes', {}).get('15m', {}).get('candles', [])
