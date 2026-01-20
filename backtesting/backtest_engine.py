@@ -1169,6 +1169,13 @@ class BacktestEngine:
         self.daily_trades_count[today_str] = self.daily_trades_count.get(today_str, 0) + 1
         self.last_trade_time = trade.timestamp
 
+        # Track regime for this trade
+        if self.use_regime_adaptive and self.regime_router:
+            trade_id = f"{trade.timestamp.isoformat()}_{trade.direction}"
+            self.regime_router.record_trade_entry(trade_id)
+            trade.regime_trade_id = trade_id
+            trade.entry_regime = self.regime_router.current_regime.value
+        
         logger.info(f"📈 TRADE OPENED: {trade.direction.upper()} @ ${trade.actual_entry_price:.2f} "
                    f"(SL: ${trade.stop_price:.2f}, TP: ${trade.target_price:.2f})")
 
@@ -1425,9 +1432,14 @@ class BacktestEngine:
         actual_reward = abs(pnl_points)
         trade.risk_reward_achieved = actual_reward / risk if risk > 0 else 0
 
+        # Record regime trade result for adaptive learning
+        if self.use_regime_adaptive and self.regime_router and hasattr(trade, 'regime_trade_id'):
+            self.regime_router.record_trade_result(trade.regime_trade_id, pnl_dollar)
+        
         # Log
         result_emoji = "✅" if trade.win else "❌"
-        logger.info(f"{result_emoji} TRADE CLOSED: {exit_reason.upper()} @ ${actual_exit:.2f} | "
+        regime_str = f" [{trade.entry_regime}]" if hasattr(trade, 'entry_regime') else ""
+        logger.info(f"{result_emoji} TRADE CLOSED{regime_str}: {exit_reason.upper()} @ ${actual_exit:.2f} | "
                    f"PnL: ${pnl_dollar:+.2f} ({pnl_percent*100:+.2f}%) | "
                    f"Held: {trade.bars_held} bars")
 
