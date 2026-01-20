@@ -562,7 +562,7 @@ BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when
 # ============================================================================
 # BACKTEST TUNING OPTIONS (test one at a time!)
 # ============================================================================
-BACKTEST_SCORE_THRESHOLD = None    # Override for testing (None = use live value)
+BACKTEST_SCORE_THRESHOLD = 43      # TEST: Even lower threshold
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
