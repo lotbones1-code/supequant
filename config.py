@@ -624,16 +624,17 @@ BACKTEST_PRICE_STRUCTURE = False
 # =====================================
 # TRENDING MARKET TESTS (Backtest Only)
 # =====================================
-# Test A: Simple Trend Following (didn't generate signals)
+# Test A: Simple Trend Following (disabled - use Dual Regime instead)
 BACKTEST_SIMPLE_TREND = False
 BACKTEST_SIMPLE_TREND_MIN_STRENGTH = 0.3
 
-# Test B: Skip trading entirely when ADX > threshold (worse overall)
+# Test B: Skip trading entirely (disabled - use Dual Regime instead)
 BACKTEST_SKIP_TRENDING = False
 BACKTEST_SKIP_ADX_THRESHOLD = 30
 
-# Test C: Use both MR and TF based on regime
-BACKTEST_DUAL_STRATEGY = False
+# Test C: Dual Regime System - Proper implementation
+# Uses multiple indicators for regime detection + real trend strategy
+BACKTEST_DUAL_REGIME_SYSTEM = True
 
 # Regime detection thresholds
 BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending

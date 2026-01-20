@@ -42,6 +42,7 @@ from backtesting.trend_filter import (
     create_strict_rsi_filter, create_price_structure_filter
 )
 from backtesting.simple_trend_strategy import create_simple_trend_strategy
+from backtesting.dual_regime_system import create_dual_regime_system
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -507,6 +508,15 @@ class BacktestEngine:
             if not self.adx_filter:
                 self.adx_filter = create_adx_filter(threshold=self.skip_adx_threshold)
             logger.info(f"🚫 SKIP TRENDING: ENABLED (ADX > {self.skip_adx_threshold})")
+        
+        # DUAL REGIME SYSTEM: Complete trending+ranging solution
+        self.dual_regime_system = None
+        if getattr(config, 'BACKTEST_DUAL_REGIME_SYSTEM', False):
+            self.dual_regime_system = create_dual_regime_system()
+            logger.info("🎯 DUAL REGIME SYSTEM: ENABLED")
+            logger.info("   - Trending → Trend Following (3 entry types)")
+            logger.info("   - Ranging → Mean Reversion")
+            logger.info("   - Choppy → Skip trading")
         
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
