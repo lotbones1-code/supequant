@@ -233,29 +233,29 @@ class ProperRegimeDetector:
         bullish_score = 0
         bearish_score = 0
         
-        # ADX contribution
-        if adx > 40:
+        # ADX contribution (strong indicator of trend strength)
+        if adx > 35:
             # Strong trend - direction determined by other factors
-            if ema_align_15m > 0 or ema_align_4h > 0:
+            if ema_align_15m > 0 or ema_align_4h > 0 or trend_dir_15m == 'bullish':
                 bullish_score += 3
-            elif ema_align_15m < 0 or ema_align_4h < 0:
+            elif ema_align_15m < 0 or ema_align_4h < 0 or trend_dir_15m == 'bearish':
                 bearish_score += 3
         elif adx > 25:
             # Moderate trend
-            if ema_align_15m > 0 or ema_align_4h > 0:
+            if ema_align_15m > 0 or ema_align_4h > 0 or trend_dir_15m == 'bullish':
                 bullish_score += 2
-            elif ema_align_15m < 0 or ema_align_4h < 0:
+            elif ema_align_15m < 0 or ema_align_4h < 0 or trend_dir_15m == 'bearish':
                 bearish_score += 2
         
-        # EMA alignment contribution
-        if ema_align_4h > 0.3:
+        # EMA alignment contribution (use MUCH lower thresholds - data shows small values)
+        if ema_align_4h > 0.02:  # Was 0.3
             bullish_score += 2
-        elif ema_align_4h < -0.3:
+        elif ema_align_4h < -0.02:
             bearish_score += 2
         
-        if ema_align_15m > 0.2:
+        if ema_align_15m > 0.01:  # Was 0.2
             bullish_score += 1
-        elif ema_align_15m < -0.2:
+        elif ema_align_15m < -0.01:
             bearish_score += 1
         
         # Trend direction contribution
