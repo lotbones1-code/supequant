@@ -207,8 +207,11 @@ class ProperRegimeDetector:
         # Count structure
         hh_count, ll_count = self.count_structure(candles_15m)
         
-        # Get volatility
+        # Get volatility (handle both formats)
         vol_percentile = volatility_15m.get('atr_percentile', 50)
+        if vol_percentile == 50:  # Default, try alternate location
+            atr_data = tf_15m.get('atr', {})
+            vol_percentile = atr_data.get('atr_percentile', 50)
         
         # Determine regime using multiple factors
         regime, confidence, recommendation = self._classify_regime(
