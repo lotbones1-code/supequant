@@ -539,7 +539,7 @@ BACKTEST_MTF_MR_THRESHOLD = 0.5    # For Mean Reversion: only block if trend str
 # ML TRADE SCORING (BACKTESTING ONLY)
 # ============================================================================
 # Uses machine learning to score signals based on historical patterns
-BACKTEST_USE_ML_SCORING = True     # Enable ML-based trade scoring
+BACKTEST_USE_ML_SCORING = False    # Disabled - didn't improve results
 BACKTEST_ML_MIN_SCORE = 0.35       # Minimum ML score to allow trade (0-1) - lowered from 0.4
 BACKTEST_ML_ADAPTIVE = True        # Auto-adjust threshold based on performance
 
