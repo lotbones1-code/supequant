@@ -723,6 +723,22 @@ class BacktestEngine:
         if daily_count >= config.MAX_DAILY_TRADES:
             return
         
+        # BACKTEST: Daily loss limit
+        daily_loss_limit = getattr(config, 'BACKTEST_DAILY_LOSS_LIMIT', None)
+        if daily_loss_limit:
+            if not hasattr(self, 'daily_pnl'):
+                self.daily_pnl = {}
+            
+            # Get today's PnL
+            today_pnl = self.daily_pnl.get(today_str, 0)
+            if today_pnl <= -daily_loss_limit:
+                if not hasattr(self, 'daily_limit_days'):
+                    self.daily_limit_days = set()
+                if today_str not in self.daily_limit_days:
+                    self.daily_limit_days.add(today_str)
+                    logger.warning(f"🛑 DAILY LOSS LIMIT: ${today_pnl:.2f} loss today - STOPPING for day")
+                return
+        
         # BACKTEST: Drawdown circuit breaker
         drawdown_limit = getattr(config, 'BACKTEST_DRAWDOWN_LIMIT', None)
         if drawdown_limit:
@@ -1294,6 +1310,12 @@ class BacktestEngine:
         # Update capital
         self.current_capital += pnl_dollar
         self.stats['total_pnl'] += pnl_dollar
+        
+        # Track daily PnL for daily loss limit
+        if not hasattr(self, 'daily_pnl'):
+            self.daily_pnl = {}
+        day_str = current_time.strftime('%Y-%m-%d')
+        self.daily_pnl[day_str] = self.daily_pnl.get(day_str, 0) + pnl_dollar
 
         # Update drawdown
         if self.current_capital > self.stats['peak_capital']:
