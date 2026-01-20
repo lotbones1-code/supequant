@@ -557,6 +557,7 @@ BACKTEST_REGIME_SWITCHING = False  # Old system - disabled
 REGIME_WINDOW_SIZE = 48
 REGIME_TREND_THRESHOLD = 0.20
 BACKTEST_TREND_FOLLOWING = True    # Enable Trend Following to complement Mean Reversion
+BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (it has different signal characteristics)
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 

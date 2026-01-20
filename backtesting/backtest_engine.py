@@ -860,12 +860,20 @@ class BacktestEngine:
         )
 
         # Run through filters
+        # TF strategy uses looser quality threshold (different signal characteristics)
+        original_score_threshold = getattr(config, 'SCORE_THRESHOLD', 50)
+        if strategy.lower() in ['trendfollowing', 'trend_following']:
+            config.SCORE_THRESHOLD = getattr(config, 'BACKTEST_TF_MIN_SCORE', 35)
+        
         filters_passed, filter_results = self.filter_manager.check_all(
             sol_market_state,
             direction,
             strategy,
             btc_market_state
         )
+        
+        # Restore original threshold
+        config.SCORE_THRESHOLD = original_score_threshold
 
         trade.filter_results = filter_results
         trade.filter_passed = filters_passed
