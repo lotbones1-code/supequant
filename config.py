@@ -564,8 +564,8 @@ BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when
 # ============================================================================
 BACKTEST_SCORE_THRESHOLD = None    # Reset to baseline (None = use live value)
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
-BACKTEST_MR_RSI_OVERSOLD = 35      # TEST #5: Less strict (was 30)
-BACKTEST_MR_RSI_OVERBOUGHT = 65    # TEST #5: Less strict (was 70)
+BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
+BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
