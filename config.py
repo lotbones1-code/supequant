@@ -660,7 +660,7 @@ BACKTEST_ROLLING_ADX_TREND = 28       # ADX threshold for trend
 BACKTEST_ROLLING_ADX_STRONG = 40      # ADX threshold for strong trend
 
 # System 3: Filter Learning - learns which filters predict wins
-BACKTEST_FILTER_LEARNING = True  # Testing
+BACKTEST_FILTER_LEARNING = False  # Tested - needs filter score capture fix
 BACKTEST_FILTER_MIN_TRADES = 15       # Min trades before adjusting weights
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
