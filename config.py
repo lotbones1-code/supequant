@@ -647,7 +647,7 @@ BACKTEST_REGIME_VOLATILITY_LOW = 30        # ATR percentile < this = low vol
 # =============================================================================
 
 # System 1: Adaptive Threshold - auto-adjusts quality threshold based on performance
-BACKTEST_ADAPTIVE_THRESHOLD = False
+BACKTEST_ADAPTIVE_THRESHOLD = True  # Testing
 BACKTEST_ADAPTIVE_BASE = 45           # Starting threshold
 BACKTEST_ADAPTIVE_MIN = 35            # Never go below
 BACKTEST_ADAPTIVE_MAX = 65            # Never go above

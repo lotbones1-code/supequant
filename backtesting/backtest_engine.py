@@ -751,6 +751,33 @@ class BacktestEngine:
             if hasattr(self, 'dual_regime_skips'):
                 logger.info(f"   Skipped (choppy): {self.dual_regime_skips} candles")
 
+        # =================================================================
+        # ADAPTIVE SYSTEMS REPORTS
+        # =================================================================
+        
+        # System 1: Adaptive Threshold Report
+        if self.adaptive_threshold:
+            logger.info(self.adaptive_threshold.get_report())
+        
+        # System 2: Rolling Regime Detector Report
+        if self.rolling_regime:
+            logger.info(self.rolling_regime.get_report())
+            
+            # Log regime distribution
+            if hasattr(self, 'rolling_regime_counts'):
+                total = sum(self.rolling_regime_counts.values())
+                logger.info("\n📊 ROLLING REGIME DISTRIBUTION:")
+                for regime, count in sorted(self.rolling_regime_counts.items()):
+                    pct = count / total * 100 if total > 0 else 0
+                    logger.info(f"   {regime}: {count} candles ({pct:.1f}%)")
+            
+            if hasattr(self, 'rolling_skips'):
+                logger.info(f"   Trading skipped: {self.rolling_skips} candles")
+        
+        # System 3: Filter Learning Report
+        if self.filter_learner:
+            logger.info(self.filter_learner.get_report())
+
         return results
 
     def _build_market_state(self, data: Dict, current_idx: int, primary_tf: str) -> Dict:
