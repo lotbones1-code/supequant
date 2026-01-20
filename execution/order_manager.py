@@ -10,8 +10,11 @@ from data_feed.okx_client import OKXClient
 from config import (
     TRADING_SYMBOL, TRADING_MODE, MAX_RISK_PER_TRADE, 
     GROWTH_MODE_ENABLED, GROWTH_LEVERAGE,
-    SPOT_FALLBACK_ENABLED, SPOT_SYMBOL
+    SPOT_FALLBACK_ENABLED, SPOT_SYMBOL,
+    LIMIT_ORDER_ENTRY_ENABLED, LIMIT_ORDER_IMPROVEMENT,
+    LIMIT_ORDER_TIMEOUT, LIMIT_ORDER_MARKET_FALLBACK
 )
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +197,166 @@ class OrderManager:
 
         except Exception as e:
             logger.error(f"❌ Error placing market order: {e}", exc_info=True)
+            return None
+
+    def place_limit_entry_order(self, signal: Dict, position_size: float) -> Optional[Dict]:
+        """
+        Place limit order for entry at a better price, with market fallback.
+        
+        This method attempts to get a better entry by placing a limit order
+        slightly below current price (for longs) or above (for shorts).
+        
+        If the limit order doesn't fill within LIMIT_ORDER_TIMEOUT seconds,
+        it cancels and falls back to a market order.
+        
+        Args:
+            signal: Trading signal from strategy
+            position_size: Position size in base currency
+            
+        Returns:
+            Order details or None if failed
+        """
+        # If limit orders disabled, use market directly
+        if not LIMIT_ORDER_ENTRY_ENABLED:
+            return self.place_market_order(signal, position_size)
+        
+        try:
+            symbol = TRADING_SYMBOL
+            direction = signal['direction']
+            side = 'buy' if direction == 'long' else 'sell'
+            current_price = signal.get('entry_price', 0)
+            
+            if current_price <= 0:
+                logger.warning("⚠️  No entry price in signal, using market order")
+                return self.place_market_order(signal, position_size)
+            
+            # Calculate limit price with improvement
+            improvement = LIMIT_ORDER_IMPROVEMENT
+            if direction == 'long':
+                # Better entry for long = lower price
+                limit_price = current_price * (1 - improvement)
+            else:
+                # Better entry for short = higher price
+                limit_price = current_price * (1 + improvement)
+            
+            limit_price = round(limit_price, 2)
+            
+            logger.info(f"📤 Placing LIMIT {side.upper()} order: {position_size:.4f} @ ${limit_price:.2f}")
+            logger.info(f"   Target improvement: {improvement*100:.2f}% ({direction})")
+            logger.info(f"   Current price: ${current_price:.2f} → Limit: ${limit_price:.2f}")
+            
+            is_spot = TRADING_MODE == 'spot'
+            td_mode = 'cash' if is_spot else 'cross'
+            
+            # Set leverage for perpetuals if needed
+            if not is_spot and GROWTH_MODE_ENABLED and GROWTH_LEVERAGE > 1:
+                leverage_set = self.client.set_leverage(
+                    symbol=symbol,
+                    leverage=GROWTH_LEVERAGE,
+                    margin_mode='isolated'
+                )
+                if leverage_set:
+                    td_mode = 'isolated'
+                    logger.info(f"⚡ Using {GROWTH_LEVERAGE}x leverage (isolated margin)")
+            
+            # Validate minimum size
+            min_size = 0.01 if is_spot else 0.1
+            if position_size < min_size:
+                position_size = min_size
+            
+            # Place limit order
+            order_kwargs = {
+                'symbol': symbol,
+                'side': side,
+                'order_type': 'limit',
+                'size': str(round(position_size, 4 if is_spot else 2)),
+                'price': str(limit_price),
+                'tdMode': td_mode
+            }
+            
+            order_result = self.client.place_order(**order_kwargs)
+            
+            if not order_result:
+                logger.warning("⚠️  Limit order failed, falling back to market")
+                return self.place_market_order(signal, position_size)
+            
+            order_id = order_result.get('ordId')
+            logger.info(f"⏳ Limit order placed: {order_id}, waiting for fill...")
+            
+            # Wait for fill with timeout
+            timeout = LIMIT_ORDER_TIMEOUT
+            start_time = time.time()
+            filled = False
+            fill_price = None
+            
+            while time.time() - start_time < timeout:
+                time.sleep(1)  # Check every second
+                
+                # Check order status
+                order_status = self.client.get_order(symbol, order_id)
+                if order_status:
+                    state = order_status.get('state', '')
+                    
+                    if state == 'filled':
+                        filled = True
+                        fill_price = float(order_status.get('avgPx', limit_price))
+                        logger.info(f"✅ Limit order FILLED @ ${fill_price:.2f}")
+                        break
+                    elif state in ['canceled', 'cancelled']:
+                        logger.warning("⚠️  Limit order was cancelled externally")
+                        break
+                
+                elapsed = time.time() - start_time
+                logger.debug(f"   Waiting... {elapsed:.0f}s / {timeout}s")
+            
+            if not filled:
+                # Cancel unfilled limit order
+                logger.info(f"⏰ Limit order timeout ({timeout}s), cancelling...")
+                self.client.cancel_order(symbol, order_id)
+                
+                if LIMIT_ORDER_MARKET_FALLBACK:
+                    logger.info("🔄 Falling back to market order")
+                    return self.place_market_order(signal, position_size)
+                else:
+                    logger.warning("❌ Limit order not filled and fallback disabled")
+                    return None
+            
+            # Calculate actual improvement
+            actual_improvement = 0
+            if direction == 'long':
+                actual_improvement = (current_price - fill_price) / current_price * 100
+            else:
+                actual_improvement = (fill_price - current_price) / current_price * 100
+            
+            logger.info(f"   💰 Entry improvement: {actual_improvement:.3f}%")
+            
+            # Create order record
+            order = {
+                'order_id': order_id,
+                'symbol': symbol,
+                'side': side,
+                'type': 'limit',
+                'size': position_size,
+                'limit_price': limit_price,
+                'fill_price': fill_price,
+                'signal': signal,
+                'timestamp': datetime.now(),
+                'status': 'filled',
+                'margin_mode': td_mode,
+                'entry_improvement': actual_improvement,
+                'trading_mode': 'spot' if is_spot else 'perp'
+            }
+            
+            self.active_orders[order_id] = order
+            self.order_history.append(order)
+            
+            return order
+            
+        except Exception as e:
+            logger.error(f"❌ Error placing limit entry order: {e}", exc_info=True)
+            if LIMIT_ORDER_MARKET_FALLBACK:
+                logger.info("🔄 Falling back to market order after error")
+                return self.place_market_order(signal, position_size)
             return None
 
     def place_stop_loss(self, position: Dict, stop_price: float) -> Optional[Dict]:
