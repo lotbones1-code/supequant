@@ -545,7 +545,7 @@ BACKTEST_USE_ML_SCORING = False    # Disabled - didn't improve results
 # FEAR & GREED INDEX (BACKTESTING ONLY)
 # ============================================================================
 # Uses historical Fear & Greed data as contrarian signal
-BACKTEST_USE_FEAR_GREED = True     # Enable Fear & Greed filter
+BACKTEST_USE_FEAR_GREED = False    # Disabled - hurt results (double-contrarian problem)
 BACKTEST_FG_FEAR_THRESHOLD = 25    # Below this = Extreme Fear (favor longs)
 BACKTEST_FG_GREED_THRESHOLD = 75   # Above this = Extreme Greed (favor shorts)
 BACKTEST_FG_BLOCK_CONTRARIAN = True  # Block trades against extreme sentiment
@@ -556,7 +556,7 @@ BACKTEST_ML_ADAPTIVE = True        # Auto-adjust threshold based on performance
 BACKTEST_REGIME_SWITCHING = False  # Old system - disabled
 REGIME_WINDOW_SIZE = 48
 REGIME_TREND_THRESHOLD = 0.20
-BACKTEST_TREND_FOLLOWING = False   # Old TF strategy - disabled
+BACKTEST_TREND_FOLLOWING = True    # Enable Trend Following to complement Mean Reversion
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
