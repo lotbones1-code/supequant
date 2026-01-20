@@ -389,7 +389,12 @@ class ProperTrendStrategy:
         tf_15m = market_state.get('timeframes', {}).get('15m', {})
         candles = tf_15m.get('candles', [])
         trend = tf_15m.get('trend', {})
+        
+        # Handle volatility/atr in different formats
         volatility = tf_15m.get('volatility', {})
+        if not volatility:
+            volatility = tf_15m.get('atr', {})
+        
         momentum = tf_15m.get('momentum', {})
         
         if len(candles) < 30:
@@ -398,7 +403,21 @@ class ProperTrendStrategy:
         current_price = tf_15m.get('current_price', candles[-1]['close'])
         ema_20 = trend.get('ema_20', current_price)
         ema_50 = trend.get('ema_50', current_price)
+        
+        # Get ATR - handle both dict formats
         atr = volatility.get('atr', 0)
+        if atr == 0 and isinstance(volatility, dict):
+            atr = volatility.get('atr', 0)
+        if atr == 0:
+            # Calculate from candles
+            if len(candles) > 14:
+                trs = []
+                for i in range(1, min(15, len(candles))):
+                    h, l, c_prev = candles[-i]['high'], candles[-i]['low'], candles[-i-1]['close']
+                    tr = max(h - l, abs(h - c_prev), abs(l - c_prev))
+                    trs.append(tr)
+                atr = np.mean(trs) if trs else 0
+        
         rsi = momentum.get('rsi', 50)
         
         if atr <= 0:
