@@ -209,57 +209,51 @@ class RegimeClassifier:
             regime = MarketRegime.UNKNOWN
             confidence = 0.5
             
-            # Check for trending market
-            if trend_strength >= self.strong_trend_threshold:
+            # Check for trending market - use multiple signals
+            is_trending = (
+                trend_strength >= self.trend_threshold or
+                abs(ema_alignment) > 0.2 or
+                directional_moves > 0.55
+            )
+            
+            is_strong_trend = (
+                trend_strength >= self.strong_trend_threshold or
+                abs(ema_alignment) > 0.4
+            )
+            
+            if is_strong_trend:
                 # Strong trend
-                if trend_direction == 'bullish' or ema_alignment > 0.3:
+                if trend_direction == 'bullish' or ema_alignment > 0.2:
                     regime = MarketRegime.TRENDING_UP
-                    confidence = min(0.9, 0.6 + trend_strength * 0.4)
-                elif trend_direction == 'bearish' or ema_alignment < -0.3:
+                    confidence = min(0.9, 0.6 + trend_strength * 0.5)
+                elif trend_direction == 'bearish' or ema_alignment < -0.2:
                     regime = MarketRegime.TRENDING_DOWN
-                    confidence = min(0.9, 0.6 + trend_strength * 0.4)
+                    confidence = min(0.9, 0.6 + trend_strength * 0.5)
+                else:
+                    regime = MarketRegime.CHOPPY
+                    confidence = 0.55
                     
-            elif trend_strength >= self.trend_threshold:
+            elif is_trending:
                 # Moderate trend
-                if trend_direction == 'bullish':
+                if trend_direction == 'bullish' or ema_alignment > 0.1:
                     regime = MarketRegime.TRENDING_UP
-                    confidence = 0.5 + trend_strength * 0.3
-                elif trend_direction == 'bearish':
+                    confidence = 0.5 + trend_strength * 0.4
+                elif trend_direction == 'bearish' or ema_alignment < -0.1:
                     regime = MarketRegime.TRENDING_DOWN
-                    confidence = 0.5 + trend_strength * 0.3
-                else:
-                    # Trend strength but no direction = choppy
-                    regime = MarketRegime.CHOPPY
-                    confidence = 0.6
-                    
-            elif trend_strength < 0.25:
-                # Low trend strength
-                if atr_percentile < self.volatility_low:
-                    # Low volatility + low trend = ranging
-                    regime = MarketRegime.RANGING
-                    confidence = 0.7 + (self.volatility_low - atr_percentile) / 100
-                elif atr_percentile > self.volatility_high:
-                    # High volatility + low trend = choppy
-                    regime = MarketRegime.CHOPPY
-                    confidence = 0.6 + (atr_percentile - self.volatility_high) / 100
-                else:
-                    # Normal volatility + low trend = ranging
-                    regime = MarketRegime.RANGING
-                    confidence = 0.6
-            else:
-                # Middle ground - use range ratio
-                if range_ratio > 0.7:
-                    regime = MarketRegime.RANGING
-                    confidence = 0.55
-                elif directional_moves > 0.6:
-                    if trend_direction == 'bullish':
-                        regime = MarketRegime.TRENDING_UP
-                    else:
-                        regime = MarketRegime.TRENDING_DOWN
-                    confidence = 0.55
+                    confidence = 0.5 + trend_strength * 0.4
                 else:
                     regime = MarketRegime.CHOPPY
                     confidence = 0.5
+                    
+            elif atr_percentile > self.volatility_high:
+                # High volatility without trend = choppy
+                regime = MarketRegime.CHOPPY
+                confidence = 0.6
+                
+            else:
+                # Low trend, normal/low volatility = ranging
+                regime = MarketRegime.RANGING
+                confidence = 0.6 + (0.25 - trend_strength) * 0.4
             
             # Smooth regime changes (avoid whipsawing)
             regime = self._smooth_regime(regime)
