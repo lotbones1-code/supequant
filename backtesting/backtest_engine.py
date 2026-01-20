@@ -36,6 +36,11 @@ from backtesting.ml_trade_scorer import create_ml_scorer
 from backtesting.fear_greed_backtest import create_fear_greed_backtester
 # Regime-Adaptive System (backtest only)
 from backtesting.regime_adaptive import create_regime_router, MarketRegime
+# Trend filters for backtesting
+from backtesting.trend_filter import (
+    create_adx_filter, create_htf_filter, 
+    create_strict_rsi_filter, create_price_structure_filter
+)
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators

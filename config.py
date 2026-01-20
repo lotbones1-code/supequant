@@ -600,6 +600,22 @@ BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
 # - CHOPPY: Minimal trading, reduced size
 BACKTEST_REGIME_ADAPTIVE = False      # Disabled - not detecting trends properly yet
 
+# TREND FILTER TESTS (one at a time)
+# Test 1: ADX-based trend detection
+BACKTEST_ADX_FILTER = True            # Use ADX to detect trends
+BACKTEST_ADX_THRESHOLD = 25           # ADX > this = trending (skip MR)
+
+# Test 2: 4H timeframe trend (disabled)
+BACKTEST_HTF_FILTER = False
+
+# Test 3: Strict RSI (disabled)
+BACKTEST_STRICT_RSI = False
+BACKTEST_RSI_OVERSOLD = 20
+BACKTEST_RSI_OVERBOUGHT = 80
+
+# Test 4: Price structure (disabled)
+BACKTEST_PRICE_STRUCTURE = False
+
 # Regime detection thresholds
 BACKTEST_REGIME_TREND_THRESHOLD = 0.4      # trend_strength > this = trending
 BACKTEST_REGIME_STRONG_TREND = 0.6         # trend_strength > this = strong trend
