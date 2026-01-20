@@ -306,9 +306,9 @@ class ProperRegimeDetector:
         # Classify based on scores - TIGHTER thresholds to avoid bad trend signals
         total_score = bullish_score + bearish_score
         
-        # ONLY skip in VERY strong trends (ADX > 50 = extreme)
-        # This is conservative - only skip when MR would definitely fail
-        if (bullish_score >= 7 or bearish_score >= 7) and adx > 50:
+        # Skip in strong trends (ADX > 40)
+        # This is when MR would definitely fail
+        if (bullish_score >= 6 or bearish_score >= 6) and adx > 40:
             if bullish_score > bearish_score:
                 regime = Regime.STRONG_UPTREND
             else:
