@@ -628,8 +628,8 @@ BACKTEST_PRICE_STRUCTURE = False
 BACKTEST_SIMPLE_TREND = False
 BACKTEST_SIMPLE_TREND_MIN_STRENGTH = 0.3
 
-# Test B: Skip trading entirely when ADX > threshold
-BACKTEST_SKIP_TRENDING = True
+# Test B: Skip trading entirely when ADX > threshold (worse overall)
+BACKTEST_SKIP_TRENDING = False
 BACKTEST_SKIP_ADX_THRESHOLD = 30
 
 # Test C: Use both MR and TF based on regime
