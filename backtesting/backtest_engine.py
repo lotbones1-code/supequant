@@ -452,6 +452,16 @@ class BacktestEngine:
                 logger.warning("⚠️ Fear & Greed: Failed to load data, disabled")
                 self.use_fear_greed = False
         
+        # REGIME-ADAPTIVE SYSTEM: Auto-adjust settings based on market regime
+        self.use_regime_adaptive = getattr(config, 'BACKTEST_REGIME_ADAPTIVE', False)
+        self.regime_router = None
+        if self.use_regime_adaptive:
+            self.regime_router = create_regime_router(enabled=True)
+            logger.info("🎯 REGIME-ADAPTIVE SYSTEM: ENABLED")
+            logger.info("   - Trending: MR disabled, TF enabled")
+            logger.info("   - Ranging: MR enabled, TF disabled")
+            logger.info("   - Choppy: Minimal trading")
+        
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
             config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
