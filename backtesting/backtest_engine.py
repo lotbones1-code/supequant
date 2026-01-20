@@ -30,6 +30,8 @@ from backtesting.trend_following_strategy import TrendFollowingStrategy
 from backtesting.ai_backtest_fair import create_fair_ai_evaluator
 # Smart Multi-Timeframe Intelligence (backtest only)
 from backtesting.smart_mtf_checker import create_mtf_checker
+# ML-based trade scoring (backtest only)
+from backtesting.ml_trade_scorer import create_ml_scorer
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
