@@ -540,6 +540,15 @@ BACKTEST_MTF_MR_THRESHOLD = 0.5    # For Mean Reversion: only block if trend str
 # ============================================================================
 # Uses machine learning to score signals based on historical patterns
 BACKTEST_USE_ML_SCORING = False    # Disabled - didn't improve results
+
+# ============================================================================
+# FEAR & GREED INDEX (BACKTESTING ONLY)
+# ============================================================================
+# Uses historical Fear & Greed data as contrarian signal
+BACKTEST_USE_FEAR_GREED = True     # Enable Fear & Greed filter
+BACKTEST_FG_FEAR_THRESHOLD = 25    # Below this = Extreme Fear (favor longs)
+BACKTEST_FG_GREED_THRESHOLD = 75   # Above this = Extreme Greed (favor shorts)
+BACKTEST_FG_BLOCK_CONTRARIAN = True  # Block trades against extreme sentiment
 BACKTEST_ML_MIN_SCORE = 0.35       # Minimum ML score to allow trade (0-1) - lowered from 0.4
 BACKTEST_ML_ADAPTIVE = True        # Auto-adjust threshold based on performance
 

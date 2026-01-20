@@ -32,6 +32,8 @@ from backtesting.ai_backtest_fair import create_fair_ai_evaluator
 from backtesting.smart_mtf_checker import create_mtf_checker
 # ML-based trade scoring (backtest only)
 from backtesting.ml_trade_scorer import create_ml_scorer
+# Fear & Greed Index (backtest only)
+from backtesting.fear_greed_backtest import create_fear_greed_backtester
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -431,6 +433,22 @@ class BacktestEngine:
                 adaptive=getattr(config, 'BACKTEST_ML_ADAPTIVE', True)
             )
             logger.info("🤖 ML Trade Scoring: ENABLED")
+        
+        # FEAR & GREED INDEX: Sentiment-based filtering (backtest only)
+        self.use_fear_greed = getattr(config, 'BACKTEST_USE_FEAR_GREED', False)
+        self.fear_greed_backtester = None
+        if self.use_fear_greed:
+            self.fear_greed_backtester = create_fear_greed_backtester(
+                fear_threshold=getattr(config, 'BACKTEST_FG_FEAR_THRESHOLD', 25),
+                greed_threshold=getattr(config, 'BACKTEST_FG_GREED_THRESHOLD', 75),
+                block_contrarian=getattr(config, 'BACKTEST_FG_BLOCK_CONTRARIAN', True)
+            )
+            # Load historical data (needs network)
+            if self.fear_greed_backtester.load_historical_data(days=365):
+                logger.info("😱 Fear & Greed Backtest: ENABLED")
+            else:
+                logger.warning("⚠️ Fear & Greed: Failed to load data, disabled")
+                self.use_fear_greed = False
         
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()
