@@ -887,6 +887,25 @@ class BacktestEngine:
                                    btc_market_state, current_time)
                 return
         
+        # SIMPLE TREND STRATEGY: Catches trending market opportunities
+        if self.simple_trend_strategy:
+            simple_trend_signal = self.simple_trend_strategy.analyze(sol_market_state)
+            if simple_trend_signal:
+                logger.info(f"🎯 SIMPLE TREND SIGNAL at {current_time.strftime('%Y-%m-%d %H:%M')}")
+                self._process_signal(simple_trend_signal, 'simple_trend', sol_market_state,
+                                   btc_market_state, current_time)
+                return
+        
+        # SKIP TRENDING: Skip all trading when ADX indicates strong trend
+        if self.skip_trending_enabled and self.adx_filter:
+            allow_mr, adx_val, _ = self.adx_filter.should_allow_mr(sol_market_state)
+            if not allow_mr:
+                # Strong trend detected - skip trading entirely
+                if not hasattr(self, 'skip_trend_count'):
+                    self.skip_trend_count = 0
+                self.skip_trend_count += 1
+                return
+        
         # Try trend following strategy (enabled by regime in trending markets)
         tf_enabled = (not regime_config or regime_config.enable_trend_following) and self.trend_following_strategy
         if tf_enabled:
