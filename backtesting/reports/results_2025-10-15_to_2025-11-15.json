@@ -1,12 +1,12 @@
 {
   "run_name": "2025-10-15_to_2025-11-15",
-  "generated": "2026-01-20T03:03:10.769538",
+  "generated": "2026-01-20T12:13:10.825977",
   "results": {
     "summary": {
       "initial_capital": 10000.0,
-      "final_capital": 8987.179255246789,
-      "total_pnl": -1012.8207447532116,
-      "total_return_pct": -10.128207447532112,
+      "final_capital": 9290.341081724786,
+      "total_pnl": -709.6589182752141,
+      "total_return_pct": -7.096589182752141,
       "max_drawdown_pct": 13.068017588526729,
       "requested_start_date": "2025-10-15",
       "requested_end_date": "2025-11-15",
@@ -14,86 +14,86 @@
       "actual_end_date": "2025-11-15"
     },
     "signals": {
-      "total_signals": 93,
-      "signals_passed_filters": 8,
-      "signals_rejected": 85,
-      "filter_pass_rate": 8.60215053763441
+      "total_signals": 96,
+      "signals_passed_filters": 9,
+      "signals_rejected": 87,
+      "filter_pass_rate": 9.375
     },
     "trades": {
-      "total_trades": 8,
-      "wins": 1,
+      "total_trades": 9,
+      "wins": 2,
       "losses": 7,
       "breakevens": 0,
-      "win_rate": 12.5
+      "win_rate": 22.22222222222222
     },
     "performance": {
-      "avg_win": 293.98101409946065,
-      "avg_win_pct": 3.435810124569377,
-      "largest_win": 293.98101409946065,
+      "avg_win": 298.5714202887291,
+      "avg_win_pct": 2.6579785118113675,
+      "largest_win": 303.8977876112625,
       "avg_loss": -186.68596555038175,
       "avg_loss_pct": -1.1827033373052163,
       "largest_loss": -206.0040637602952,
-      "profit_factor": 0.2249622118335424
+      "profit_factor": 0.45694982925469074
     },
     "filter_rejections": {
-      "pattern_failure": 32,
-      "quality_score": 52
+      "pattern_failure": 33,
+      "quality_score": 54
     }
   },
   "metrics": {
     "returns": {
-      "total_return_pct": -10.128207447532112,
-      "total_return_dollar": -1012.8207447532113,
-      "cagr": -78.96697687134436,
+      "total_return_pct": -7.096589182752141,
+      "total_return_dollar": -709.6589182752141,
+      "cagr": -65.86010206677145,
       "days_traded": 25,
       "years": 0.07
     },
     "risk": {
-      "volatility_pct": 1.55,
-      "sharpe_ratio": -6.18,
-      "sortino_ratio": -7.86,
+      "volatility_pct": 1.66,
+      "sharpe_ratio": -3.15,
+      "sortino_ratio": -4.27,
       "max_drawdown_pct": 13.07,
-      "calmar_ratio": -6.04
+      "calmar_ratio": -5.04
     },
     "trade_stats": {
-      "total_trades": 8,
-      "wins": 1,
+      "total_trades": 9,
+      "wins": 2,
       "losses": 7,
       "breakevens": 0,
-      "win_rate_pct": 12.5,
-      "avg_win_dollar": 293.98,
+      "win_rate_pct": 22.22,
+      "avg_win_dollar": 298.57,
       "avg_loss_dollar": -186.69,
-      "profit_factor": 0.22,
-      "expectancy_dollar": -126.6,
-      "kelly_pct": -43.06,
-      "largest_win": 293.98,
+      "profit_factor": 0.46,
+      "expectancy_dollar": -78.85,
+      "kelly_pct": -26.41,
+      "largest_win": 303.9,
       "largest_loss": -206.0,
-      "max_consecutive_wins": 1,
+      "max_consecutive_wins": 2,
       "max_consecutive_losses": 7
     },
     "risk_reward": {
-      "avg_risk_reward": 1.06,
-      "avg_mfe_pct": 1.3,
-      "avg_mae_pct": 1.43,
-      "mfe_mae_ratio": 0.91
+      "avg_risk_reward": 1.13,
+      "avg_mfe_pct": 1.39,
+      "avg_mae_pct": 1.31,
+      "mfe_mae_ratio": 1.07
     },
     "consistency": {
-      "total_trading_days": 7,
-      "winning_days": 1,
+      "total_trading_days": 8,
+      "winning_days": 2,
       "losing_days": 6,
-      "daily_win_rate_pct": 14.29,
-      "avg_daily_pnl": -144.69,
-      "best_day": 293.98,
+      "daily_win_rate_pct": 25.0,
+      "avg_daily_pnl": -88.71,
+      "best_day": 303.9,
       "worst_day": -389.18
     },
     "time_analysis": {
-      "avg_trade_duration_bars": 21.0,
-      "avg_win_duration_bars": 8.0,
+      "avg_trade_duration_bars": 20.3,
+      "avg_win_duration_bars": 11.5,
       "avg_loss_duration_bars": 22.9,
       "exit_reasons": {
         "stop": 6,
         "timeout": 1,
-        "target": 1
+        "target": 2
       }
     }
   }

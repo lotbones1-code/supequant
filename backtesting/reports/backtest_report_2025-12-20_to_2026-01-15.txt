@@ -1,7 +1,7 @@
 ================================================================================
 BACKTEST FULL REPORT
 ================================================================================
-Generated: 2026-01-20 03:03:51
+Generated: 2026-01-20 12:13:40
 Run Name: 2025-12-20_to_2026-01-15
 ================================================================================
 
@@ -12,23 +12,23 @@ EXECUTIVE SUMMARY
 
 💰 CAPITAL & RETURNS:
   Initial Capital: $10,000.00
-  Final Capital: $12,720.47
-  Total PnL: $+2,450.08
-  Total Return: +27.20%
-  CAGR: 10075.61%
+  Final Capital: $14,361.08
+  Total PnL: $+4,076.42
+  Total Return: +43.61%
+  CAGR: 104527.96%
   Max Drawdown: 3.27%
 
 📈 TRADE PERFORMANCE:
-  Total Signals: 63
-  Signals Passed Filters: 11 (17.5%)
+  Total Signals: 62
+  Signals Passed Filters: 11 (17.7%)
   Trades Executed: 11
-  Wins: 7 | Losses: 4 | BE: 0
-  Win Rate: 63.64%
+  Wins: 8 | Losses: 3 | BE: 0
+  Win Rate: 72.73%
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: 11.76
-  Profit Factor: 4.67
-  Expectancy: $222.73/trade
+  Sharpe Ratio: 16.06
+  Profit Factor: 9.63
+  Expectancy: $370.58/trade
 
 🎯 ASSESSMENT:
   ⚠️  Insufficient data (< 30 trades) - Results inconclusive
@@ -39,51 +39,51 @@ PERFORMANCE METRICS REPORT
 ============================================================
 
 📈 RETURNS:
-  Total Return: $+2,720.47 (+27.20%)
-  CAGR: 10075.61%
+  Total Return: $+4,361.08 (+43.61%)
+  CAGR: 104527.96%
   Period: 19 days (0.05 years)
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: 11.76
-  Sortino Ratio: 20.87
+  Sharpe Ratio: 16.06
+  Sortino Ratio: 28.46
   Max Drawdown: 3.27%
-  Volatility: 1.39%
-  Calmar Ratio: 3085.80
+  Volatility: 1.36%
+  Calmar Ratio: 32013.21
 
 📊 TRADE STATISTICS:
   Total Trades: 11
-  Wins: 7 | Losses: 4 | BE: 0
-  Win Rate: 63.64%
-  Profit Factor: 4.67
-  Expectancy: $222.73 per trade
-  Kelly %: 50.01%
-  Avg Win: $445.40
-  Avg Loss: $-166.93
-  Largest Win: $544.58
-  Largest Loss: $-229.00
+  Wins: 8 | Losses: 3 | BE: 0
+  Win Rate: 72.73%
+  Profit Factor: 9.63
+  Expectancy: $370.58 per trade
+  Kelly %: 65.18%
+  Avg Win: $568.57
+  Avg Loss: $-157.38
+  Largest Win: $1147.37
+  Largest Loss: $-241.09
   Max Win Streak: 4
   Max Loss Streak: 2
 
 💰 RISK/REWARD ANALYSIS:
-  Avg R:R Achieved: 1.73
-  Avg MFE: 1.62%
-  Avg MAE: 0.66%
-  MFE/MAE Ratio: 2.44
+  Avg R:R Achieved: 1.78
+  Avg MFE: 1.88%
+  Avg MAE: 0.62%
+  MFE/MAE Ratio: 3.03
 
 🎯 CONSISTENCY:
-  Trading Days: 8
-  Winning Days: 6
+  Trading Days: 9
+  Winning Days: 7
   Losing Days: 2
-  Daily Win Rate: 75.00%
-  Avg Daily PnL: $+306.26
-  Best Day: $+1085.49
-  Worst Day: $-315.52
+  Daily Win Rate: 77.78%
+  Avg Daily PnL: $+452.94
+  Best Day: $+1225.49
+  Worst Day: $-241.09
 
 ⏱️  TIME ANALYSIS:
-  Avg Trade Duration: 22.6 bars
-  Avg Win Duration: 26.6 bars
-  Avg Loss Duration: 15.8 bars
-  Exit Reasons: {'timeout': 2, 'stop': 3, 'target': 5, 'tp3_complete': 1}
+  Avg Trade Duration: 25.5 bars
+  Avg Win Duration: 28.0 bars
+  Avg Loss Duration: 19.0 bars
+  Exit Reasons: {'timeout': 2, 'target': 6, 'stop': 2, 'tp3_complete': 1}
 
 ============================================================
 
@@ -93,12 +93,12 @@ FILTER ANALYSIS
 
 📊 FILTER REJECTION BREAKDOWN:
 
-  quality_score: 37 rejections (71.2%)
-  pattern_failure: 14 rejections (26.9%)
+  quality_score: 37 rejections (72.5%)
+  pattern_failure: 14 rejections (27.5%)
 
 🔍 FILTER INSIGHTS:
   • Most restrictive filter: quality_score (37 rejections)
-  ✅ Filter pass rate (17.5%) is reasonable
+  ✅ Filter pass rate (17.7%) is reasonable
 
 
 ================================================================================
@@ -109,25 +109,25 @@ TRADE ANALYSIS
 
   MEAN_REVERSION:
     Trades: 9
-    Wins: 6 (66.7%)
-    PnL: $+2,295.23
+    Wins: 7 (77.8%)
+    PnL: $+3,058.74
 
   BREAKOUT:
     Trades: 2
     Wins: 1 (50.0%)
-    PnL: $+154.85
+    PnL: $+1,017.68
 
 📊 PERFORMANCE BY DIRECTION:
 
   LONG:
-    Trades: 8
-    Wins: 4 (50.0%)
-    PnL: $+1,089.31
+    Trades: 7
+    Wins: 4 (57.1%)
+    PnL: $+2,251.03
 
   SHORT:
-    Trades: 3
-    Wins: 3 (100.0%)
-    PnL: $+1,360.76
+    Trades: 4
+    Wins: 4 (100.0%)
+    PnL: $+1,825.39
 
 
 
@@ -135,6 +135,10 @@ TRADE ANALYSIS
 RECOMMENDATIONS
 ================================================================================
 
+⚠️  SUSPICIOUSLY HIGH WIN RATE: >70% may indicate:
+   - Overfitting to historical data
+   - Stops too wide (cutting winners too early)
+   - Need for out-of-sample testing
 ⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
    - Results may not be statistically significant
    - Test on longer time period
