@@ -566,6 +566,11 @@ BACKTEST_SCORE_THRESHOLD = None    # Reset (None = use live value of 45)
 BACKTEST_DRAWDOWN_LIMIT = None     # Disabled (None = no limit)
 BACKTEST_BREAKEVEN_AFTER_TP1 = False # Disabled - causes premature exits
 BACKTEST_DAILY_LOSS_LIMIT = None     # Disabled (no effect in testing)
+
+# TEST #1: More aggressive confidence multipliers
+BACKTEST_CONF_LOW_MULT = 0.3         # Was 0.5 - smaller on weak signals
+BACKTEST_CONF_HIGH_MULT = 1.5        # Was 1.3 - bigger on strong signals
+BACKTEST_CONF_ELITE_MULT = 2.0       # Was 1.5 - much bigger on elite signals
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
