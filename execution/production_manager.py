@@ -19,7 +19,11 @@ from enum import Enum
 from dataclasses import dataclass, field
 
 from data_feed.okx_client import OKXClient
-from config import TRADING_SYMBOL, SPOT_SYMBOL, TRADING_MODE
+from config import (
+    TRADING_SYMBOL, SPOT_SYMBOL, TRADING_MODE,
+    LIMIT_ORDER_ENTRY_ENABLED, LIMIT_ORDER_IMPROVEMENT,
+    LIMIT_ORDER_TIMEOUT, LIMIT_ORDER_MARKET_FALLBACK
+)
 
 logger = logging.getLogger(__name__)
 
