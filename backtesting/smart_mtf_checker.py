@@ -220,8 +220,13 @@ class SmartMTFChecker:
         
         return True, "Trend following MTF OK"
     
-    def _get_trend(self, market_state: Dict, timeframe: str) -> str:
-        """Extract trend direction from market state for a timeframe."""
+    def _get_trend_with_strength(self, market_state: Dict, timeframe: str) -> Tuple[str, float]:
+        """
+        Extract trend direction AND strength from market state for a timeframe.
+        
+        Returns:
+            Tuple of (trend_direction, trend_strength)
+        """
         try:
             tf_data = market_state.get('timeframes', {}).get(timeframe, {})
             trend = tf_data.get('trend', {})
@@ -231,18 +236,23 @@ class SmartMTFChecker:
             
             # Need minimum strength to be considered trending
             if strength < 0.2:
-                return 'neutral'
+                return 'neutral', strength
             
             if direction in ['up', 'bullish', 'long']:
-                return 'bullish'
+                return 'bullish', strength
             elif direction in ['down', 'bearish', 'short']:
-                return 'bearish'
+                return 'bearish', strength
             else:
-                return 'neutral'
+                return 'neutral', strength
                 
         except Exception as e:
             logger.debug(f"Could not get {timeframe} trend: {e}")
-            return 'neutral'
+            return 'neutral', 0.0
+    
+    def _get_trend(self, market_state: Dict, timeframe: str) -> str:
+        """Extract trend direction from market state for a timeframe (legacy)."""
+        trend, _ = self._get_trend_with_strength(market_state, timeframe)
+        return trend
     
     def _calculate_alignment(self, direction: str, trend_15m: str, trend_1h: str, trend_4h: str) -> float:
         """
@@ -287,26 +297,50 @@ class SmartMTFChecker:
     
     def _calculate_confidence(self, alignment_score: float, 
                              trend_15m: str, trend_1h: str, trend_4h: str,
-                             direction: str) -> float:
+                             direction: str, is_mean_reversion: bool = False) -> float:
         """Calculate confidence multiplier based on MTF analysis."""
         
-        # Base confidence from alignment
-        confidence = alignment_score
-        
-        # Perfect alignment bonus
-        if direction == 'long':
-            if trend_15m == 'bullish' and trend_1h == 'bullish' and trend_4h == 'bullish':
-                confidence = min(1.0, confidence + 0.15)
+        if is_mean_reversion:
+            # For Mean Reversion: Higher confidence when trends are NOT aligned
+            # (because MR fades moves - counter-trend is expected)
+            
+            # Base confidence - start high for MR
+            confidence = 0.7
+            
+            # BONUS when going against weak/neutral trends (ideal for MR)
+            if trend_1h == 'neutral':
+                confidence += 0.15  # Ranging market - perfect for MR
+            if trend_4h == 'neutral':
+                confidence += 0.10
+            
+            # Slight penalty for very strong opposing trends (even if allowed)
+            # This adjusts position size without blocking
+            trends = [trend_15m, trend_1h, trend_4h]
+            opposing = 'bearish' if direction == 'long' else 'bullish'
+            strong_opposing = sum(1 for t in trends if t == opposing)
+            
+            if strong_opposing >= 2:
+                confidence *= 0.85  # Reduce size slightly
+            
+            return min(1.0, confidence)
         else:
-            if trend_15m == 'bearish' and trend_1h == 'bearish' and trend_4h == 'bearish':
-                confidence = min(1.0, confidence + 0.15)
-        
-        # Conflicting timeframes penalty
-        trends = [trend_15m, trend_1h, trend_4h]
-        if 'bullish' in trends and 'bearish' in trends:
-            confidence *= 0.8  # 20% penalty for conflict
-        
-        return confidence
+            # For Trend Following: Use alignment score
+            confidence = alignment_score
+            
+            # Perfect alignment bonus
+            if direction == 'long':
+                if trend_15m == 'bullish' and trend_1h == 'bullish' and trend_4h == 'bullish':
+                    confidence = min(1.0, confidence + 0.15)
+            else:
+                if trend_15m == 'bearish' and trend_1h == 'bearish' and trend_4h == 'bearish':
+                    confidence = min(1.0, confidence + 0.15)
+            
+            # Conflicting timeframes penalty
+            trends = [trend_15m, trend_1h, trend_4h]
+            if 'bullish' in trends and 'bearish' in trends:
+                confidence *= 0.8  # 20% penalty for conflict
+            
+            return confidence
     
     def get_stats(self) -> Dict:
         """Get MTF checker statistics."""
