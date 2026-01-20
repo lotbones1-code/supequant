@@ -128,6 +128,11 @@ MTF_TREND_MIN_STRENGTH = 0.25  # Was 0.5
 LTF_TREND_MIN_STRENGTH = 0.2  # Was 0.4
 TIMEFRAME_ALIGNMENT_THRESHOLD = 0.4  # Was 0.7 - don't require perfect alignment
 
+# 4H Trend Filter (LIVE) - Skip MR when 4H shows strong trend
+# Backtest showed: Improved trending -$828 -> -$635 without hurting ranging
+HTF_TREND_FILTER_ENABLED = True       # Enable 4H trend check before MR trades
+HTF_TREND_BLOCK_THRESHOLD = 0.5       # Block MR if 4H trend_strength > this or ema_alignment > this
+
 # AI Rejection Filter - MORE PERMISSIVE
 AI_CONFIDENCE_THRESHOLD = 40  # Was 70 - allow more trades through
 AI_MODEL_PATH = "model_learning/rejection_model.pkl"
