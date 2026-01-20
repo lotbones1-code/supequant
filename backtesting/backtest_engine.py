@@ -872,8 +872,41 @@ class BacktestEngine:
             regime_name = regime_details.get('regime', 'unknown')
             self.regime_candle_count[regime_name] = self.regime_candle_count.get(regime_name, 0) + 1
 
-        # Try breakout strategy (skip if regime says no)
-        breakout_enabled = not regime_config or regime_config.enable_breakout
+        # DUAL REGIME SYSTEM: Analyze regime and potentially generate trend signal
+        dual_regime_analysis = None
+        if self.dual_regime_system:
+            dual_regime_analysis, trend_signal = self.dual_regime_system.analyze(sol_market_state)
+            
+            # Track regime distribution
+            if not hasattr(self, 'dual_regime_counts'):
+                self.dual_regime_counts = {}
+            regime_val = dual_regime_analysis.regime.value
+            self.dual_regime_counts[regime_val] = self.dual_regime_counts.get(regime_val, 0) + 1
+            
+            # If trending regime and we have a trend signal, use it
+            if trend_signal and dual_regime_analysis.recommendation == 'trend_following':
+                trend_signal['dual_regime'] = regime_val
+                logger.info(f"🎯 DUAL REGIME TREND SIGNAL at {current_time.strftime('%Y-%m-%d %H:%M')}")
+                logger.info(f"   Regime: {regime_val} | Confidence: {dual_regime_analysis.confidence:.0%}")
+                self._process_signal(trend_signal, 'trend_following', sol_market_state,
+                                   btc_market_state, current_time)
+                return
+            
+            # If choppy regime, skip all trading
+            if dual_regime_analysis.recommendation == 'skip':
+                if not hasattr(self, 'dual_regime_skips'):
+                    self.dual_regime_skips = 0
+                self.dual_regime_skips += 1
+                return
+            
+            # If ranging regime, continue to MR below (but skip breakout/pullback/TF)
+            if dual_regime_analysis.recommendation == 'mean_reversion':
+                # Skip directly to MR, bypassing other strategies
+                pass  # Will continue below
+
+        # Try breakout strategy (skip if regime says no or dual regime says MR only)
+        skip_for_dual_mr = dual_regime_analysis and dual_regime_analysis.recommendation == 'mean_reversion'
+        breakout_enabled = (not regime_config or regime_config.enable_breakout) and not skip_for_dual_mr
         if breakout_enabled:
             breakout_signal = self.breakout_strategy.analyze(sol_market_state)
             if breakout_signal:
@@ -885,8 +918,8 @@ class BacktestEngine:
                                    btc_market_state, current_time)
                 return
 
-        # Try pullback strategy (skip if regime says no)
-        pullback_enabled = not regime_config or regime_config.enable_pullback
+        # Try pullback strategy (skip if regime says no or dual regime says MR only)
+        pullback_enabled = (not regime_config or regime_config.enable_pullback) and not skip_for_dual_mr
         if pullback_enabled:
             pullback_signal = self.pullback_strategy.analyze(sol_market_state)
             if pullback_signal:
