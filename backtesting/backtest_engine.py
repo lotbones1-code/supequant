@@ -43,6 +43,11 @@ from backtesting.trend_filter import (
 )
 from backtesting.simple_trend_strategy import create_simple_trend_strategy
 from backtesting.dual_regime_system import create_dual_regime_system
+# Adaptive systems for future-proofing
+from backtesting.adaptive_systems import (
+    create_adaptive_threshold, create_rolling_regime_detector, create_filter_learner,
+    TradeResult, AdaptiveThreshold, RollingRegimeDetector, FilterLearner
+)
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -517,6 +522,40 @@ class BacktestEngine:
             logger.info("   - Trending → Trend Following (3 entry types)")
             logger.info("   - Ranging → Mean Reversion")
             logger.info("   - Choppy → Skip trading")
+        
+        # =================================================================
+        # ADAPTIVE SYSTEMS: Future-proofing features
+        # =================================================================
+        
+        # System 1: Adaptive Threshold - auto-adjusts quality threshold
+        self.adaptive_threshold: Optional[AdaptiveThreshold] = None
+        if getattr(config, 'BACKTEST_ADAPTIVE_THRESHOLD', False):
+            self.adaptive_threshold = create_adaptive_threshold(
+                base_threshold=getattr(config, 'BACKTEST_ADAPTIVE_BASE', 45)
+            )
+            self.adaptive_threshold.min_threshold = getattr(config, 'BACKTEST_ADAPTIVE_MIN', 35)
+            self.adaptive_threshold.max_threshold = getattr(config, 'BACKTEST_ADAPTIVE_MAX', 65)
+            self.adaptive_threshold.target_win_rate = getattr(config, 'BACKTEST_ADAPTIVE_TARGET_WR', 0.48)
+            logger.info("🎚️ ADAPTIVE THRESHOLD: ENABLED")
+            logger.info(f"   Base: {self.adaptive_threshold.base_threshold} | Range: {self.adaptive_threshold.min_threshold}-{self.adaptive_threshold.max_threshold}")
+        
+        # System 2: Rolling Regime Detector - detects regime changes
+        self.rolling_regime: Optional[RollingRegimeDetector] = None
+        if getattr(config, 'BACKTEST_ROLLING_REGIME', False):
+            self.rolling_regime = create_rolling_regime_detector()
+            self.rolling_regime.regime_persistence = getattr(config, 'BACKTEST_ROLLING_PERSISTENCE', 8)
+            self.rolling_regime.adx_trend_threshold = getattr(config, 'BACKTEST_ROLLING_ADX_TREND', 28)
+            self.rolling_regime.adx_strong_threshold = getattr(config, 'BACKTEST_ROLLING_ADX_STRONG', 40)
+            logger.info("🔄 ROLLING REGIME DETECTOR: ENABLED")
+            logger.info(f"   ADX Thresholds: trend>{self.rolling_regime.adx_trend_threshold}, strong>{self.rolling_regime.adx_strong_threshold}")
+        
+        # System 3: Filter Learning - learns which filters predict wins
+        self.filter_learner: Optional[FilterLearner] = None
+        if getattr(config, 'BACKTEST_FILTER_LEARNING', False):
+            self.filter_learner = create_filter_learner()
+            self.filter_learner.min_trades_to_learn = getattr(config, 'BACKTEST_FILTER_MIN_TRADES', 15)
+            logger.info("📚 FILTER LEARNING: ENABLED")
+            logger.info(f"   Min trades to learn: {self.filter_learner.min_trades_to_learn}")
         
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):

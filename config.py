@@ -642,6 +642,27 @@ BACKTEST_REGIME_STRONG_TREND = 0.6         # trend_strength > this = strong tren
 BACKTEST_REGIME_VOLATILITY_HIGH = 70       # ATR percentile > this = high vol
 BACKTEST_REGIME_VOLATILITY_LOW = 30        # ATR percentile < this = low vol
 
+# =============================================================================
+# ADAPTIVE SYSTEMS - Future-proofing features (backtest only)
+# =============================================================================
+
+# System 1: Adaptive Threshold - auto-adjusts quality threshold based on performance
+BACKTEST_ADAPTIVE_THRESHOLD = False
+BACKTEST_ADAPTIVE_BASE = 45           # Starting threshold
+BACKTEST_ADAPTIVE_MIN = 35            # Never go below
+BACKTEST_ADAPTIVE_MAX = 65            # Never go above
+BACKTEST_ADAPTIVE_TARGET_WR = 0.48    # Target win rate
+
+# System 2: Rolling Regime Detector - detects regime changes and adjusts parameters
+BACKTEST_ROLLING_REGIME = False
+BACKTEST_ROLLING_PERSISTENCE = 8      # Candles before confirming regime change
+BACKTEST_ROLLING_ADX_TREND = 28       # ADX threshold for trend
+BACKTEST_ROLLING_ADX_STRONG = 40      # ADX threshold for strong trend
+
+# System 3: Filter Learning - learns which filters predict wins
+BACKTEST_FILTER_LEARNING = False
+BACKTEST_FILTER_MIN_TRADES = 15       # Min trades before adjusting weights
+
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
 # BACKTEST MODE - Even looser for testing
