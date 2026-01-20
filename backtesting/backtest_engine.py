@@ -408,15 +408,17 @@ class BacktestEngine:
                 self.use_fair_ai = False
         
         # SMART MTF: Multi-Timeframe Intelligence (backtest only)
+        # Now strategy-aware: different logic for Mean Reversion vs Trend Following
         self.use_mtf = getattr(config, 'BACKTEST_USE_MTF', False)
         self.mtf_checker = None
         if self.use_mtf:
             self.mtf_checker = create_mtf_checker(
                 require_1h=getattr(config, 'BACKTEST_MTF_REQUIRE_1H', True),
                 require_4h=getattr(config, 'BACKTEST_MTF_REQUIRE_4H', False),
-                min_alignment=getattr(config, 'BACKTEST_MTF_MIN_ALIGNMENT', 0.3)
+                min_alignment=getattr(config, 'BACKTEST_MTF_MIN_ALIGNMENT', 0.3),
+                mr_extreme_threshold=getattr(config, 'BACKTEST_MTF_MR_THRESHOLD', 0.7)
             )
-            logger.info("📊 SmartMTF Backtest: ENABLED")
+            logger.info("📊 SmartMTF Backtest: ENABLED (Strategy-Aware)")
         
         self.filter_manager = FilterManager()
         self.indicators = TechnicalIndicators()

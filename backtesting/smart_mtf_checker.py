@@ -356,11 +356,13 @@ class SmartMTFChecker:
 def create_mtf_checker(
     require_1h: bool = True,
     require_4h: bool = False,
-    min_alignment: float = 0.3
+    min_alignment: float = 0.3,
+    mr_extreme_threshold: float = 0.7
 ) -> SmartMTFChecker:
     """Create a configured MTF checker for backtesting."""
     return SmartMTFChecker(
         require_1h_alignment=require_1h,
         require_4h_alignment=require_4h,
-        min_alignment_score=min_alignment
+        min_alignment_score=min_alignment,
+        mr_extreme_threshold=mr_extreme_threshold
     )
