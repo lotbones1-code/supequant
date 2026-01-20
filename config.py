@@ -624,12 +624,12 @@ BACKTEST_PRICE_STRUCTURE = False
 # =====================================
 # TRENDING MARKET TESTS (Backtest Only)
 # =====================================
-# Test A: Simple Trend Following in trending markets
-BACKTEST_SIMPLE_TREND = True          # Enable simple trend strategy
+# Test A: Simple Trend Following (didn't generate signals)
+BACKTEST_SIMPLE_TREND = False
 BACKTEST_SIMPLE_TREND_MIN_STRENGTH = 0.3
 
 # Test B: Skip trading entirely when ADX > threshold
-BACKTEST_SKIP_TRENDING = False
+BACKTEST_SKIP_TRENDING = True
 BACKTEST_SKIP_ADX_THRESHOLD = 30
 
 # Test C: Use both MR and TF based on regime
