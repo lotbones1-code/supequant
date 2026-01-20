@@ -31,12 +31,14 @@ import logging
 from utils.logger import setup_logging
 from utils.trade_journal import TradeJournal
 from utils.telegram_notifier import TelegramNotifier
+from utils.telegram_bot import get_bot, start_bot, EnhancedTelegramBot
 from data_feed import OKXClient, MarketDataFeed
 from filters import FilterManager
 from strategy import StrategyManager
 from risk import RiskManager
 from execution import OrderManager, PositionTracker, ProductionOrderManager
 from model_learning import DataCollector
+from backtesting.adaptive_systems import AdaptiveThreshold, TradeResult, create_adaptive_threshold
 
 import config
 
@@ -145,6 +147,28 @@ class EliteQuantSystem:
         self.notifier = None
         if getattr(config, 'TELEGRAM_ENABLED', False):
             self.notifier = TelegramNotifier()
+        
+        # Enhanced Telegram Bot (two-way communication with notes, reminders, hourly updates)
+        self.telegram_bot = None
+        if getattr(config, 'TELEGRAM_ENABLED', False):
+            try:
+                self.telegram_bot = start_bot()
+                logger.info("✅ Enhanced Telegram Bot started (commands, notes, reminders, hourly updates)")
+            except Exception as e:
+                logger.warning(f"⚠️ Enhanced Telegram Bot failed to start: {e}")
+        
+        # Adaptive Threshold System (adjusts quality threshold based on performance)
+        self.adaptive_threshold = None
+        if getattr(config, 'ADAPTIVE_THRESHOLD_ENABLED', False):
+            self.adaptive_threshold = create_adaptive_threshold(
+                base_threshold=getattr(config, 'ADAPTIVE_THRESHOLD_BASE', 45)
+            )
+            self.adaptive_threshold.min_threshold = getattr(config, 'ADAPTIVE_THRESHOLD_MIN', 35)
+            self.adaptive_threshold.max_threshold = getattr(config, 'ADAPTIVE_THRESHOLD_MAX', 65)
+            self.adaptive_threshold.target_win_rate = getattr(config, 'ADAPTIVE_THRESHOLD_TARGET_WR', 0.48)
+            self.adaptive_threshold.lookback_trades = getattr(config, 'ADAPTIVE_THRESHOLD_LOOKBACK', 15)
+            self.adaptive_threshold.adjustment_speed = getattr(config, 'ADAPTIVE_THRESHOLD_SPEED', 0.15)
+            logger.info(f"🎚️ Adaptive Threshold enabled (base: {self.adaptive_threshold.base_threshold}, range: {self.adaptive_threshold.min_threshold}-{self.adaptive_threshold.max_threshold})")
         
         # Production Order Manager (optional, cleaner execution with auto-cleanup)
         self.production_manager = None
@@ -441,6 +465,14 @@ class EliteQuantSystem:
                         })
                     return
 
+            # Step 5.6: Adaptive Threshold - adjust quality bar based on recent performance
+            if self.adaptive_threshold:
+                adaptive_thresh = self.adaptive_threshold.get_threshold(datetime.now())
+                original_thresh = config.SCORE_THRESHOLD
+                if abs(adaptive_thresh - original_thresh) > 1:
+                    logger.info(f"🎚️ Adaptive threshold: {original_thresh} → {adaptive_thresh:.0f}")
+                config.SCORE_THRESHOLD = adaptive_thresh
+            
             # Step 6: Run ALL filters (most important step!)
             filters_passed, filter_results = self.filter_manager.check_all(
                 sol_market_state,
