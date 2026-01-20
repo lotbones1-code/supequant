@@ -1,7 +1,7 @@
 ================================================================================
 BACKTEST FULL REPORT
 ================================================================================
-Generated: 2026-01-20 14:38:36
+Generated: 2026-01-20 14:40:34
 Run Name: 2025-10-15_to_2025-11-15
 ================================================================================
 
@@ -12,58 +12,139 @@ EXECUTIVE SUMMARY
 
 💰 CAPITAL & RETURNS:
   Initial Capital: $10,000.00
-  Final Capital: $10,000.00
-  Total PnL: $+0.00
-  Total Return: +0.00%
-  Max Drawdown: 0.00%
+  Final Capital: $9,580.59
+  Total PnL: $-419.41
+  Total Return: -4.19%
+  CAGR: -49.34%
+  Max Drawdown: 7.32%
 
 📈 TRADE PERFORMANCE:
-  Total Signals: 1
-  Signals Passed Filters: 0 (0.0%)
-  Trades Executed: 0
-  Wins: 0 | Losses: 0 | BE: 0
-  Win Rate: 0.00%
+  Total Signals: 52
+  Signals Passed Filters: 7 (13.5%)
+  Trades Executed: 7
+  Wins: 2 | Losses: 5 | BE: 0
+  Win Rate: 28.57%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: -3.57
+  Profit Factor: 0.59
+  Expectancy: $-59.92/trade
 
 🎯 ASSESSMENT:
   ⚠️  Insufficient data (< 30 trades) - Results inconclusive
 
-No metrics available
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $-419.41 (-4.19%)
+  CAGR: -49.34%
+  Period: 23 days (0.06 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: -3.57
+  Sortino Ratio: -4.05
+  Max Drawdown: 7.32%
+  Volatility: 1.30%
+  Calmar Ratio: -6.74
+
+📊 TRADE STATISTICS:
+  Total Trades: 7
+  Wins: 2 | Losses: 5 | BE: 0
+  Win Rate: 28.57%
+  Profit Factor: 0.59
+  Expectancy: $-59.92 per trade
+  Kelly %: -20.00%
+  Avg Win: $299.51
+  Avg Loss: $-203.68
+  Largest Win: $312.63
+  Largest Loss: $-209.20
+  Max Win Streak: 1
+  Max Loss Streak: 3
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.18
+  Avg MFE: 1.03%
+  Avg MAE: 1.20%
+  MFE/MAE Ratio: 0.86
+
+🎯 CONSISTENCY:
+  Trading Days: 5
+  Winning Days: 2
+  Losing Days: 3
+  Daily Win Rate: 40.00%
+  Avg Daily PnL: $-83.88
+  Best Day: $+312.63
+  Worst Day: $-611.18
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 15.0 bars
+  Avg Win Duration: 10.0 bars
+  Avg Loss Duration: 17.0 bars
+  Exit Reasons: {'stop': 5, 'target': 2}
+
+============================================================
+
 ================================================================================
 FILTER ANALYSIS
 ================================================================================
 
 📊 FILTER REJECTION BREAKDOWN:
 
-  pattern_failure: 1 rejections (100.0%)
+  quality_score: 27 rejections (60.0%)
+  pattern_failure: 18 rejections (40.0%)
 
 🔍 FILTER INSIGHTS:
-  • Most restrictive filter: pattern_failure (1 rejections)
-  ⚠️  WARNING: Very low filter pass rate (<10%)
-     Consider loosening filter thresholds
+  • Most restrictive filter: quality_score (27 rejections)
+  ✅ Filter pass rate (13.5%) is reasonable
 
 
 ================================================================================
 TRADE ANALYSIS
 ================================================================================
 
-  No trades executed
+📊 PERFORMANCE BY STRATEGY:
+
+  MEAN_REVERSION:
+    Trades: 7
+    Wins: 2 (28.6%)
+    PnL: $-419.41
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 3
+    Wins: 0 (0.0%)
+    PnL: $-606.18
+
+  SHORT:
+    Trades: 4
+    Wins: 2 (50.0%)
+    PnL: $+186.77
+
+
 
 ================================================================================
 RECOMMENDATIONS
 ================================================================================
 
-🔧 FILTER TUNING: Pass rate is very low (<10%). Consider:
-   - Loosening threshold requirements
-   - Disabling overly restrictive filters
-   - Reviewing filter logic for false rejections
 📉 LOW WIN RATE: Win rate is below 40%. Consider:
    - Reviewing entry criteria
    - Adjusting stop loss placement
    - Checking if market conditions suit strategies
+❌ NEGATIVE EXPECTANCY: Profit factor < 1.0
+   - System is losing money
+   - DO NOT trade this live
+   - Major strategy revision needed
 ⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
    - Results may not be statistically significant
    - Test on longer time period
    - Minimum 100 trades recommended for validation
+📊 LOW RISK-ADJUSTED RETURNS: Sharpe < 1.0
+   - Returns not adequate for risk taken
+   - Consider less risky instruments
 
 
 ================================================================================

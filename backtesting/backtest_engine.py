@@ -925,6 +925,18 @@ class BacktestEngine:
                         config.MR_RSI_OVERBOUGHT = orig_overbought
                         return  # Skip to next candle
                 
+                # 4H TREND FILTER: Skip MR if 4H shows strong trend
+                if self.htf_filter:
+                    allow_mr, trend_dir, htf_reason = self.htf_filter.should_allow_mr(sol_market_state)
+                    if not allow_mr:
+                        if not hasattr(self, 'htf_blocks'):
+                            self.htf_blocks = 0
+                        self.htf_blocks += 1
+                        logger.debug(f"📊 4H BLOCK: {htf_reason}")
+                        config.MR_RSI_OVERSOLD = orig_oversold
+                        config.MR_RSI_OVERBOUGHT = orig_overbought
+                        return
+                
                 # ELITE: Check regime before generating signal
                 regime_allowed, regime_confidence = self.elite_regime_checker.check(sol_market_state)
                 
