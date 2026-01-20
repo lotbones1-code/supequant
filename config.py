@@ -565,7 +565,7 @@ BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when
 BACKTEST_SCORE_THRESHOLD = None    # Reset (None = use live value of 45)
 BACKTEST_DRAWDOWN_LIMIT = None     # Disabled (None = no limit)
 BACKTEST_BREAKEVEN_AFTER_TP1 = False # Disabled - causes premature exits
-BACKTEST_DAILY_LOSS_LIMIT = 500      # TEST #4: Stop trading after $500 daily loss
+BACKTEST_DAILY_LOSS_LIMIT = None     # Disabled (no effect in testing)
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)

@@ -1,7 +1,7 @@
 ================================================================================
 BACKTEST FULL REPORT
 ================================================================================
-Generated: 2026-01-20 13:09:11
+Generated: 2026-01-20 13:11:45
 Run Name: 2025-10-15_to_2025-11-15
 ================================================================================
 
@@ -19,8 +19,8 @@ EXECUTIVE SUMMARY
   Max Drawdown: 12.38%
 
 📈 TRADE PERFORMANCE:
-  Total Signals: 90
-  Signals Passed Filters: 12 (13.3%)
+  Total Signals: 89
+  Signals Passed Filters: 12 (13.5%)
   Trades Executed: 12
   Wins: 3 | Losses: 9 | BE: 0
   Win Rate: 25.00%
@@ -93,12 +93,12 @@ FILTER ANALYSIS
 
 📊 FILTER REJECTION BREAKDOWN:
 
-  quality_score: 47 rejections (60.3%)
-  pattern_failure: 31 rejections (39.7%)
+  quality_score: 47 rejections (61.0%)
+  pattern_failure: 30 rejections (39.0%)
 
 🔍 FILTER INSIGHTS:
   • Most restrictive filter: quality_score (47 rejections)
-  ✅ Filter pass rate (13.3%) is reasonable
+  ✅ Filter pass rate (13.5%) is reasonable
 
 
 ================================================================================
