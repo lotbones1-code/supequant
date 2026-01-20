@@ -563,7 +563,8 @@ BACKTEST_TF_MIN_SCORE = 35         # Lower quality threshold for TF (unused when
 # BACKTEST TUNING OPTIONS (test one at a time!)
 # ============================================================================
 BACKTEST_SCORE_THRESHOLD = None    # Reset (None = use live value of 45)
-BACKTEST_DRAWDOWN_LIMIT = 0.15     # TEST #2b: Stop trading at 15% drawdown
+BACKTEST_DRAWDOWN_LIMIT = None     # Disabled (None = no limit)
+BACKTEST_BREAKEVEN_AFTER_TP1 = True  # TEST #3: Move stop to entry after TP1
 BACKTEST_TRADE_INTERVAL = None     # Reset (no effect)
 BACKTEST_MR_RSI_OVERSOLD = None    # Reset (None = use live value)
 BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
