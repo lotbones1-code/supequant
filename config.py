@@ -647,14 +647,14 @@ BACKTEST_REGIME_VOLATILITY_LOW = 30        # ATR percentile < this = low vol
 # =============================================================================
 
 # System 1: Adaptive Threshold - auto-adjusts quality threshold based on performance
-BACKTEST_ADAPTIVE_THRESHOLD = True  # Testing
+BACKTEST_ADAPTIVE_THRESHOLD = False  # Tested - +$106 improvement
 BACKTEST_ADAPTIVE_BASE = 45           # Starting threshold
 BACKTEST_ADAPTIVE_MIN = 35            # Never go below
 BACKTEST_ADAPTIVE_MAX = 65            # Never go above
 BACKTEST_ADAPTIVE_TARGET_WR = 0.48    # Target win rate
 
 # System 2: Rolling Regime Detector - detects regime changes and adjusts parameters
-BACKTEST_ROLLING_REGIME = False
+BACKTEST_ROLLING_REGIME = True  # Testing
 BACKTEST_ROLLING_PERSISTENCE = 8      # Candles before confirming regime change
 BACKTEST_ROLLING_ADX_TREND = 28       # ADX threshold for trend
 BACKTEST_ROLLING_ADX_STRONG = 40      # ADX threshold for strong trend
