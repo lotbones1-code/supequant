@@ -793,42 +793,71 @@ class BacktestEngine:
             else:
                 logger.debug(f"   ⚠️ No 15m timeframe data available")
 
-        # Try breakout strategy
-        breakout_signal = self.breakout_strategy.analyze(sol_market_state)
-        if breakout_signal:
-            logger.info(f"🎯 BREAKOUT SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
-            self._process_signal(breakout_signal, 'breakout', sol_market_state,
-                               btc_market_state, current_time)
-            return
+        # REGIME-ADAPTIVE: Get current regime and adjust settings
+        regime_config = None
+        if self.use_regime_adaptive and self.regime_router:
+            regime_config, regime_details = self.regime_router.analyze(sol_market_state)
+            
+            # Track regime for stats
+            if not hasattr(self, 'regime_candle_count'):
+                self.regime_candle_count = {}
+            regime_name = regime_details.get('regime', 'unknown')
+            self.regime_candle_count[regime_name] = self.regime_candle_count.get(regime_name, 0) + 1
 
-        # Try pullback strategy
-        pullback_signal = self.pullback_strategy.analyze(sol_market_state)
-        if pullback_signal:
-            logger.info(f"🎯 PULLBACK SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
-            self._process_signal(pullback_signal, 'pullback', sol_market_state,
-                               btc_market_state, current_time)
-            return
+        # Try breakout strategy (skip if regime says no)
+        breakout_enabled = not regime_config or regime_config.enable_breakout
+        if breakout_enabled:
+            breakout_signal = self.breakout_strategy.analyze(sol_market_state)
+            if breakout_signal:
+                # Apply regime position sizing
+                if regime_config:
+                    breakout_signal['position_size_mult'] = regime_config.position_size_mult
+                logger.info(f"🎯 BREAKOUT SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
+                self._process_signal(breakout_signal, 'breakout', sol_market_state,
+                                   btc_market_state, current_time)
+                return
+
+        # Try pullback strategy (skip if regime says no)
+        pullback_enabled = not regime_config or regime_config.enable_pullback
+        if pullback_enabled:
+            pullback_signal = self.pullback_strategy.analyze(sol_market_state)
+            if pullback_signal:
+                if regime_config:
+                    pullback_signal['position_size_mult'] = regime_config.position_size_mult
+                logger.info(f"🎯 PULLBACK SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
+                self._process_signal(pullback_signal, 'pullback', sol_market_state,
+                                   btc_market_state, current_time)
+                return
         
-        # Try trend following strategy EARLY (BACKTEST ONLY - catches trending markets)
-        if self.trend_following_strategy:
+        # Try trend following strategy (enabled by regime in trending markets)
+        tf_enabled = (not regime_config or regime_config.enable_trend_following) and self.trend_following_strategy
+        if tf_enabled:
             tf_signal = self.trend_following_strategy.analyze(sol_market_state)
             if tf_signal:
+                if regime_config:
+                    tf_signal['position_size_mult'] = regime_config.position_size_mult
                 logger.info(f"🎯 TREND FOLLOWING SIGNAL FOUND at {current_time.strftime('%Y-%m-%d %H:%M')}")
                 self._process_signal(tf_signal, 'trend_following', sol_market_state,
                                    btc_market_state, current_time)
                 return
         
-        # Try mean reversion strategy (ELITE: with strict regime checking)
-        if self.mean_reversion_strategy:
-            # Apply backtest RSI overrides if set
+        # Try mean reversion strategy (REGIME-ADAPTIVE: skip in trending markets)
+        mr_enabled = (not regime_config or regime_config.enable_mean_reversion) and self.mean_reversion_strategy
+        if mr_enabled:
+            # Apply backtest RSI overrides if set (or use regime-specific values)
             orig_oversold = config.MR_RSI_OVERSOLD
             orig_overbought = config.MR_RSI_OVERBOUGHT
-            if getattr(config, 'BACKTEST_MR_RSI_OVERSOLD', None):
+            
+            # Use regime-specific RSI values if available
+            if regime_config:
+                config.MR_RSI_OVERSOLD = regime_config.mr_rsi_oversold
+                config.MR_RSI_OVERBOUGHT = regime_config.mr_rsi_overbought
+            elif getattr(config, 'BACKTEST_MR_RSI_OVERSOLD', None):
                 config.MR_RSI_OVERSOLD = config.BACKTEST_MR_RSI_OVERSOLD
             if getattr(config, 'BACKTEST_MR_RSI_OVERBOUGHT', None):
                 config.MR_RSI_OVERBOUGHT = config.BACKTEST_MR_RSI_OVERBOUGHT
             
-            # BACKTEST: Skip MR in strong trends (regime-aware)
+            # BACKTEST: Skip MR in strong trends (legacy check - regime system handles this now)
             max_trend = getattr(config, 'BACKTEST_MR_MAX_TREND_STRENGTH', None)
             skip_mr_trend = False
             if max_trend:
@@ -883,7 +912,11 @@ class BacktestEngine:
                             
                             logger.info(f"🎯 MEAN REVERSION ({size_label}) at {current_time.strftime('%Y-%m-%d %H:%M')} (conf: {regime_confidence:.2f})")
                         else:
-                            mr_signal['position_size_mult'] = 1.0
+                            # Apply regime position sizing if available
+                            if regime_config:
+                                mr_signal['position_size_mult'] = regime_config.position_size_mult
+                            else:
+                                mr_signal['position_size_mult'] = 1.0
                             logger.info(f"🎯 MEAN REVERSION SIGNAL at {current_time.strftime('%Y-%m-%d %H:%M')}")
                         
                         self._process_signal(mr_signal, 'mean_reversion', sol_market_state,
