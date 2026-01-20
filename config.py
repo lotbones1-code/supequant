@@ -515,7 +515,7 @@ ELITE_BREAKEVEN_AFTER_TP1 = False  # Disabled - causes premature exits
 ELITE_BREAKEVEN_BUFFER = 0.001     # 0.1% buffer above/below entry
 
 # FAIR AI BACKTESTING (AI evaluates without seeing future data)
-BACKTEST_USE_FAIR_AI = True        # Enable AI-assisted backtesting
+BACKTEST_USE_FAIR_AI = False       # Disabled to test MTF alone
 BACKTEST_AI_USE_CLAUDE = True      # Use Claude for evaluation
 BACKTEST_AI_USE_OPENAI = False     # Use OpenAI for evaluation (set True for hybrid mode)
 

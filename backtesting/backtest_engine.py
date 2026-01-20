@@ -839,6 +839,23 @@ class BacktestEngine:
         trade.filter_passed = filters_passed
 
         if filters_passed:
+            # SMART MTF BACKTEST: Check multi-timeframe alignment
+            mtf_approved = True
+            if self.use_mtf and self.mtf_checker:
+                mtf_analysis = self.mtf_checker.analyze(sol_market_state, direction)
+                if not mtf_analysis.allowed:
+                    logger.info(f"📊 MTF BLOCKED: {mtf_analysis.reason} (1H: {mtf_analysis.trend_1h}, 4H: {mtf_analysis.trend_4h})")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['mtf_blocked'] = True
+                    trade.filter_results['mtf_reason'] = mtf_analysis.reason
+                    self.trades.append(trade)
+                    return
+                else:
+                    # Apply MTF confidence to position sizing
+                    signal['mtf_confidence'] = mtf_analysis.confidence
+                    logger.debug(f"📊 MTF APPROVED: alignment={mtf_analysis.alignment_score:.2f}, conf={mtf_analysis.confidence:.2f}")
+            
             # FAIR AI BACKTEST: Ask AI to evaluate (without future data)
             ai_approved = True
             if self.use_fair_ai and self.fair_ai_evaluator:
