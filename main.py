@@ -44,6 +44,17 @@ from execution import OrderManager, PositionTracker, ProductionOrderManager
 from model_learning import DataCollector
 from backtesting.adaptive_systems import AdaptiveThreshold, TradeResult, create_adaptive_threshold
 
+# Elite Prediction V2 System (75% win rate in backtests)
+try:
+    from backtesting.elite_prediction_system import (
+        create_elite_prediction_system_v2, ElitePredictionSystemV2
+    )
+    from backtesting.price_predictor import create_price_predictor, ElitePricePredictor
+    PREDICTION_V2_AVAILABLE = True
+except ImportError as e:
+    PREDICTION_V2_AVAILABLE = False
+    logging.warning(f"Elite Prediction V2 not available: {e}")
+
 import config
 
 # Use Production Order Manager for cleaner execution
