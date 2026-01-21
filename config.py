@@ -688,34 +688,61 @@ BACKTEST_PRICE_PREDICTION = True  # Enable price prediction during backtests
 BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1y)
 
 # =============================================================================
-# PREDICTION-GUIDED TRADING - Use predictions to enhance trades (backtest only)
+# PREDICTION-GUIDED TRADING V1 - Basic version (backtest only)
 # =============================================================================
-# These features use predictions to filter and size trades
-# All are isolated from live trading - only affect backtests
+# V1 features - more permissive settings
+BACKTEST_PREDICTION_GUIDED = False  # V1 disabled - using V2 instead
 
-# Master switch for prediction-guided trading
-BACKTEST_PREDICTION_GUIDED = True  # ENABLED - improves returns by ~25%
-
-# Feature 1: Direction Filter - only trade when prediction aligns with signal
+# V1 Settings (kept for reference)
 BACKTEST_PRED_DIRECTION_FILTER = True
-BACKTEST_PRED_BLOCK_ON_CONFLICT = False  # If True, block conflicting trades entirely
-BACKTEST_PRED_CONFLICT_SIZE_REDUCTION = 0.5  # Reduce size by 50% on conflict
-
-# Feature 2: Confidence Sizing - scale position based on prediction confidence
+BACKTEST_PRED_BLOCK_ON_CONFLICT = False
+BACKTEST_PRED_CONFLICT_SIZE_REDUCTION = 0.5
 BACKTEST_PRED_CONFIDENCE_SIZING = True
-BACKTEST_PRED_MIN_CONFIDENCE = 0.3  # Below this, use minimum size
-BACKTEST_PRED_MAX_MULTIPLIER = 1.8  # Maximum position boost
-BACKTEST_PRED_MIN_MULTIPLIER = 0.5  # Minimum position size
-
-# Feature 3: Market Timing - skip trading during uncertain periods  
+BACKTEST_PRED_MIN_CONFIDENCE = 0.3
+BACKTEST_PRED_MAX_MULTIPLIER = 1.8
+BACKTEST_PRED_MIN_MULTIPLIER = 0.5
 BACKTEST_PRED_MARKET_TIMING = True
-BACKTEST_PRED_MIN_CONF_TO_TRADE = 0.35  # Skip if confidence below this
-
-# Feature 4: Trend Bias - favor trades aligned with predicted direction
+BACKTEST_PRED_MIN_CONF_TO_TRADE = 0.35
 BACKTEST_PRED_TREND_BIAS = True
-BACKTEST_PRED_TREND_THRESHOLD = 0.05  # 5% predicted change = strong trend
-BACKTEST_PRED_BIAS_BOOST = 1.3  # Boost aligned trades by 30%
-BACKTEST_PRED_ANTI_BIAS = 0.7  # Reduce counter-trend trades by 30%
+BACKTEST_PRED_TREND_THRESHOLD = 0.05
+BACKTEST_PRED_BIAS_BOOST = 1.3
+BACKTEST_PRED_ANTI_BIAS = 0.7
+
+# =============================================================================
+# ELITE PREDICTION SYSTEM V2 - Higher win rate version (backtest only)
+# =============================================================================
+# V2 improvements: stricter thresholds, multi-horizon consensus, accuracy weighting
+# Expected: Higher win rate with similar or better returns
+
+# Master switch for V2 system
+BACKTEST_ELITE_PREDICTION_V2 = True  # Enable V2 elite system
+
+# V2 Feature Toggles
+BACKTEST_V2_DIRECTION_FILTER = True      # Align trades with predictions
+BACKTEST_V2_MULTI_HORIZON = True         # Require 30d + 90d consensus
+BACKTEST_V2_ACCURACY_WEIGHTING = True    # Weight by recent prediction accuracy
+BACKTEST_V2_DYNAMIC_STOPS = True         # Tighter stops on aligned trades
+BACKTEST_V2_EARLY_EXIT = True            # Exit when prediction reverses
+BACKTEST_V2_MARKET_TIMING = True         # Skip uncertain periods
+
+# V2 Strictness Settings (higher = more selective = higher win rate)
+BACKTEST_V2_STRICT_MODE = True           # Block conflicts, require consensus
+BACKTEST_V2_MIN_CONFIDENCE = 0.50        # 50% min confidence (was 35%)
+BACKTEST_V2_MIN_CONSENSUS = 0.60         # 60% min consensus between horizons
+
+# V2 Direction Filter Thresholds
+BACKTEST_V2_BULLISH_THRESHOLD = 0.03     # 3% for bullish (was 2%)
+BACKTEST_V2_STRONG_THRESHOLD = 0.07      # 7% for strong signal (was 5%)
+BACKTEST_V2_CONFLICT_REDUCTION = 0.30    # 70% reduction on conflict (was 50%)
+
+# V2 Dynamic Stop Settings
+BACKTEST_V2_ALIGNED_STOP = 0.85          # 15% tighter on aligned
+BACKTEST_V2_STRONG_ALIGNED_STOP = 0.75   # 25% tighter on strong aligned
+BACKTEST_V2_CONFLICT_STOP = 1.10         # 10% wider on conflict
+
+# V2 Early Exit Settings
+BACKTEST_V2_EARLY_EXIT_CONF = 0.55       # Min confidence to trigger early exit
+BACKTEST_V2_EARLY_EXIT_REVERSAL = 0.03   # 3% reversal needed
 
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
