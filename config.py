@@ -687,6 +687,36 @@ BACKTEST_FILTER_MIN_TRADES = 15       # Min trades before adjusting weights
 BACKTEST_PRICE_PREDICTION = True  # Enable price prediction during backtests
 BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1y)
 
+# =============================================================================
+# PREDICTION-GUIDED TRADING - Use predictions to enhance trades (backtest only)
+# =============================================================================
+# These features use predictions to filter and size trades
+# All are isolated from live trading - only affect backtests
+
+# Master switch for prediction-guided trading
+BACKTEST_PREDICTION_GUIDED = True  # Enable prediction-guided trading
+
+# Feature 1: Direction Filter - only trade when prediction aligns with signal
+BACKTEST_PRED_DIRECTION_FILTER = True
+BACKTEST_PRED_BLOCK_ON_CONFLICT = False  # If True, block conflicting trades entirely
+BACKTEST_PRED_CONFLICT_SIZE_REDUCTION = 0.5  # Reduce size by 50% on conflict
+
+# Feature 2: Confidence Sizing - scale position based on prediction confidence
+BACKTEST_PRED_CONFIDENCE_SIZING = True
+BACKTEST_PRED_MIN_CONFIDENCE = 0.3  # Below this, use minimum size
+BACKTEST_PRED_MAX_MULTIPLIER = 1.8  # Maximum position boost
+BACKTEST_PRED_MIN_MULTIPLIER = 0.5  # Minimum position size
+
+# Feature 3: Market Timing - skip trading during uncertain periods  
+BACKTEST_PRED_MARKET_TIMING = True
+BACKTEST_PRED_MIN_CONF_TO_TRADE = 0.35  # Skip if confidence below this
+
+# Feature 4: Trend Bias - favor trades aligned with predicted direction
+BACKTEST_PRED_TREND_BIAS = True
+BACKTEST_PRED_TREND_THRESHOLD = 0.05  # 5% predicted change = strong trend
+BACKTEST_PRED_BIAS_BOOST = 1.3  # Boost aligned trades by 30%
+BACKTEST_PRED_ANTI_BIAS = 0.7  # Reduce counter-trend trades by 30%
+
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
 # BACKTEST MODE - Even looser for testing

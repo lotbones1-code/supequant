@@ -50,6 +50,10 @@ from backtesting.adaptive_systems import (
 )
 # Price prediction system (backtest only)
 from backtesting.price_predictor import create_price_predictor, ElitePricePredictor
+# Prediction-guided trading (backtest only)
+from backtesting.prediction_guided_trading import (
+    create_prediction_guided_trading, ElitePredictionGuidedTrading, PredictionGuidance
+)
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
