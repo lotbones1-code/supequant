@@ -919,9 +919,13 @@ class BacktestEngine:
                 logger.info("No predictions evaluated yet (need longer backtest period)")
             logger.info("="*60)
         
-        # PREDICTION-GUIDED TRADING REPORT
+        # PREDICTION-GUIDED TRADING REPORT (V1)
         if self.prediction_guided:
             logger.info(self.prediction_guided.get_report())
+        
+        # ELITE PREDICTION V2 REPORT
+        if self.elite_prediction_v2:
+            logger.info(self.elite_prediction_v2.get_report())
 
         return results
 

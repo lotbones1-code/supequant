@@ -725,10 +725,10 @@ BACKTEST_V2_DYNAMIC_STOPS = True         # Tighter stops on aligned trades
 BACKTEST_V2_EARLY_EXIT = True            # Exit when prediction reverses
 BACKTEST_V2_MARKET_TIMING = True         # Skip uncertain periods
 
-# V2 Strictness Settings (higher = more selective = higher win rate)
-BACKTEST_V2_STRICT_MODE = True           # Block conflicts, require consensus
-BACKTEST_V2_MIN_CONFIDENCE = 0.50        # 50% min confidence (was 35%)
-BACKTEST_V2_MIN_CONSENSUS = 0.60         # 60% min consensus between horizons
+# V2 Strictness Settings (tuned for balance between selectivity and trade volume)
+BACKTEST_V2_STRICT_MODE = False          # Don't block conflicts, just reduce size
+BACKTEST_V2_MIN_CONFIDENCE = 0.40        # 40% min confidence (balanced)
+BACKTEST_V2_MIN_CONSENSUS = 0.45         # 45% min consensus between horizons
 
 # V2 Direction Filter Thresholds
 BACKTEST_V2_BULLISH_THRESHOLD = 0.03     # 3% for bullish (was 2%)
