@@ -678,6 +678,15 @@ BACKTEST_ROLLING_ADX_STRONG = 40      # ADX threshold for strong trend
 BACKTEST_FILTER_LEARNING = False  # Tested - needs filter score capture fix
 BACKTEST_FILTER_MIN_TRADES = 15       # Min trades before adjusting weights
 
+# =============================================================================
+# PRICE PREDICTION SYSTEM - Elite forecasting (backtest only)
+# =============================================================================
+# Predicts prices for 1 month, 3 months, 1 year
+# Learns from accuracy and improves over time
+# Completely isolated from trading logic
+BACKTEST_PRICE_PREDICTION = True  # Enable price prediction during backtests
+BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1y)
+
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
 # BACKTEST MODE - Even looser for testing

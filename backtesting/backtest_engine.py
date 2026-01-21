@@ -48,6 +48,8 @@ from backtesting.adaptive_systems import (
     create_adaptive_threshold, create_rolling_regime_detector, create_filter_learner,
     TradeResult, AdaptiveThreshold, RollingRegimeDetector, FilterLearner
 )
+# Price prediction system (backtest only)
+from backtesting.price_predictor import create_price_predictor, ElitePricePredictor
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
