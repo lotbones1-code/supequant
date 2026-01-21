@@ -694,7 +694,7 @@ BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1
 # All are isolated from live trading - only affect backtests
 
 # Master switch for prediction-guided trading
-BACKTEST_PREDICTION_GUIDED = True  # Enable prediction-guided trading (backtest only)
+BACKTEST_PREDICTION_GUIDED = False  # DISABLED for baseline comparison
 
 # Feature 1: Direction Filter - only trade when prediction aligns with signal
 BACKTEST_PRED_DIRECTION_FILTER = True
