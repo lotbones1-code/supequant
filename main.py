@@ -325,6 +325,9 @@ class EliteQuantSystem:
             logger.info(f"Dashboard: http://localhost:{config.DASHBOARD_PORT}")
         logger.info("="*60 + "\n")
 
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
         try:
             while self.running:
                 self.cycle_count += 1
@@ -333,19 +336,83 @@ class EliteQuantSystem:
                 logger.info(f"CYCLE #{self.cycle_count} - {datetime.now()} [{status}]")
                 logger.info(f"{'─'*60}")
 
-                # Run one trading cycle
-                self._run_trading_cycle()
+                # Heartbeat - system is alive
+                self.system_health.beat('trading_loop')
+                
+                try:
+                    # Run one trading cycle
+                    self._run_trading_cycle()
+                    
+                    # Success - reset error counter
+                    consecutive_errors = 0
+                    self.system_health.record_api_success()
+                    
+                except Exception as cycle_error:
+                    consecutive_errors += 1
+                    self.system_health.record_error('trading_cycle', str(cycle_error))
+                    self.system_health.record_api_failure()
+                    
+                    logger.error(f"❌ Cycle error ({consecutive_errors}/{max_consecutive_errors}): {cycle_error}")
+                    
+                    # If too many consecutive errors, pause trading
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.error(f"🛑 Too many consecutive errors - pausing trading for safety")
+                        self.trading_paused = True
+                        
+                        # Notify via Telegram
+                        if self.telegram_bot:
+                            try:
+                                self.telegram_bot.send_message(f"""
+⚠️ <b>SYSTEM ALERT</b>
+
+Trading paused due to {consecutive_errors} consecutive errors.
+Last error: {str(cycle_error)[:100]}
+
+Check logs and restart when ready.
+                                """.strip())
+                            except:
+                                pass
+                        
+                        # Wait longer before retry
+                        time.sleep(300)  # 5 minute cooldown
+                        consecutive_errors = 0  # Reset and retry
+                    else:
+                        # Brief cooldown after error
+                        time.sleep(30)
+                        continue  # Skip the normal wait
 
                 # Wait before next cycle
                 time.sleep(60)  # Check every minute
+                
+                # Log health status every 10 cycles
+                if self.cycle_count % 10 == 0:
+                    if not self.system_health.is_healthy():
+                        logger.warning("⚠️ System health degraded:")
+                        logger.warning(self.system_health.get_health_report())
 
         except KeyboardInterrupt:
             logger.info("\n⚠️  Keyboard interrupt received")
             self.shutdown()
         except Exception as e:
-            logger.error(f"❌ Unexpected error in main loop: {e}", exc_info=True)
+            logger.error(f"❌ Critical error in main loop: {e}", exc_info=True)
+            self.system_health.record_error('critical', str(e))
             if DASHBOARD_AVAILABLE:
                 add_error(str(e))
+            
+            # Notify via Telegram
+            if self.telegram_bot:
+                try:
+                    self.telegram_bot.send_message(f"""
+🚨 <b>CRITICAL ERROR</b>
+
+System shutting down due to critical error:
+{str(e)[:200]}
+
+Manual restart required.
+                    """.strip())
+                except:
+                    pass
+            
             self.shutdown()
 
     def _run_trading_cycle(self):
@@ -362,6 +429,10 @@ class EliteQuantSystem:
                 config.TRADING_SYMBOL,
                 self.timeframes
             )
+            
+            # Heartbeat - market data fetched successfully
+            if sol_market_state:
+                self.system_health.beat('market_data')
 
             # Update dashboard with prices
             if DASHBOARD_AVAILABLE and sol_market_state:
