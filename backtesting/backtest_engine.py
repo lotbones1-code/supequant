@@ -887,6 +887,10 @@ class BacktestEngine:
             else:
                 logger.info("No predictions evaluated yet (need longer backtest period)")
             logger.info("="*60)
+        
+        # PREDICTION-GUIDED TRADING REPORT
+        if self.prediction_guided:
+            logger.info(self.prediction_guided.get_report())
 
         return results
 
@@ -1537,6 +1541,11 @@ class BacktestEngine:
         if signal and 'position_size_mult' in signal:
             regime_mult = signal.get('position_size_mult', 1.0)
             position_multiplier *= regime_mult
+        
+        # Apply prediction-guided position sizing if available
+        if signal and 'prediction_multiplier' in signal:
+            pred_mult = signal.get('prediction_multiplier', 1.0)
+            position_multiplier *= pred_mult
             if regime_mult < 1.0:
                 logger.info(f"   📉 Regime adjustment: {regime_mult:.1f}x position size")
         
