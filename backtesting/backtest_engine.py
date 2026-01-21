@@ -1708,7 +1708,7 @@ class BacktestEngine:
             should_early_exit, early_exit_reason = self.elite_prediction_v2.check_early_exit(trade.signal_id)
             if should_early_exit:
                 logger.info(f"🔮 V2 EARLY EXIT: {early_exit_reason}")
-                self._close_position(trade, current_price, current_time, 'prediction_reversal')
+                self._close_position(current_price, 'prediction_reversal', current_time)
                 return
 
         # Check exit conditions - Support multiple TP levels (V3)
