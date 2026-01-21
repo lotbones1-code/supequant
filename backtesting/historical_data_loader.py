@@ -563,3 +563,145 @@ class HistoricalDataLoader:
         info['symbols'] = list(info['symbols'])
 
         return info
+    
+    def load_from_binance_file(self, filepath: str, symbol_map: str = None) -> Dict:
+        """
+        Load historical data from downloaded Binance JSON file
+        
+        Args:
+            filepath: Path to the Binance historical data JSON file
+            symbol_map: How to map symbols (e.g., 'SOLUSDT' -> 'SOL-USDT-SWAP')
+            
+        Returns:
+            Dict with timeframes as keys and candle lists as values
+        """
+        filepath = Path(filepath)
+        
+        if not filepath.exists():
+            logger.error(f"❌ File not found: {filepath}")
+            return {}
+        
+        logger.info(f"📂 Loading historical data from {filepath}")
+        
+        with open(filepath, 'r') as f:
+            raw_data = json.load(f)
+        
+        # Extract metadata
+        symbol = raw_data.get('symbol', 'UNKNOWN')
+        start_date = raw_data.get('start_date', 'N/A')
+        end_date = raw_data.get('end_date', 'N/A')
+        candle_counts = raw_data.get('candle_counts', {})
+        timeframes_data = raw_data.get('timeframes', {})
+        
+        logger.info(f"   Symbol: {symbol}")
+        logger.info(f"   Period: {start_date} to {end_date}")
+        logger.info(f"   Candle counts: {candle_counts}")
+        
+        # Map timeframe names (Binance uses lowercase, we use mixed case)
+        tf_mapping = {
+            '5m': '5m',
+            '15m': '15m',
+            '1H': '1H',
+            '1h': '1H',
+            '4H': '4H', 
+            '4h': '4H',
+            '1D': '1D',
+            '1d': '1D'
+        }
+        
+        data = {}
+        for tf_name, candles in timeframes_data.items():
+            mapped_tf = tf_mapping.get(tf_name, tf_name)
+            data[mapped_tf] = candles
+            logger.info(f"   ✅ {mapped_tf}: {len(candles)} candles loaded")
+        
+        return data
+    
+    def load_extended_data(self, symbol: str, start_date: str, end_date: str,
+                          binance_data_dir: str = "data/historical",
+                          timeframes: Optional[List[str]] = None) -> Dict:
+        """
+        Load extended historical data - tries Binance files first, then OKX API
+        
+        This enables longer backtesting periods (6-12 months) by using
+        pre-downloaded Binance data.
+        
+        Args:
+            symbol: Trading symbol (e.g., 'SOL-USDT-SWAP')
+            start_date: Start date in 'YYYY-MM-DD' format
+            end_date: End date in 'YYYY-MM-DD' format
+            binance_data_dir: Directory containing downloaded Binance data
+            timeframes: List of timeframes to load (default: all)
+            
+        Returns:
+            Dict with timeframes as keys and candle lists as values
+        """
+        if timeframes is None:
+            timeframes = list(self.timeframes.keys())
+        
+        binance_dir = Path(binance_data_dir)
+        
+        # Map OKX symbol to Binance symbol
+        symbol_mapping = {
+            'SOL-USDT-SWAP': 'SOLUSDT',
+            'SOL-USDT': 'SOLUSDT',
+            'BTC-USDT-SWAP': 'BTCUSDT',
+            'BTC-USDT': 'BTCUSDT'
+        }
+        binance_symbol = symbol_mapping.get(symbol, symbol.replace('-', '').replace('SWAP', ''))
+        
+        # Look for Binance data files
+        binance_files = list(binance_dir.glob(f"{binance_symbol}_*.json"))
+        
+        data = {}
+        
+        if binance_files:
+            logger.info(f"📊 Found {len(binance_files)} Binance data file(s) for {symbol}")
+            
+            # Load from the most recent/comprehensive file
+            # Sort by file size (larger = more data) or by date range in filename
+            binance_files.sort(key=lambda x: x.stat().st_size, reverse=True)
+            
+            for bf in binance_files:
+                binance_data = self.load_from_binance_file(bf)
+                
+                # Merge data (prioritize data with more candles)
+                for tf, candles in binance_data.items():
+                    if tf in timeframes:
+                        if tf not in data or len(candles) > len(data.get(tf, [])):
+                            data[tf] = candles
+            
+            # Filter data to requested date range
+            start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp() * 1000)
+            end_ts = int((datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)).timestamp() * 1000)
+            
+            for tf in list(data.keys()):
+                if data[tf]:
+                    filtered = [c for c in data[tf] if start_ts <= c['timestamp'] <= end_ts]
+                    data[tf] = filtered
+                    logger.info(f"   {tf}: Filtered to {len(filtered)} candles in date range")
+        
+        # Fill in any missing timeframes from OKX API
+        missing_tfs = [tf for tf in timeframes if tf not in data or not data[tf]]
+        
+        if missing_tfs:
+            logger.info(f"   Fetching missing timeframes from OKX: {missing_tfs}")
+            okx_data = self.load_data(symbol, start_date, end_date, timeframes=missing_tfs)
+            
+            for tf, candles in okx_data.items():
+                if tf not in data or not data[tf]:
+                    data[tf] = candles
+        
+        # Log summary
+        logger.info(f"\n📊 Extended Data Loading Summary for {symbol}:")
+        logger.info(f"   Requested Period: {start_date} to {end_date}")
+        for tf, candles in data.items():
+            if candles:
+                first_ts = datetime.fromtimestamp(candles[0]['timestamp'] / 1000)
+                last_ts = datetime.fromtimestamp(candles[-1]['timestamp'] / 1000)
+                logger.info(f"   {tf}: {len(candles)} candles")
+                logger.info(f"      Date Range: {first_ts.strftime('%Y-%m-%d %H:%M')} to {last_ts.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                logger.warning(f"   {tf}: NO DATA")
+        
+        return data
