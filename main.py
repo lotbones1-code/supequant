@@ -818,6 +818,64 @@ Manual restart required.
                 logger.error(f"❌ Fail-closed: Rejecting trade due to Claude error")
                 return False
 
+    def _update_predictions(self, market_state: Dict):
+        """
+        Update price predictions for V2 system.
+        
+        Only updates once per hour to avoid excessive computation.
+        Uses historical prices from market state.
+        """
+        from datetime import timedelta
+        
+        try:
+            # Only update once per hour
+            now = datetime.now()
+            if self.last_prediction_update:
+                hours_since_update = (now - self.last_prediction_update).total_seconds() / 3600
+                if hours_since_update < 1:
+                    return  # Skip - updated recently
+            
+            # Get historical prices from market state
+            timeframes = market_state.get('timeframes', {})
+            tf_15m = timeframes.get('15m', {})
+            candles = tf_15m.get('candles', [])
+            
+            if len(candles) < 60:
+                logger.debug("Not enough candles for prediction (need 60+)")
+                return
+            
+            # Get current price and historical prices
+            current_price = market_state.get('current_price') or candles[-1].get('close', 0)
+            historical_prices = [c.get('close', 0) for c in candles]
+            
+            if not current_price or not historical_prices:
+                return
+            
+            # Make predictions for 30 and 90 days
+            predictions = []
+            for horizon_days in [30, 90]:
+                target_date = now + timedelta(days=horizon_days)
+                prediction = self.price_predictor.predict(
+                    current_price=current_price,
+                    prices_history=historical_prices,
+                    target_date=target_date,
+                    prediction_time=now
+                )
+                predictions.append(prediction)
+            
+            # Update V2 system with new predictions
+            self.prediction_v2.update_predictions(predictions)
+            self.last_prediction_update = now
+            
+            # Log prediction summary
+            if predictions:
+                pred_30d = predictions[0]
+                change_30d = (pred_30d.predicted_price - pred_30d.current_price) / pred_30d.current_price * 100
+                logger.info(f"🔮 Predictions updated: 30d: {change_30d:+.1f}% (conf: {pred_30d.confidence:.2f})")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Prediction update failed: {e}")
+
     def _execute_trade(self, signal: Dict, position_size: float):
         """
         Execute a trade based on signal
