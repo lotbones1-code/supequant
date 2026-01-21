@@ -559,6 +559,16 @@ class BacktestEngine:
             logger.info("📚 FILTER LEARNING: ENABLED")
             logger.info(f"   Min trades to learn: {self.filter_learner.min_trades_to_learn}")
         
+        # PRICE PREDICTION SYSTEM: Elite forecasting (backtest only)
+        self.price_predictor: Optional[ElitePricePredictor] = None
+        self.prediction_horizons = getattr(config, 'BACKTEST_PREDICTION_HORIZONS', [30, 90, 365])
+        if getattr(config, 'BACKTEST_PRICE_PREDICTION', False):
+            symbol = getattr(config, 'TRADING_SYMBOL', 'SOL-USDT-SWAP').replace('-SWAP', '').replace('-USDT', '-USDT')
+            self.price_predictor = create_price_predictor(symbol)
+            logger.info("🔮 PRICE PREDICTION SYSTEM: ENABLED")
+            logger.info(f"   Prediction horizons: {self.prediction_horizons} days (1m, 3m, 1y)")
+            logger.info("   Models: Trend, Volatility, Pattern, Regression (ensemble)")
+        
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
             config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
@@ -682,9 +692,14 @@ class BacktestEngine:
         else:
             logger.info(f"  Strategy does not have 'df' attribute (this is normal for BreakoutStrategyV3)")
 
+        # Price prediction tracking
+        prediction_tracker = {}  # prediction_id -> prediction data
+        last_prediction_day = None
+        
         # Process each candle
         for idx, candle in enumerate(sol_candles):
             current_time = datetime.fromtimestamp(candle['timestamp'] / 1000)
+            current_day = current_time.date()
 
             # Progress update every 10% (avoid division by zero)
             progress_interval = max(1, total_candles // 10)
@@ -699,6 +714,42 @@ class BacktestEngine:
             # Skip if we couldn't build market state (data alignment issues)
             if not sol_market_state or not btc_market_state:
                 continue
+            
+            # PRICE PREDICTION: Make predictions once per day
+            if self.price_predictor and (last_prediction_day is None or current_day != last_prediction_day):
+                current_price = sol_market_state.get('current_price', candle['close'])
+                
+                # Get historical prices for prediction
+                historical_prices = [c['close'] for c in sol_candles[:idx+1]]
+                
+                if len(historical_prices) >= 60:  # Need enough history
+                    for horizon_days in self.prediction_horizons:
+                        target_date = current_time + timedelta(days=horizon_days)
+                        prediction = self.price_predictor.predict(
+                            current_price=current_price,
+                            prices_history=historical_prices,
+                            target_date=target_date,
+                            prediction_time=current_time
+                        )
+                        
+                        # Store for later evaluation
+                        prediction_id = f"{prediction.symbol}_{target_date.strftime('%Y%m%d')}_{current_time.strftime('%Y%m%d')}"
+                        prediction_tracker[prediction_id] = {
+                            'prediction': prediction,
+                            'target_date': target_date.date(),
+                            'created_at': current_time
+                        }
+                
+                last_prediction_day = current_day
+            
+            # PRICE PREDICTION: Evaluate predictions that have reached their target date
+            if self.price_predictor and prediction_tracker:
+                current_price = sol_market_state.get('current_price', candle['close'])
+                for pred_id, pred_data in list(prediction_tracker.items()):
+                    if current_day >= pred_data['target_date']:
+                        # Evaluate this prediction
+                        self.price_predictor.evaluate_prediction(pred_id, current_price)
+                        del prediction_tracker[pred_id]  # Remove evaluated prediction
 
             # Check if we have an open position
             if self.open_position:
@@ -779,6 +830,29 @@ class BacktestEngine:
         # System 3: Filter Learning Report
         if self.filter_learner:
             logger.info(self.filter_learner.get_report())
+        
+        # PRICE PREDICTION REPORT
+        if self.price_predictor:
+            stats = self.price_predictor.get_accuracy_stats()
+            logger.info("\n" + "="*60)
+            logger.info("🔮 PRICE PREDICTION SYSTEM REPORT")
+            logger.info("="*60)
+            logger.info(f"Total Predictions Evaluated: {stats['total_predictions']}")
+            if stats['total_predictions'] > 0:
+                logger.info(f"Average Error: {stats['avg_error_percent']:.2f}%")
+                logger.info(f"Median Error: {stats['median_error_percent']:.2f}%")
+                logger.info(f"Best Prediction: {stats['best_error']:.2f}% error")
+                logger.info(f"Worst Prediction: {stats['worst_error']:.2f}% error")
+                logger.info(f"\nModel Weights (learned):")
+                for model, weight in stats['current_weights'].items():
+                    logger.info(f"   {model}: {weight:.2%}")
+                if stats['model_performance']:
+                    logger.info(f"\nModel Performance:")
+                    for model, perf in stats['model_performance'].items():
+                        logger.info(f"   {model}: {perf['avg_error']:.2f}% error ({perf['count']} predictions)")
+            else:
+                logger.info("No predictions evaluated yet (need longer backtest period)")
+            logger.info("="*60)
 
         return results
 

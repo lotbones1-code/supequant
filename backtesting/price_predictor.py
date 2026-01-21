@@ -237,21 +237,30 @@ class ElitePricePredictor:
         self._update_weights_from_accuracy()
     
     def predict(self, current_price: float, prices_history: List[float], 
-                target_date: datetime) -> PricePrediction:
+                target_date: datetime, prediction_time: datetime = None) -> PricePrediction:
         """Make a price prediction for a target date"""
-        days_ahead = (target_date - datetime.now(timezone.utc)).days
+        if prediction_time is None:
+            prediction_time = datetime.now(timezone.utc)
+        elif prediction_time.tzinfo is None:
+            # Make timezone-aware if naive
+            prediction_time = prediction_time.replace(tzinfo=timezone.utc)
+        
+        if target_date.tzinfo is None:
+            target_date = target_date.replace(tzinfo=timezone.utc)
+        
+        days_ahead = (target_date - prediction_time).days
         
         if days_ahead <= 0:
             return PricePrediction(
                 symbol=self.symbol,
                 current_price=current_price,
                 predicted_price=current_price,
-                prediction_date=datetime.now(timezone.utc).isoformat(),
+                prediction_date=prediction_time.isoformat(),
                 target_date=target_date.isoformat(),
                 confidence=1.0,
                 model_used='current',
                 time_horizon_days=0,
-                created_at=datetime.now(timezone.utc).isoformat()
+                created_at=prediction_time.isoformat()
             )
         
         trend_price, trend_conf = self.trend_model.predict(prices_history, days_ahead)
@@ -291,15 +300,15 @@ class ElitePricePredictor:
             symbol=self.symbol,
             current_price=current_price,
             predicted_price=weighted_price,
-            prediction_date=datetime.now(timezone.utc).isoformat(),
+            prediction_date=prediction_time.isoformat(),
             target_date=target_date.isoformat(),
             confidence=overall_confidence,
             model_used=f'ensemble({dominant_model})',
             time_horizon_days=days_ahead,
-            created_at=datetime.now(timezone.utc).isoformat()
+            created_at=prediction_time.isoformat()
         )
         
-        prediction_id = f"{self.symbol}_{target_date.strftime('%Y%m%d')}_{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+        prediction_id = f"{self.symbol}_{target_date.strftime('%Y%m%d')}_{prediction_time.strftime('%Y%m%d')}"
         self.predictions[prediction_id] = prediction
         self._save_prediction(prediction)
         
