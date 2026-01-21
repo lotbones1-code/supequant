@@ -1538,16 +1538,17 @@ class BacktestEngine:
         position_multiplier = trade.filter_results.get('position_size_multiplier', 1.0)
         
         # Apply regime-based position sizing if available
+        regime_mult = 1.0
         if signal and 'position_size_mult' in signal:
             regime_mult = signal.get('position_size_mult', 1.0)
             position_multiplier *= regime_mult
+            if regime_mult < 1.0:
+                logger.info(f"   📉 Regime adjustment: {regime_mult:.1f}x position size")
         
         # Apply prediction-guided position sizing if available
         if signal and 'prediction_multiplier' in signal:
             pred_mult = signal.get('prediction_multiplier', 1.0)
             position_multiplier *= pred_mult
-            if regime_mult < 1.0:
-                logger.info(f"   📉 Regime adjustment: {regime_mult:.1f}x position size")
         
         # Calculate position size with multiplier
         base_risk = config.MAX_RISK_PER_TRADE * position_multiplier
