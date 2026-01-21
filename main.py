@@ -32,6 +32,10 @@ from utils.logger import setup_logging
 from utils.trade_journal import TradeJournal
 from utils.telegram_notifier import TelegramNotifier
 from utils.telegram_bot import get_bot, start_bot, EnhancedTelegramBot
+from utils.reliability import (
+    get_system_health, init_system_health, retry_with_backoff, 
+    safe_execute, SystemHealth
+)
 from data_feed import OKXClient, MarketDataFeed
 from filters import FilterManager
 from strategy import StrategyManager
@@ -124,6 +128,10 @@ class EliteQuantSystem:
 
     def __init__(self):
         logger.info("🚀 Initializing Elite Quant System")
+        
+        # Initialize system health monitoring for 24/7 reliability
+        self.system_health = init_system_health()
+        logger.info("✅ System health monitoring enabled")
 
         # Initialize all components
         self.okx_client = OKXClient()
