@@ -164,7 +164,7 @@ SCORE_THRESHOLD_ADAPTED_VALUE = 55  # Raise to 55 after enough winning trades
 # =====================================
 # Uses price predictions to filter and size trades for higher win rate
 # Backtested: 75% win rate, Profit Factor 4.34, Sharpe 11.04
-PREDICTION_V2_ENABLED = True  # Enable V2 prediction system for live trading
+PREDICTION_V2_ENABLED = False  # DISABLED - Was hurting backtest results (reverted to pre-V2 state)
 
 # V2 Feature Toggles (all recommended ON based on backtests)
 PREDICTION_V2_DIRECTION_FILTER = True    # Only trade when prediction aligns
