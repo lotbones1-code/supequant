@@ -54,6 +54,10 @@ from backtesting.price_predictor import create_price_predictor, ElitePricePredic
 from backtesting.prediction_guided_trading import (
     create_prediction_guided_trading, ElitePredictionGuidedTrading, PredictionGuidance
 )
+# Elite Prediction System V2 (backtest only) - Higher win rate version
+from backtesting.elite_prediction_system import (
+    create_elite_prediction_system_v2, ElitePredictionSystemV2, EliteGuidance
+)
 # Note: FundingArbitrageStrategy excluded - requires live funding rate data not in historical candles
 from filters.filter_manager import FilterManager
 from data_feed.indicators import TechnicalIndicators
@@ -597,6 +601,29 @@ class BacktestEngine:
                 self.prediction_guided.trend_bias.bias_multiplier = getattr(config, 'BACKTEST_PRED_BIAS_BOOST', 1.3)
                 self.prediction_guided.trend_bias.anti_bias_multiplier = getattr(config, 'BACKTEST_PRED_ANTI_BIAS', 0.7)
         
+        # ELITE PREDICTION SYSTEM V2: Higher win rate version (backtest only)
+        self.elite_prediction_v2: Optional[ElitePredictionSystemV2] = None
+        if getattr(config, 'BACKTEST_ELITE_PREDICTION_V2', False) and self.price_predictor:
+            self.elite_prediction_v2 = create_elite_prediction_system_v2(
+                enable_all=True,
+                strict_mode=getattr(config, 'BACKTEST_V2_STRICT_MODE', True),
+                min_confidence=getattr(config, 'BACKTEST_V2_MIN_CONFIDENCE', 0.50),
+                min_consensus=getattr(config, 'BACKTEST_V2_MIN_CONSENSUS', 0.60)
+            )
+            # Configure V2 components from config
+            if self.elite_prediction_v2.direction_filter:
+                self.elite_prediction_v2.direction_filter.bullish_threshold = getattr(config, 'BACKTEST_V2_BULLISH_THRESHOLD', 0.03)
+                self.elite_prediction_v2.direction_filter.strong_threshold = getattr(config, 'BACKTEST_V2_STRONG_THRESHOLD', 0.07)
+                self.elite_prediction_v2.direction_filter.conflict_reduction = getattr(config, 'BACKTEST_V2_CONFLICT_REDUCTION', 0.30)
+            if self.elite_prediction_v2.dynamic_stops:
+                self.elite_prediction_v2.dynamic_stops.aligned_stop_mult = getattr(config, 'BACKTEST_V2_ALIGNED_STOP', 0.85)
+                self.elite_prediction_v2.dynamic_stops.strong_aligned_stop_mult = getattr(config, 'BACKTEST_V2_STRONG_ALIGNED_STOP', 0.75)
+                self.elite_prediction_v2.dynamic_stops.conflict_stop_mult = getattr(config, 'BACKTEST_V2_CONFLICT_STOP', 1.10)
+            if self.elite_prediction_v2.early_exit:
+                self.elite_prediction_v2.early_exit.min_confidence_for_exit = getattr(config, 'BACKTEST_V2_EARLY_EXIT_CONF', 0.55)
+                self.elite_prediction_v2.early_exit.min_prediction_change = getattr(config, 'BACKTEST_V2_EARLY_EXIT_REVERSAL', 0.03)
+            logger.info("🔮 ELITE PREDICTION V2: ENABLED (Higher Win Rate Mode)")
+        
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
             config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
@@ -773,6 +800,10 @@ class BacktestEngine:
                     # Update prediction-guided trading with new predictions
                     if self.prediction_guided and daily_predictions:
                         self.prediction_guided.update_predictions(daily_predictions)
+                    
+                    # Update Elite Prediction V2 with new predictions
+                    if self.elite_prediction_v2 and daily_predictions:
+                        self.elite_prediction_v2.update_predictions(daily_predictions)
                 
                 last_prediction_day = current_day
             
