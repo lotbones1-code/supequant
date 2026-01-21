@@ -573,6 +573,30 @@ class BacktestEngine:
             logger.info(f"   Prediction horizons: {self.prediction_horizons} days (1m, 3m, 1y)")
             logger.info("   Models: Trend, Volatility, Pattern, Regression (ensemble)")
         
+        # PREDICTION-GUIDED TRADING: Use predictions to enhance trades (backtest only)
+        self.prediction_guided: Optional[ElitePredictionGuidedTrading] = None
+        if getattr(config, 'BACKTEST_PREDICTION_GUIDED', False) and self.price_predictor:
+            self.prediction_guided = create_prediction_guided_trading(
+                enable_direction_filter=getattr(config, 'BACKTEST_PRED_DIRECTION_FILTER', True),
+                enable_confidence_sizing=getattr(config, 'BACKTEST_PRED_CONFIDENCE_SIZING', True),
+                enable_market_timing=getattr(config, 'BACKTEST_PRED_MARKET_TIMING', True),
+                enable_trend_bias=getattr(config, 'BACKTEST_PRED_TREND_BIAS', True)
+            )
+            # Configure components from config
+            if self.prediction_guided.direction_filter:
+                self.prediction_guided.direction_filter.block_on_conflict = getattr(config, 'BACKTEST_PRED_BLOCK_ON_CONFLICT', False)
+                self.prediction_guided.direction_filter.conflict_size_reduction = getattr(config, 'BACKTEST_PRED_CONFLICT_SIZE_REDUCTION', 0.5)
+            if self.prediction_guided.confidence_sizer:
+                self.prediction_guided.confidence_sizer.min_confidence = getattr(config, 'BACKTEST_PRED_MIN_CONFIDENCE', 0.3)
+                self.prediction_guided.confidence_sizer.max_multiplier = getattr(config, 'BACKTEST_PRED_MAX_MULTIPLIER', 1.8)
+                self.prediction_guided.confidence_sizer.min_multiplier = getattr(config, 'BACKTEST_PRED_MIN_MULTIPLIER', 0.5)
+            if self.prediction_guided.market_timer:
+                self.prediction_guided.market_timer.min_confidence_to_trade = getattr(config, 'BACKTEST_PRED_MIN_CONF_TO_TRADE', 0.35)
+            if self.prediction_guided.trend_bias:
+                self.prediction_guided.trend_bias.strong_trend_threshold = getattr(config, 'BACKTEST_PRED_TREND_THRESHOLD', 0.05)
+                self.prediction_guided.trend_bias.bias_multiplier = getattr(config, 'BACKTEST_PRED_BIAS_BOOST', 1.3)
+                self.prediction_guided.trend_bias.anti_bias_multiplier = getattr(config, 'BACKTEST_PRED_ANTI_BIAS', 0.7)
+        
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
             config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
@@ -727,6 +751,7 @@ class BacktestEngine:
                 historical_prices = [c['close'] for c in sol_candles[:idx+1]]
                 
                 if len(historical_prices) >= 60:  # Need enough history
+                    daily_predictions = []
                     for horizon_days in self.prediction_horizons:
                         target_date = current_time + timedelta(days=horizon_days)
                         prediction = self.price_predictor.predict(
@@ -735,6 +760,7 @@ class BacktestEngine:
                             target_date=target_date,
                             prediction_time=current_time
                         )
+                        daily_predictions.append(prediction)
                         
                         # Store for later evaluation
                         prediction_id = f"{prediction.symbol}_{target_date.strftime('%Y%m%d')}_{current_time.strftime('%Y%m%d')}"
@@ -743,6 +769,10 @@ class BacktestEngine:
                             'target_date': target_date.date(),
                             'created_at': current_time
                         }
+                    
+                    # Update prediction-guided trading with new predictions
+                    if self.prediction_guided and daily_predictions:
+                        self.prediction_guided.update_predictions(daily_predictions)
                 
                 last_prediction_day = current_day
             
@@ -1423,6 +1453,31 @@ class BacktestEngine:
                     signal['fg_multiplier'] = fg_multiplier
                     if fg_multiplier != 1.0:
                         logger.info(f"😱 F&G: {fg_reason}")
+            
+            # PREDICTION-GUIDED TRADING: Use predictions to filter and size trades
+            prediction_approved = True
+            if self.prediction_guided:
+                # Get signal confidence from filter results
+                signal_confidence = filter_results.get('final_score', 50) / 100.0
+                
+                # Evaluate signal with prediction guidance
+                guidance = self.prediction_guided.evaluate_signal(direction, signal_confidence)
+                
+                if not guidance.should_trade:
+                    logger.info(f"🔮 PREDICTION BLOCKED: {guidance.reason}")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['prediction_blocked'] = True
+                    trade.filter_results['prediction_reason'] = guidance.reason
+                    self.trades.append(trade)
+                    return
+                else:
+                    # Apply prediction-guided position multiplier
+                    signal['prediction_multiplier'] = guidance.position_multiplier
+                    signal['prediction_direction'] = guidance.direction.value
+                    signal['prediction_confidence'] = guidance.confidence
+                    if guidance.position_multiplier != 1.0:
+                        logger.info(f"🔮 PREDICTION: {guidance.reason} (mult: {guidance.position_multiplier:.2f}x)")
             
             # FAIR AI BACKTEST: Ask AI to evaluate (without future data)
             ai_approved = True
