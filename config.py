@@ -709,7 +709,7 @@ BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1
 # PREDICTION-GUIDED TRADING V1 - Basic version (backtest only)
 # =============================================================================
 # V1 features - more permissive settings
-BACKTEST_PREDICTION_GUIDED = False  # V1 disabled - using V2 instead
+BACKTEST_PREDICTION_GUIDED = True  # V1 enabled - this got $7,980 profit (85% return)
 
 # V1 Settings (kept for reference)
 BACKTEST_PRED_DIRECTION_FILTER = True
