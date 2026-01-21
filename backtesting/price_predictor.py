@@ -190,67 +190,21 @@ class RegressionPredictor:
         x = np.arange(len(recent_prices))
         y = np.array(recent_prices)
         
-        # Use log prices for better fit with exponential trends
-        log_y = np.log(y)
-        coeffs = np.polyfit(x, log_y, deg=1)
+        coeffs = np.polyfit(x, y, deg=1)
         slope = coeffs[0]
         intercept = coeffs[1]
         
         future_x = len(recent_prices) + days_ahead - 1
-        predicted_price = np.exp(slope * future_x + intercept)
+        predicted_price = slope * future_x + intercept
         
         y_pred = slope * x + intercept
-        ss_res = np.sum((log_y - y_pred) ** 2)
-        ss_tot = np.sum((log_y - np.mean(log_y)) ** 2)
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
         r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
         
-        confidence = max(0.2, min(0.75, r_squared))
+        confidence = max(0.2, min(0.7, r_squared))
         
         return max(0, predicted_price), confidence
-
-
-class VolumeMomentumPredictor:
-    """Predicts using volume-weighted momentum"""
-    
-    def __init__(self, lookback: int = 30):
-        self.lookback = lookback
-    
-    def predict(self, prices: List[float], volumes: List[float], days_ahead: int) -> Tuple[float, float]:
-        """Predict using volume-weighted momentum"""
-        if len(prices) < self.lookback or len(volumes) < self.lookback:
-            return prices[-1] if prices else 0.0, 0.1
-        
-        recent_prices = prices[-self.lookback:]
-        recent_volumes = volumes[-self.lookback:]
-        
-        # Calculate volume-weighted returns
-        returns = []
-        for i in range(1, len(recent_prices)):
-            price_change = (recent_prices[i] - recent_prices[i-1]) / recent_prices[i-1]
-            volume_weight = recent_volumes[i] / (np.mean(recent_volumes) + 1e-10)
-            returns.append(price_change * volume_weight)
-        
-        if not returns:
-            return prices[-1], 0.2
-        
-        # Volume-weighted momentum
-        momentum = np.mean(returns) * 252  # Annualized
-        
-        # Volume trend (increasing volume = stronger signal)
-        volume_trend = (np.mean(recent_volumes[-10:]) - np.mean(recent_volumes[:10])) / (np.mean(recent_volumes[:10]) + 1e-10)
-        
-        current_price = prices[-1]
-        daily_return = momentum / 252
-        # Adjust by volume trend
-        daily_return *= (1 + min(volume_trend, 0.5) * 0.3)
-        
-        predicted_price = current_price * ((1 + daily_return) ** days_ahead)
-        
-        # Confidence based on volume consistency
-        volume_std = np.std(recent_volumes) / (np.mean(recent_volumes) + 1e-10)
-        confidence = max(0.3, 0.7 - volume_std)
-        
-        return predicted_price, confidence
 
 
 class ElitePricePredictor:
@@ -268,14 +222,12 @@ class ElitePricePredictor:
         self.volatility_model = VolatilityMomentumPredictor()
         self.pattern_model = PatternMatcher()
         self.regression_model = RegressionPredictor()
-        self.volume_model = VolumeMomentumPredictor()
         
         self.model_weights = {
-            'trend': 0.20,
-            'volatility': 0.20,
-            'pattern': 0.20,
-            'regression': 0.20,
-            'volume': 0.20
+            'trend': 0.25,
+            'volatility': 0.25,
+            'pattern': 0.25,
+            'regression': 0.25
         }
         
         self.predictions: Dict[str, PricePrediction] = {}
@@ -285,8 +237,7 @@ class ElitePricePredictor:
         self._update_weights_from_accuracy()
     
     def predict(self, current_price: float, prices_history: List[float], 
-                target_date: datetime, prediction_time: datetime = None,
-                volumes_history: List[float] = None) -> PricePrediction:
+                target_date: datetime, prediction_time: datetime = None) -> PricePrediction:
         """Make a price prediction for a target date"""
         if prediction_time is None:
             prediction_time = datetime.now(timezone.utc)
@@ -317,43 +268,31 @@ class ElitePricePredictor:
         pattern_price, pattern_conf = self.pattern_model.predict(prices_history, days_ahead)
         reg_price, reg_conf = self.regression_model.predict(prices_history, days_ahead)
         
-        # Volume model (if volumes provided)
-        volume_price, volume_conf = None, 0.0
-        if volumes_history and len(volumes_history) == len(prices_history):
-            volume_price, volume_conf = self.volume_model.predict(prices_history, volumes_history, days_ahead)
-        else:
-            # Fallback: use volatility model if no volume
-            volume_price, volume_conf = vol_price, vol_conf * 0.8
-        
         weights = self.model_weights
         weighted_price = (
             trend_price * weights['trend'] * trend_conf +
             vol_price * weights['volatility'] * vol_conf +
             pattern_price * weights['pattern'] * pattern_conf +
-            reg_price * weights['regression'] * reg_conf +
-            volume_price * weights['volume'] * volume_conf
+            reg_price * weights['regression'] * reg_conf
         ) / (
             weights['trend'] * trend_conf +
             weights['volatility'] * vol_conf +
             weights['pattern'] * pattern_conf +
-            weights['regression'] * reg_conf +
-            weights['volume'] * volume_conf + 1e-10
+            weights['regression'] * reg_conf + 1e-10
         )
         
         overall_confidence = (
             trend_conf * weights['trend'] +
             vol_conf * weights['volatility'] +
             pattern_conf * weights['pattern'] +
-            reg_conf * weights['regression'] +
-            volume_conf * weights['volume']
+            reg_conf * weights['regression']
         )
         
         model_scores = {
             'trend': weights['trend'] * trend_conf,
             'volatility': weights['volatility'] * vol_conf,
             'pattern': weights['pattern'] * pattern_conf,
-            'regression': weights['regression'] * reg_conf,
-            'volume': weights['volume'] * volume_conf
+            'regression': weights['regression'] * reg_conf
         }
         dominant_model = max(model_scores, key=model_scores.get)
         
@@ -408,8 +347,7 @@ class ElitePricePredictor:
             'trend': [],
             'volatility': [],
             'pattern': [],
-            'regression': [],
-            'volume': []
+            'regression': []
         }
         
         for acc in self.accuracy_history[-50:]:
@@ -422,17 +360,14 @@ class ElitePricePredictor:
                 model_errors['pattern'].append(acc.error_percent)
             elif 'regression' in model.lower():
                 model_errors['regression'].append(acc.error_percent)
-            elif 'volume' in model.lower():
-                model_errors['volume'].append(acc.error_percent)
         
         model_scores = {}
         for model, errors in model_errors.items():
             if errors:
                 avg_error = np.mean(errors)
-                # Better scoring: lower error = exponentially higher score
-                model_scores[model] = 1.0 / (1.0 + avg_error / 8.0) ** 1.5
+                model_scores[model] = 1.0 / (1.0 + avg_error / 10.0)
             else:
-                model_scores[model] = 0.20  # Equal weight for new models
+                model_scores[model] = 0.25
         
         total_score = sum(model_scores.values())
         if total_score > 0:
@@ -450,7 +385,7 @@ class ElitePricePredictor:
         errors = [acc.error_percent for acc in self.accuracy_history]
         
         model_perf = {}
-        for model in ['trend', 'volatility', 'pattern', 'regression', 'volume']:
+        for model in ['trend', 'volatility', 'pattern', 'regression']:
             model_errors = [acc.error_percent for acc in self.accuracy_history 
                           if model in acc.model_used.lower()]
             if model_errors:

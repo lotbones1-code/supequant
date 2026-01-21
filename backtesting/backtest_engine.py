@@ -723,17 +723,13 @@ class BacktestEngine:
                 historical_prices = [c['close'] for c in sol_candles[:idx+1]]
                 
                 if len(historical_prices) >= 60:  # Need enough history
-                    # Get historical volumes for volume-weighted predictions
-                    historical_volumes = [c.get('volume', 0) for c in sol_candles[:idx+1]]
-                    
                     for horizon_days in self.prediction_horizons:
                         target_date = current_time + timedelta(days=horizon_days)
                         prediction = self.price_predictor.predict(
                             current_price=current_price,
                             prices_history=historical_prices,
                             target_date=target_date,
-                            prediction_time=current_time,
-                            volumes_history=historical_volumes if historical_volumes else None
+                            prediction_time=current_time
                         )
                         
                         # Store for later evaluation
