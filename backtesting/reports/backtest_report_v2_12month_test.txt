@@ -1,0 +1,153 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-21 00:13:43
+Run Name: v2_12month_test
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $12,317.13
+  Total PnL: $+2,317.13
+  Total Return: +23.17%
+  CAGR: 165.18%
+  Max Drawdown: 9.99%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 290
+  Signals Passed Filters: 14 (4.8%)
+  Trades Executed: 14
+  Wins: 10 | Losses: 4 | BE: 0
+  Win Rate: 71.43%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 9.93
+  Profit Factor: 2.98
+  Expectancy: $165.51/trade
+
+🎯 ASSESSMENT:
+  ⚠️  Insufficient data (< 30 trades) - Results inconclusive
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $+2,317.13 (+23.17%)
+  CAGR: 165.18%
+  Period: 78 days (0.21 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 9.93
+  Sortino Ratio: 13.28
+  Max Drawdown: 9.99%
+  Volatility: 1.59%
+  Calmar Ratio: 16.54
+
+📊 TRADE STATISTICS:
+  Total Trades: 14
+  Wins: 10 | Losses: 4 | BE: 0
+  Win Rate: 71.43%
+  Profit Factor: 2.98
+  Expectancy: $165.51 per trade
+  Kelly %: 47.48%
+  Avg Win: $348.55
+  Avg Loss: $-292.10
+  Largest Win: $1012.76
+  Largest Loss: $-328.75
+  Max Win Streak: 6
+  Max Loss Streak: 4
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.37
+  Avg MFE: 2.02%
+  Avg MAE: 1.09%
+  MFE/MAE Ratio: 1.86
+
+🎯 CONSISTENCY:
+  Trading Days: 11
+  Winning Days: 8
+  Losing Days: 3
+  Daily Win Rate: 72.73%
+  Avg Daily PnL: $+210.65
+  Best Day: $+1128.24
+  Worst Day: $-605.07
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 20.3 bars
+  Avg Win Duration: 25.5 bars
+  Avg Loss Duration: 7.2 bars
+  Exit Reasons: {'timeout': 4, 'target': 5, 'prediction_reversal': 1, 'stop': 4}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 145 rejections (52.5%)
+  pattern_failure: 90 rejections (32.6%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (145 rejections)
+  ⚠️  WARNING: Very low filter pass rate (<10%)
+     Consider loosening filter thresholds
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  MEAN_REVERSION:
+    Trades: 14
+    Wins: 10 (71.4%)
+    PnL: $+2,317.13
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 9
+    Wins: 5 (55.6%)
+    PnL: $+1,939.11
+
+  SHORT:
+    Trades: 5
+    Wins: 5 (100.0%)
+    PnL: $+378.02
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+🔧 FILTER TUNING: Pass rate is very low (<10%). Consider:
+   - Loosening threshold requirements
+   - Disabling overly restrictive filters
+   - Reviewing filter logic for false rejections
+⚠️  SUSPICIOUSLY HIGH WIN RATE: >70% may indicate:
+   - Overfitting to historical data
+   - Stops too wide (cutting winners too early)
+   - Need for out-of-sample testing
+⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
+   - Results may not be statistically significant
+   - Test on longer time period
+   - Minimum 100 trades recommended for validation
+✅ EXCELLENT RISK-ADJUSTED RETURNS: Sharpe > 2.0
+   - Strong risk/return profile
+   - Verify results with forward testing
+
+
+================================================================================
+END OF REPORT
+================================================================================
