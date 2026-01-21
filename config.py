@@ -702,7 +702,7 @@ BACKTEST_FILTER_MIN_TRADES = 15       # Min trades before adjusting weights
 # Predicts prices for 1 month, 3 months, 1 year
 # Learns from accuracy and improves over time
 # Completely isolated from trading logic
-BACKTEST_PRICE_PREDICTION = True  # Enable price prediction during backtests
+BACKTEST_PRICE_PREDICTION = False  # DISABLED - Was reducing trade count and profits
 BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1y)
 
 # =============================================================================
@@ -733,7 +733,7 @@ BACKTEST_PRED_ANTI_BIAS = 0.7
 # Expected: Higher win rate with similar or better returns
 
 # Master switch for V2 system
-BACKTEST_ELITE_PREDICTION_V2 = True  # Enable V2 elite system
+BACKTEST_ELITE_PREDICTION_V2 = False  # DISABLED - Was reducing trade count and profits
 
 # V2 Feature Toggles
 BACKTEST_V2_DIRECTION_FILTER = True      # Align trades with predictions
