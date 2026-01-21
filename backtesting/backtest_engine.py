@@ -1489,9 +1489,36 @@ class BacktestEngine:
                     if fg_multiplier != 1.0:
                         logger.info(f"😱 F&G: {fg_reason}")
             
-            # PREDICTION-GUIDED TRADING: Use predictions to filter and size trades
-            prediction_approved = True
-            if self.prediction_guided:
+            # ELITE PREDICTION V2: Higher win rate prediction system (takes priority)
+            if self.elite_prediction_v2:
+                # Get signal confidence from filter results
+                signal_confidence = filter_results.get('final_score', 50) / 100.0
+                
+                # Evaluate signal with elite V2 prediction guidance
+                v2_guidance = self.elite_prediction_v2.evaluate_signal(direction, signal_confidence)
+                
+                if not v2_guidance.should_trade:
+                    logger.info(f"🔮 V2 BLOCKED: {v2_guidance.reason}")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['prediction_v2_blocked'] = True
+                    trade.filter_results['prediction_v2_reason'] = v2_guidance.reason
+                    self.trades.append(trade)
+                    return
+                else:
+                    # Apply V2 prediction-guided multipliers
+                    signal['prediction_multiplier'] = v2_guidance.position_multiplier
+                    signal['prediction_direction'] = v2_guidance.direction.value
+                    signal['prediction_confidence'] = v2_guidance.confidence
+                    signal['prediction_stop_adjustment'] = v2_guidance.stop_adjustment
+                    signal['prediction_consensus'] = v2_guidance.consensus_score
+                    
+                    if v2_guidance.position_multiplier != 1.0 or v2_guidance.stop_adjustment != 1.0:
+                        logger.info(f"🔮 V2: {v2_guidance.reason}")
+                        logger.info(f"   Pos: {v2_guidance.position_multiplier:.2f}x | Stop: {v2_guidance.stop_adjustment:.0%} | Cons: {v2_guidance.consensus_score:.2f}")
+            
+            # PREDICTION-GUIDED TRADING V1: Use predictions to filter and size trades (fallback)
+            elif self.prediction_guided:
                 # Get signal confidence from filter results
                 signal_confidence = filter_results.get('final_score', 50) / 100.0
                 
@@ -1581,6 +1608,24 @@ class BacktestEngine:
             pred_mult = signal.get('prediction_multiplier', 1.0)
             position_multiplier *= pred_mult
         
+        # Apply V2 dynamic stop adjustment if available
+        stop_adjustment = signal.get('prediction_stop_adjustment', 1.0) if signal else 1.0
+        if stop_adjustment != 1.0:
+            # Adjust stop distance
+            original_stop_distance = abs(trade.entry_price - trade.stop_price)
+            new_stop_distance = original_stop_distance * stop_adjustment
+            
+            if trade.direction == 'long':
+                trade.stop_price = trade.entry_price - new_stop_distance
+            else:
+                trade.stop_price = trade.entry_price + new_stop_distance
+            
+            logger.info(f"   🎯 V2 Stop adjusted: {stop_adjustment:.0%} (new stop: {trade.stop_price:.2f})")
+        
+        # Register trade for V2 early exit monitoring
+        if self.elite_prediction_v2:
+            self.elite_prediction_v2.register_trade_for_early_exit(trade.signal_id, trade.direction)
+        
         # Calculate position size with multiplier
         base_risk = config.MAX_RISK_PER_TRADE * position_multiplier
         account_risk = self.current_capital * base_risk
@@ -1653,6 +1698,14 @@ class BacktestEngine:
 
         trade.max_favorable_excursion = max(trade.max_favorable_excursion, excursion)
         trade.max_adverse_excursion = max(trade.max_adverse_excursion, adverse)
+
+        # V2 EARLY EXIT: Check if prediction reversed
+        if self.elite_prediction_v2:
+            should_early_exit, early_exit_reason = self.elite_prediction_v2.check_early_exit(trade.signal_id)
+            if should_early_exit:
+                logger.info(f"🔮 V2 EARLY EXIT: {early_exit_reason}")
+                self._close_position(trade, current_price, current_time, 'prediction_reversal')
+                return
 
         # Check exit conditions - Support multiple TP levels (V3)
         exit_triggered = False
