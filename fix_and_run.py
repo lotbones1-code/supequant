@@ -68,7 +68,7 @@ def main():
     
     all_good = True
     for module in test_imports:
-        success, _, _ = run_command(f"python3 -c 'import {module}'", check=False)
+        success, _, _ = run_command(f"{sys.executable} -c 'import {module}'", check=False)
         if success:
             print(f"  ✅ {module} - OK")
         else:
@@ -85,7 +85,7 @@ def main():
     print("")
     
     # Run main.py
-    os.system("python3 main.py")
+    os.system(f"{sys.executable} main.py")
 
 if __name__ == "__main__":
     main()

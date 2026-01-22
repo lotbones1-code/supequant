@@ -405,15 +405,37 @@ class ProductionOrderManager:
 
             position.entry_size = actual_size
             
+            # Verify minimum order size (OKX minimum is 0.001 SOL)
+            MIN_ORDER_SIZE = 0.001
+            if actual_size < MIN_ORDER_SIZE:
+                logger.warning(f"⚠️ Position size {actual_size:.6f} SOL below minimum {MIN_ORDER_SIZE} SOL")
+                position.state = PositionState.FAILED
+                if self.on_trade_failed:
+                    self.on_trade_failed(direction=direction, reason=f'Position size {actual_size:.6f} below minimum {MIN_ORDER_SIZE} SOL')
+                return None
+
+            # Verify leverage is set for perpetuals
+            if is_perp:
+                try:
+                    current_leverage = self.client.get_leverage(symbol)
+                    if current_leverage is None or current_leverage < 1:
+                        logger.info(f"⚙️ Setting leverage for perpetual trading...")
+                        self.client.set_leverage(symbol, leverage=5, margin_mode='cross')
+                    else:
+                        logger.info(f"✅ Leverage verified: {current_leverage}x for perpetual trading")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not verify/set leverage: {e} - continuing with defaults")
+
             logger.info(f"\n📊 Trade Details:")
             logger.info(f"   Symbol: {symbol}")
+            logger.info(f"   Mode: {'PERPETUAL' if is_perp else 'SPOT'}")
             logger.info(f"   Direction: {signal['direction'].upper()}")
             logger.info(f"   Size: {actual_size:.4f} SOL")
             logger.info(f"   Entry: ${current_price:.2f}")
             logger.info(f"   Stop Loss: ${signal['stop_loss']:.2f}")
             logger.info(f"   TP1: ${position.tp1_price:.2f}")
             logger.info(f"   TP2: ${position.tp2_price:.2f}")
-            
+
             # Place entry order (limit or market)
             position.state = PositionState.ENTRY_PLACED
             side = 'buy' if signal['direction'] == 'long' else 'sell'

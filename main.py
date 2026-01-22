@@ -780,6 +780,8 @@ Manual restart required.
                 logger.error("❌ Could not get account balance")
                 return
 
+            logger.info(f"💰 Current account balance: ${account_balance:.2f}")
+
             # Get confidence score from filter results if available
             confidence_score = filter_results.get('confidence_score') or filter_results.get('quality_score', 0) / 100.0
             
@@ -998,9 +1000,16 @@ Manual restart required.
         managed_position = self.production_manager.execute_trade(signal, position_size)
         
         if not managed_position:
-            logger.error("❌ Trade execution failed")
+            error_msg = f"❌ Trade execution failed: {signal['direction'].upper()} {signal.get('strategy', 'unknown')} @ ${signal['entry_price']:.2f}"
+            logger.error(error_msg)
+            logger.error(f"   Signal details: SL=${signal['stop_loss']:.2f}, Size={position_size:.4f}")
             if DASHBOARD_AVAILABLE:
-                add_error("Trade execution failed")
+                add_error(f"Trade failed: {signal['direction'].upper()} @ ${signal['entry_price']:.2f}")
+            if self.telegram_bot:
+                try:
+                    self.telegram_bot.send_message(f"🚨 {error_msg}")
+                except:
+                    pass
             return
         
         # Step 3: Save for AI learning
