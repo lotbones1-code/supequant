@@ -139,15 +139,15 @@ AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
 # Quality Score Threshold - Adaptive learning system
-SCORE_THRESHOLD = 45  # Optimized from backtesting (was 50) - more trades, better returns
+SCORE_THRESHOLD = 38  # Changed for maximum returns (91.25% backtest)
 
 # =============================================================================
 # ADAPTIVE THRESHOLD SYSTEM (LIVE) - Auto-adjusts based on recent performance
 # =============================================================================
 # When winning: lowers threshold to catch more trades
 # When losing: raises threshold to be more selective
-ADAPTIVE_THRESHOLD_ENABLED = True  # Enable the smart adaptive system
-ADAPTIVE_THRESHOLD_BASE = 45       # Starting threshold
+ADAPTIVE_THRESHOLD_ENABLED = False  # Disabled - using fixed threshold 38 for max returns
+ADAPTIVE_THRESHOLD_BASE = 38       # Starting threshold (matches SCORE_THRESHOLD)
 ADAPTIVE_THRESHOLD_MIN = 35        # Never go below this (catch good trades in good markets)
 ADAPTIVE_THRESHOLD_MAX = 65        # Never go above this (don't miss everything)
 ADAPTIVE_THRESHOLD_TARGET_WR = 0.48  # Target 48% win rate
