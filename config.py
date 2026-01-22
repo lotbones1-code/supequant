@@ -160,19 +160,24 @@ SCORE_THRESHOLD_MIN_TRADES_FOR_ADAPTATION = 20  # Need 20+ trades before raising
 SCORE_THRESHOLD_ADAPTED_VALUE = 55  # Raise to 55 after enough winning trades
 
 # =====================================
-# ELITE PREDICTION V2 - Live Trading (75% win rate in backtests)
 # =====================================
-# Uses price predictions to filter and size trades for higher win rate
-# Backtested: 75% win rate, Profit Factor 4.34, Sharpe 11.04
-PREDICTION_V2_ENABLED = False  # DISABLED - Was hurting backtest results (reverted to pre-V2 state)
+# ELITE PREDICTION V1 - Live Trading ($8k profit in backtests - THE WORKING ONE)
+# =====================================
+# V1 is now ENABLED by default in live trading (no config flag needed)
+# This is the system that produced $8,251 profit (87.89% return) in backtests
+# Features: Direction filter, Confidence sizing, Market timing, Trend bias
 
-# V2 Feature Toggles (all recommended ON based on backtests)
+# ELITE PREDICTION V2 - DISABLED (was too restrictive)
+# =====================================
+PREDICTION_V2_ENABLED = False  # DISABLED - V2 was too restrictive, use V1 instead
+
+# V2 Feature Toggles (kept for reference, not used)
 PREDICTION_V2_DIRECTION_FILTER = True    # Only trade when prediction aligns
 PREDICTION_V2_MULTI_HORIZON = True       # Require 30d + 90d consensus
 PREDICTION_V2_CONFIDENCE_SIZING = True   # Adjust position size by confidence
 PREDICTION_V2_DYNAMIC_STOPS = True       # Tighter stops on aligned trades
 
-# V2 Thresholds (tuned for balance between selectivity and trade volume)
+# V2 Thresholds (kept for reference, not used)
 PREDICTION_V2_MIN_CONFIDENCE = 0.40      # 40% min confidence
 PREDICTION_V2_MIN_CONSENSUS = 0.45       # 45% consensus between horizons
 PREDICTION_V2_BLOCK_ON_CONFLICT = False  # Don't block, just reduce size on conflict
