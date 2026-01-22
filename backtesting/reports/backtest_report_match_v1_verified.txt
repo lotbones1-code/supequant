@@ -1,0 +1,152 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-22 08:19:46
+Run Name: match_v1_verified
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $18,292.24
+  Total PnL: $+7,534.29
+  Total Return: +82.92%
+  CAGR: 1057.81%
+  Max Drawdown: 15.60%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 252
+  Signals Passed Filters: 44 (17.5%)
+  Trades Executed: 44
+  Wins: 23 | Losses: 21 | BE: 0
+  Win Rate: 52.27%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 4.88
+  Profit Factor: 2.58
+  Expectancy: $171.23/trade
+
+🎯 ASSESSMENT:
+  ✅ EXCELLENT SYSTEM - Strong candidate for live trading (after validation)
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $+8,292.24 (+82.92%)
+  CAGR: 1057.81%
+  Period: 90 days (0.25 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 4.88
+  Sortino Ratio: 7.05
+  Max Drawdown: 15.60%
+  Volatility: 1.87%
+  Calmar Ratio: 67.82
+
+📊 TRADE STATISTICS:
+  Total Trades: 44
+  Wins: 23 | Losses: 21 | BE: 0
+  Win Rate: 52.27%
+  Profit Factor: 2.58
+  Expectancy: $171.23 per trade
+  Kelly %: 32.02%
+  Avg Win: $534.77
+  Avg Loss: $-226.93
+  Largest Win: $1584.62
+  Largest Loss: $-562.75
+  Max Win Streak: 5
+  Max Loss Streak: 7
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.41
+  Avg MFE: 1.67%
+  Avg MAE: 1.07%
+  MFE/MAE Ratio: 1.56
+
+🎯 CONSISTENCY:
+  Trading Days: 31
+  Winning Days: 17
+  Losing Days: 14
+  Daily Win Rate: 54.84%
+  Avg Daily PnL: $+243.04
+  Best Day: $+3306.06
+  Worst Day: $-562.75
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 20.1 bars
+  Avg Win Duration: 27.0 bars
+  Avg Loss Duration: 12.4 bars
+  Exit Reasons: {'stop': 19, 'timeout': 8, 'target': 15, 'tp3_complete': 2}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 129 rejections (62.0%)
+  pattern_failure: 78 rejections (37.5%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (129 rejections)
+  ✅ Filter pass rate (17.5%) is reasonable
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  MEAN_REVERSION:
+    Trades: 41
+    Wins: 21 (51.2%)
+    PnL: $+4,697.64
+
+  BREAKOUT:
+    Trades: 3
+    Wins: 2 (66.7%)
+    PnL: $+2,836.66
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 29
+    Wins: 14 (48.3%)
+    PnL: $+5,267.39
+
+  SHORT:
+    Trades: 15
+    Wins: 9 (60.0%)
+    PnL: $+2,266.90
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+✅ EXCELLENT RISK-ADJUSTED RETURNS: Sharpe > 2.0
+   - Strong risk/return profile
+   - Verify results with forward testing
+
+✅ SYSTEM SHOWS PROMISE:
+   Next steps:
+   1. Run on different time periods (walk-forward)
+   2. Test on different market conditions
+   3. Paper trade for 30-90 days
+   4. Start live with reduced size (0.25% risk)
+
+
+================================================================================
+END OF REPORT
+================================================================================
