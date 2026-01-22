@@ -456,6 +456,7 @@ STRUCTURE_MIN_TOUCHES = 2          # Min touches to confirm level
 API_RATE_LIMIT_MS = 100
 MAX_RETRIES = 3
 RETRY_DELAY_MS = 1000
+API_TIMEOUT_SECONDS = 30  # Increased from 10 to handle slow OKX API responses
 
 # Caching
 ENABLE_CACHE = True
