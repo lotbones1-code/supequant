@@ -36,6 +36,14 @@ try:
 except ImportError:
     config = None
 
+# Import Claude agent for AI chat
+try:
+    from agents.claude_agent import ClaudeAgent
+    CLAUDE_AVAILABLE = True
+except ImportError:
+    CLAUDE_AVAILABLE = False
+    logger.warning("Claude agent not available for AI chat")
+
 
 # =============================================================================
 # DATA CLASSES
@@ -414,6 +422,15 @@ class EnhancedTelegramBot:
         self._last_hourly_update = None
         self._last_daily_report = None
         
+        # AI Chat agent (for answering questions)
+        self.claude_agent = None
+        if CLAUDE_AVAILABLE:
+            try:
+                self.claude_agent = ClaudeAgent(timeout_seconds=30.0)
+                logger.info("🤖 AI Chat enabled for Telegram bot")
+            except Exception as e:
+                logger.warning(f"Could not initialize Claude agent for chat: {e}")
+        
         # Natural language triggers (conversational)
         self.triggers = {
             'notes': self._show_notes_menu,
@@ -434,6 +451,32 @@ class EnhancedTelegramBot:
             'hey': self._show_main_menu,
         }
         
+        # Question patterns that trigger AI chat
+        self.ai_question_patterns = [
+            'why did we lose',
+            'why did we win',
+            'why did it lose',
+            'why did it win',
+            'why loss',
+            'why won',
+            'how is the market',
+            'market looking',
+            'market outlook',
+            'when will we trade',
+            'when is the next trade',
+            'trade coming',
+            'will we trade',
+            'should i trade',
+            'what happened',
+            'explain the trade',
+            'analyze',
+            'what do you think',
+            'is it good',
+            'is it bad',
+            'why no trades',
+            'no signals',
+        ]
+        
         # Command handlers (still supported)
         self.commands = {
             '/note': self._handle_note_command,
@@ -448,6 +491,8 @@ class EnhancedTelegramBot:
             '/clear': self._handle_clear_note,
             '/menu': self._show_main_menu,
             '/search': self._handle_search,
+            '/ask': self._handle_ask_command,
+            '/market': self._handle_market_question,
         }
         
         # Callback handlers (for inline buttons)
@@ -652,6 +697,13 @@ class EnhancedTelegramBot:
                     handler()
                 except Exception as e:
                     logger.error(f"Error handling trigger {trigger}: {e}")
+                return
+        
+        # Check if it's an AI question
+        text_lower = text.lower()
+        for pattern in self.ai_question_patterns:
+            if pattern in text_lower:
+                self._handle_ai_question(text)
                 return
         
         # If nothing matched, treat it as a potential note
