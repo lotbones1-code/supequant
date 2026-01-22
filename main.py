@@ -218,10 +218,27 @@ class EliteQuantSystem:
                     enable_market_timing=True,
                     enable_trend_bias=True
                 )
+                
+                # Configure V1 components to match backtest EXACTLY (same settings that made $8k)
+                if self.prediction_v1.direction_filter:
+                    self.prediction_v1.direction_filter.block_on_conflict = getattr(config, 'BACKTEST_PRED_BLOCK_ON_CONFLICT', False)
+                    self.prediction_v1.direction_filter.conflict_size_reduction = getattr(config, 'BACKTEST_PRED_CONFLICT_SIZE_REDUCTION', 0.5)
+                if self.prediction_v1.confidence_sizer:
+                    self.prediction_v1.confidence_sizer.min_confidence = getattr(config, 'BACKTEST_PRED_MIN_CONFIDENCE', 0.3)
+                    self.prediction_v1.confidence_sizer.max_multiplier = getattr(config, 'BACKTEST_PRED_MAX_MULTIPLIER', 1.8)
+                    self.prediction_v1.confidence_sizer.min_multiplier = getattr(config, 'BACKTEST_PRED_MIN_MULTIPLIER', 0.5)
+                if self.prediction_v1.market_timer:
+                    self.prediction_v1.market_timer.min_confidence_to_trade = getattr(config, 'BACKTEST_PRED_MIN_CONF_TO_TRADE', 0.35)
+                if self.prediction_v1.trend_bias:
+                    self.prediction_v1.trend_bias.strong_trend_threshold = getattr(config, 'BACKTEST_PRED_TREND_THRESHOLD', 0.05)
+                    self.prediction_v1.trend_bias.bias_multiplier = getattr(config, 'BACKTEST_PRED_BIAS_BOOST', 1.3)
+                    self.prediction_v1.trend_bias.anti_bias_multiplier = getattr(config, 'BACKTEST_PRED_ANTI_BIAS', 0.7)
+                
                 logger.info("🔮 Elite Prediction V1 ENABLED ($8k profit in backtests)")
-                logger.info("   Direction filter: ON")
-                logger.info("   Confidence sizing: ON")
-                logger.info("   Market timing: ON")
+                logger.info("   Direction filter: ON (conflict_reduction=0.5)")
+                logger.info("   Confidence sizing: ON (min=0.3, max_mult=1.8)")
+                logger.info("   Market timing: ON (min_conf=0.35)")
+                logger.info("   Trend bias: ON (threshold=0.05, boost=1.3x)")
             except Exception as e:
                 logger.warning(f"⚠️ Elite Prediction V1 failed to initialize: {e}")
                 self.prediction_v1 = None
