@@ -1,94 +1,60 @@
-# Claude Agent Quick Start Guide
+# 🚀 Quick Start Guide for Claude AI
 
-## ✅ What's Fixed
+**Repository:** `https://github.com/lotbones1-code/supequant.git`  
+**Branch:** `main`  
+**Status:** ✅ Latest live system committed and pushed
 
-All the problems you were having are now solved:
+---
 
-1. ✅ **No more random crashes** - Circuit breaker prevents failures
-2. ✅ **No more blocking all trades** - Auto-disable protection
-3. ✅ **No more API timeouts** - Built-in timeout handling
-4. ✅ **Fail-safe by default** - Trades continue even if Claude fails
+## ✅ VERIFICATION (Run First)
 
-## 🚀 Quick Configuration
+Before making any changes, verify you're on the correct system:
 
-### Option 1: Use Defaults (Recommended)
+```bash
+# Check these 3 things:
+1. grep "USE_PRODUCTION_MANAGER = True" main.py
+2. ls execution/production_manager.py
+3. ls dashboard/app.py
 
-Just use the defaults - everything is configured for safety:
-
-```python
-# In config.py - these are already set:
-CLAUDE_GATING_ENABLED = True
-CLAUDE_FAIL_OPEN = True  # ✅ Approves trades if Claude fails
-CLAUDE_TIMEOUT_SECONDS = 10.0
+# If all exist → You're on the correct system ✅
 ```
 
-**Result**: Claude helps when it can, but never blocks trading.
+---
 
-### Option 2: Disable Claude Completely
+## 📋 KEY SYSTEM MARKERS
 
-If you want to trade without Claude:
+- **Main Entry:** `main.py` → `EliteQuantSystem` class
+- **Production Manager:** `USE_PRODUCTION_MANAGER = True` (line 71)
+- **Dashboard:** `dashboard/app.py` (port 8080)
+- **7 Strategies:** All in `strategy/` directory
+- **12+ Filters:** All in `filters/` directory
+- **Analytics:** Phase 1.5 modules in `utils/`
 
-```python
-# In config.py
-CLAUDE_GATING_ENABLED = False
-```
+---
 
-### Option 3: Strict Mode (Not Recommended)
+## 🚨 DO NOT MODIFY
 
-Only use if you want Claude to block trades on errors:
+1. `execution/production_manager.py` - Working perfectly
+2. `main.py` trade execution flow - Only add hooks
+3. `risk/risk_manager.py` - Core risk logic
+4. `data_feed/okx_client.py` - API client (except config)
 
-```python
-# In config.py
-CLAUDE_FAIL_OPEN = False  # ⚠️ Rejects trades if Claude fails
-```
+---
 
-## 📊 Monitoring
+## 📖 FULL DOCUMENTATION
 
-Check Claude status in logs:
+- **System Details:** See `SYSTEM_IDENTIFICATION.md`
+- **Features:** See `IMPLEMENTATION_ROADMAP.md`
+- **Architecture:** See `README.md`
 
-```
-🤖 Claude AI Statistics:
-   Rules learned: 5
-   Trades blocked: 12
-   Approval rate: 85.2%
-   Success rate: 65.0% ✅
-   Error rate: 2.1% ✅
-```
+---
 
-## 🔧 Troubleshooting
+## 🔧 RECENT FIXES
 
-### "Circuit breaker is OPEN"
+- ✅ API timeout increased to 30 seconds (was 10s)
+- ✅ System identification guide added
+- ✅ All changes committed and pushed to GitHub
 
-**What it means**: Too many API failures  
-**What happens**: Trades are approved automatically (fail-open)  
-**Fix**: Check API key, wait 60 seconds, or restart bot
+---
 
-### "Auto-disabling Claude gating"
-
-**What it means**: Claude was blocking too many trades  
-**What happens**: Claude disables itself, trading continues  
-**Fix**: Review `claude_rejection_rules.json` and remove strict rules
-
-### High Error Rate
-
-**What it means**: Many API calls failing  
-**What happens**: Trades still approved (fail-open)  
-**Fix**: Check Anthropic API status, verify API key
-
-## 🎯 Key Points
-
-1. **Fail-Open is Default**: Trades are approved if Claude fails ✅
-2. **Auto-Disable Protection**: Claude won't block all your trades ✅
-3. **Circuit Breaker**: Prevents cascading failures ✅
-4. **Easy to Disable**: Set `CLAUDE_GATING_ENABLED = False` ✅
-
-## 📝 Files Changed
-
-- `agents/claude_agent.py` - Added circuit breaker, timeout, fail-open
-- `agents/claude_autonomous_system.py` - Added safeguards, auto-disable
-- `main.py` - Improved error handling
-- `config.py` - Added Claude configuration options
-
-## 🚀 You're Ready!
-
-Your Claude agent is now **production-ready** and **won't cause problems**. Just run your bot normally - everything is configured for safety!
+**For detailed system information, see `SYSTEM_IDENTIFICATION.md`**

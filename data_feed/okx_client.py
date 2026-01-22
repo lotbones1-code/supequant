@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Any
 import requests
 from config import (
     OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSPHRASE, OKX_SIMULATED, OKX_API_DOMAIN,
-    API_RATE_LIMIT_MS, MAX_RETRIES, RETRY_DELAY_MS
+    API_RATE_LIMIT_MS, MAX_RETRIES, RETRY_DELAY_MS, API_TIMEOUT_SECONDS
 )
 import logging
 
@@ -132,9 +132,9 @@ class OKXClient:
                     headers = {'Content-Type': 'application/json'}
 
                 if method == 'GET':
-                    response = requests.get(url, params=params, headers=headers, timeout=10)
+                    response = requests.get(url, params=params, headers=headers, timeout=API_TIMEOUT_SECONDS)
                 elif method == 'POST':
-                    response = requests.post(url, data=request_body, headers=headers, timeout=10)
+                    response = requests.post(url, data=request_body, headers=headers, timeout=API_TIMEOUT_SECONDS)
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
