@@ -756,7 +756,7 @@ Manual restart required.
                     'type': 'approved',
                     'direction': signal['direction'],
                     'strategy': signal['strategy'],
-                    'reason': 'All filters + Claude AI + V2 passed'
+                    'reason': 'All filters + Claude AI + V1 passed'
                 })
 
             # Step 8: Calculate position size (with growth optimization if enabled)
@@ -778,11 +778,11 @@ Manual restart required.
                 confidence_score=confidence_score
             )
             
-            # Apply V2 prediction multiplier to position size
+            # Apply V1 prediction multiplier to position size
             if prediction_multiplier != 1.0:
                 original_size = position_size
                 position_size = position_size * prediction_multiplier
-                logger.info(f"🔮 V2 Position adjusted: {original_size:.4f} → {position_size:.4f} ({prediction_multiplier:.2f}x)")
+                logger.info(f"🔮 V1 Position adjusted: {original_size:.4f} → {position_size:.4f} ({prediction_multiplier:.2f}x)")
             
             # Get aggressive TP targets if growth mode enabled
             aggressive_tps = self.risk_manager.get_aggressive_tp_targets(signal)
