@@ -712,12 +712,18 @@ BACKTEST_PRICE_PREDICTION = True  # Enable price prediction during backtests
 BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1y)
 
 # =============================================================================
-# PREDICTION-GUIDED TRADING V1 - Basic version (backtest only)
+# ⚠️ VERIFIED V1 CONFIGURATION (87.89% RETURN) - DO NOT CHANGE ⚠️
 # =============================================================================
-# V1 features - more permissive settings
-BACKTEST_PREDICTION_GUIDED = True  # V1 enabled - this got $7,980 profit (85% return)
+# This exact configuration produced:
+# - 87.89% return ($8,251 profit)
+# - 43 trades in 86 days (Oct 15, 2025 → Jan 20, 2026)
+# - 53.49% win rate, 13.64% max drawdown
+# - Verified report: backtesting/reports/backtest_report_verify_v1_prediction.txt
+# - Full docs: VERIFIED_CONFIG.md
+# =============================================================================
+BACKTEST_PREDICTION_GUIDED = True  # V1 enabled
 
-# V1 Settings (kept for reference)
+# V1 Settings (VERIFIED - DO NOT MODIFY)
 BACKTEST_PRED_DIRECTION_FILTER = True
 BACKTEST_PRED_BLOCK_ON_CONFLICT = False
 BACKTEST_PRED_CONFLICT_SIZE_REDUCTION = 0.5
