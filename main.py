@@ -237,7 +237,7 @@ class EliteQuantSystem:
             )
             logger.info("✅ Production Order Manager enabled (auto-cleanup, smart TPs, trade journal, notifications)")
             
-            # Set up callback for adaptive threshold learning
+            # Set up callback for adaptive threshold learning and dashboard update
             def on_trade_complete(trade_data):
                 if self.adaptive_threshold:
                     trade_result = TradeResult(
@@ -257,6 +257,21 @@ class EliteQuantSystem:
                         self.telegram_bot.send_trade_closed(trade_data)
                     except:
                         pass
+                
+                # Update dashboard with final trade data (FIXES THE WIN/LOSS BUG!)
+                if DASHBOARD_AVAILABLE:
+                    try:
+                        add_trade({
+                            'symbol': config.TRADING_SYMBOL,
+                            'side': trade_data.get('direction', 'unknown'),
+                            'entry_price': trade_data.get('entry_price', 0),
+                            'exit_price': trade_data.get('exit_price', 0),
+                            'pnl': trade_data.get('pnl', 0),  # Final PnL - this fixes the bug!
+                            'strategy': trade_data.get('strategy', 'unknown')
+                        })
+                        logger.info(f"📊 Dashboard updated with final PnL: ${trade_data.get('pnl', 0):.2f}")
+                    except Exception as e:
+                        logger.warning(f"Failed to update dashboard: {e}")
             
             self.production_manager._on_trade_close = on_trade_complete
 
@@ -830,7 +845,7 @@ Manual restart required.
 
     def _update_predictions(self, market_state: Dict):
         """
-        Update price predictions for V2 system.
+        Update price predictions for V1 system.
         
         Only updates once per hour to avoid excessive computation.
         Uses historical prices from market state.
@@ -873,8 +888,8 @@ Manual restart required.
                 )
                 predictions.append(prediction)
             
-            # Update V2 system with new predictions
-            self.prediction_v2.update_predictions(predictions)
+            # Update V1 system with new predictions
+            self.prediction_v1.update_predictions(predictions)
             self.last_prediction_update = now
             
             # Log prediction summary
