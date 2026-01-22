@@ -1258,16 +1258,457 @@ Type a word or #tag to search:
 • "remind" - Set reminders
 • "menu" - Main menu
 
+<b>Ask Me Anything:</b>
+• "Why did we lose?"
+• "Why did we win?"
+• "How is the market?"
+• "When is the next trade?"
+• "Analyze the market"
+
 <b>Commands (Power Users):</b>
 /note text - Quick save
 /notes - List all
 /remind 2h text - Set reminder
-/clear ID - Delete note
-/search word - Find notes
+/ask question - Ask AI anything
+/market - Market analysis
 /status /stats /pnl /streak
 
 <i>Boss Shamil, I'm always here! 🚀</i>
         """.strip())
+    
+    # =========================================================================
+    # AI CHAT HANDLERS
+    # =========================================================================
+    
+    def _handle_ai_question(self, question: str):
+        """Handle natural language AI questions"""
+        question_lower = question.lower()
+        
+        # Determine question type and route accordingly
+        if any(w in question_lower for w in ['why did we lose', 'why loss', 'why did it lose']):
+            self._analyze_last_trade('loss', question)
+        elif any(w in question_lower for w in ['why did we win', 'why won', 'why did it win']):
+            self._analyze_last_trade('win', question)
+        elif any(w in question_lower for w in ['market', 'outlook', 'looking']):
+            self._get_market_outlook(question)
+        elif any(w in question_lower for w in ['next trade', 'trade coming', 'when will', 'will we trade', 'no trades', 'no signals']):
+            self._get_trade_forecast(question)
+        elif any(w in question_lower for w in ['what happened', 'explain']):
+            self._analyze_last_trade(None, question)
+        else:
+            # Generic AI question
+            self._ask_ai_generic(question)
+    
+    def _handle_ask_command(self, args: str):
+        """Handle /ask command"""
+        if not args:
+            self.send_message("""
+🤖 <b>ASK ME ANYTHING</b>
+
+Just type your question, for example:
+• Why did we lose the last trade?
+• How is the market looking?
+• When will we get a trade?
+• Analyze my performance
+            """.strip())
+            return
+        
+        self._ask_ai_generic(args)
+    
+    def _handle_market_question(self, args: str = None):
+        """Handle /market command"""
+        self._get_market_outlook(args or "How is the market looking?")
+    
+    def _analyze_last_trade(self, trade_type: str = None, question: str = ""):
+        """Analyze why the last trade won or lost"""
+        self.send_message("🔍 <i>Analyzing... one moment Boss</i>")
+        
+        # Get recent trades
+        trades = self._get_recent_trades(limit=5)
+        
+        if not trades:
+            self.send_message("""
+📊 <b>NO RECENT TRADES</b>
+
+Boss, I don't see any recent trades to analyze.
+The system is scanning for opportunities.
+            """.strip())
+            return
+        
+        # Filter by type if specified
+        if trade_type == 'loss':
+            filtered = [t for t in trades if t.get('pnl_abs', 0) < 0]
+            if not filtered:
+                self.send_message("✅ No recent losses to analyze, Boss!")
+                return
+            trade_to_analyze = filtered[0]
+        elif trade_type == 'win':
+            filtered = [t for t in trades if t.get('pnl_abs', 0) > 0]
+            if not filtered:
+                self.send_message("📊 No recent wins to analyze yet.")
+                return
+            trade_to_analyze = filtered[0]
+        else:
+            trade_to_analyze = trades[0]
+        
+        # Build trade context
+        direction = trade_to_analyze.get('direction', 'unknown').upper()
+        entry = trade_to_analyze.get('entry_price', 0)
+        exit_price = trade_to_analyze.get('exit_price', 0)
+        pnl = trade_to_analyze.get('pnl_abs', 0)
+        reason = trade_to_analyze.get('close_reason', 'unknown')
+        strategy = trade_to_analyze.get('strategy', 'unknown')
+        
+        result_emoji = "💰" if pnl > 0 else "📉"
+        result_text = "WIN" if pnl > 0 else "LOSS"
+        
+        # Try to get AI analysis
+        if self.claude_agent:
+            try:
+                analysis = self._get_ai_trade_analysis(trade_to_analyze, question)
+                
+                self.send_message(f"""
+{result_emoji} <b>TRADE ANALYSIS - {result_text}</b>
+
+<b>Trade Details:</b>
+• Direction: {direction}
+• Entry: ${entry:.2f}
+• Exit: ${exit_price:.2f}
+• PnL: ${pnl:+.2f}
+• Reason: {reason}
+• Strategy: {strategy}
+
+<b>🤖 AI Analysis:</b>
+{analysis}
+                """.strip())
+            except Exception as e:
+                logger.error(f"AI analysis failed: {e}")
+                self._send_basic_trade_analysis(trade_to_analyze)
+        else:
+            self._send_basic_trade_analysis(trade_to_analyze)
+    
+    def _send_basic_trade_analysis(self, trade: Dict):
+        """Send basic trade analysis without AI"""
+        direction = trade.get('direction', 'unknown').upper()
+        entry = trade.get('entry_price', 0)
+        exit_price = trade.get('exit_price', 0)
+        pnl = trade.get('pnl_abs', 0)
+        reason = trade.get('close_reason', 'unknown')
+        
+        result_emoji = "💰" if pnl > 0 else "📉"
+        
+        if pnl > 0:
+            msg = "The trade hit take profit! Great setup."
+        elif reason == 'stop_loss':
+            msg = "Stop loss was hit. Risk was managed properly - that's the discipline!"
+        else:
+            msg = f"Trade closed due to: {reason}"
+        
+        self.send_message(f"""
+{result_emoji} <b>TRADE ANALYSIS</b>
+
+<b>Trade:</b> {direction}
+<b>Entry:</b> ${entry:.2f} → Exit: ${exit_price:.2f}
+<b>PnL:</b> ${pnl:+.2f}
+<b>Closed:</b> {reason}
+
+<b>Analysis:</b>
+{msg}
+        """.strip())
+    
+    def _get_market_outlook(self, question: str = ""):
+        """Get AI market analysis"""
+        self.send_message("🔍 <i>Analyzing market conditions...</i>")
+        
+        # Get current market data
+        market_data = self._get_current_market_data()
+        
+        if self.claude_agent:
+            try:
+                analysis = self._get_ai_market_analysis(market_data, question)
+                
+                self.send_message(f"""
+📊 <b>MARKET ANALYSIS</b>
+
+{analysis}
+
+<i>This is AI-generated analysis. Always verify before trading.</i>
+                """.strip())
+            except Exception as e:
+                logger.error(f"AI market analysis failed: {e}")
+                self._send_basic_market_outlook(market_data)
+        else:
+            self._send_basic_market_outlook(market_data)
+    
+    def _send_basic_market_outlook(self, market_data: Dict):
+        """Send basic market outlook without AI"""
+        trend = market_data.get('trend', 'unknown')
+        volatility = market_data.get('volatility', 'medium')
+        
+        self.send_message(f"""
+📊 <b>MARKET OUTLOOK</b>
+
+<b>Trend:</b> {trend.upper()}
+<b>Volatility:</b> {volatility.upper()}
+
+<i>For detailed AI analysis, ensure Claude API is configured.</i>
+        """.strip())
+    
+    def _get_trade_forecast(self, question: str = ""):
+        """Forecast when next trade might happen"""
+        self.send_message("🔮 <i>Checking trading conditions...</i>")
+        
+        # Get stats
+        today = self.performance.get_today_stats()
+        all_time = self.performance.get_all_time_stats()
+        market_data = self._get_current_market_data()
+        
+        if self.claude_agent:
+            try:
+                forecast = self._get_ai_trade_forecast(today, all_time, market_data, question)
+                
+                self.send_message(f"""
+🔮 <b>TRADE FORECAST</b>
+
+{forecast}
+
+<b>Current Status:</b>
+• Trades Today: {today['trades']}
+• Win Rate: {today['win_rate']:.0f}%
+• System: ✅ Scanning
+
+<i>The system trades when high-quality setups appear. Patience pays!</i>
+                """.strip())
+            except Exception as e:
+                logger.error(f"AI forecast failed: {e}")
+                self._send_basic_forecast(today, market_data)
+        else:
+            self._send_basic_forecast(today, market_data)
+    
+    def _send_basic_forecast(self, today: Dict, market_data: Dict):
+        """Send basic forecast without AI"""
+        trend = market_data.get('trend', 'unknown')
+        
+        self.send_message(f"""
+🔮 <b>TRADE FORECAST</b>
+
+<b>Status:</b> System actively scanning
+<b>Trades Today:</b> {today['trades']}
+<b>Market Trend:</b> {trend}
+
+The system waits for high-quality setups. It uses:
+• V1 Prediction System (the profitable one!)
+• 4H HTF Filter
+• Adaptive Thresholds
+• Multiple strategy confirmation
+
+<i>Stay patient Boss - quality over quantity!</i>
+        """.strip())
+    
+    def _ask_ai_generic(self, question: str):
+        """Handle generic AI questions"""
+        if not self.claude_agent:
+            self.send_message("""
+🤖 <b>AI CHAT UNAVAILABLE</b>
+
+Claude API is not configured. To enable:
+1. Set ANTHROPIC_API_KEY in .env
+2. Restart the bot
+
+<i>Basic commands still work: /status, /stats, /pnl</i>
+            """.strip())
+            return
+        
+        self.send_message("🤔 <i>Thinking...</i>")
+        
+        try:
+            # Get context
+            today = self.performance.get_today_stats()
+            streak = self.performance.get_streak()
+            recent_trades = self._get_recent_trades(limit=3)
+            
+            context = f"""
+Trading System Context:
+- Today's trades: {today['trades']} ({today['wins']}W/{today['losses']}L)
+- Today's PnL: ${today['pnl']:.2f}
+- Win rate: {today['win_rate']:.0f}%
+- Current streak: {streak['count']} {streak['type']}
+- Recent trades: {len(recent_trades)} in history
+- Mode: {'PAPER' if getattr(config, 'OKX_SIMULATED', True) else 'LIVE'}
+- Using V1 Prediction System (the $8k profit system)
+"""
+            
+            system_prompt = """You are Boss Shamil's personal trading AI assistant. 
+You help him understand his SOL-USDT perpetual futures trading bot.
+Be concise, supportive, and call him "Boss".
+Focus on actionable insights and keep responses under 150 words."""
+            
+            messages = [
+                {'role': 'user', 'content': f"{context}\n\nBoss Shamil asks: {question}"}
+            ]
+            
+            response = self.claude_agent._call_claude(messages, system=system_prompt, max_tokens=500)
+            
+            self.send_message(f"""
+🤖 <b>AI RESPONSE</b>
+
+{response['content']}
+            """.strip())
+            
+        except Exception as e:
+            logger.error(f"Generic AI question failed: {e}")
+            self.send_message(f"""
+❌ <b>AI ERROR</b>
+
+Couldn't process that question. Try:
+• "Why did we lose?"
+• "How is the market?"
+• "When is the next trade?"
+
+Or use /status for a quick update.
+            """.strip())
+    
+    def _get_ai_trade_analysis(self, trade: Dict, question: str) -> str:
+        """Get AI analysis of a specific trade"""
+        direction = trade.get('direction', 'unknown')
+        entry = trade.get('entry_price', 0)
+        exit_price = trade.get('exit_price', 0)
+        pnl = trade.get('pnl_abs', 0)
+        reason = trade.get('close_reason', 'unknown')
+        strategy = trade.get('strategy', 'unknown')
+        
+        prompt = f"""Analyze this trade for Boss Shamil:
+- Direction: {direction}
+- Entry: ${entry:.2f}
+- Exit: ${exit_price:.2f}
+- PnL: ${pnl:+.2f}
+- Close reason: {reason}
+- Strategy: {strategy}
+
+Question: {question if question else 'Why did this trade result in a ' + ('win' if pnl > 0 else 'loss') + '?'}
+
+Provide a brief (2-3 sentences) analysis focusing on:
+1. What happened
+2. Why it happened
+3. What to learn from it
+
+Be encouraging and supportive. Call him Boss."""
+        
+        system = "You are a supportive trading coach analyzing trades. Be concise and actionable."
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self.claude_agent._call_claude(messages, system=system, max_tokens=300)
+        return response['content']
+    
+    def _get_ai_market_analysis(self, market_data: Dict, question: str) -> str:
+        """Get AI market analysis"""
+        prompt = f"""Analyze current market conditions for SOL-USDT:
+- Trend: {market_data.get('trend', 'unknown')}
+- Volatility: {market_data.get('volatility', 'unknown')}
+- Recent price action: {'bullish' if market_data.get('bullish', False) else 'bearish' if market_data.get('bearish', False) else 'mixed'}
+
+Question: {question if question else 'How is the market looking?'}
+
+Provide a brief market outlook (3-4 sentences) focusing on:
+1. Current market condition
+2. What to expect
+3. Trading recommendation
+
+Call him Boss. Be direct and actionable."""
+        
+        system = "You are a market analyst providing concise market updates. Focus on actionable insights."
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self.claude_agent._call_claude(messages, system=system, max_tokens=300)
+        return response['content']
+    
+    def _get_ai_trade_forecast(self, today: Dict, all_time: Dict, market_data: Dict, question: str) -> str:
+        """Get AI trade forecast"""
+        prompt = f"""Boss Shamil wants to know about upcoming trades.
+
+Current status:
+- Trades today: {today['trades']}
+- Today's win rate: {today['win_rate']:.0f}%
+- All-time trades: {all_time['trades']}
+- All-time win rate: {all_time['win_rate']:.0f}%
+- Market trend: {market_data.get('trend', 'unknown')}
+- System: V1 Prediction (the profitable one with $8k backtest profit)
+
+Question: {question}
+
+Provide a brief forecast (2-3 sentences) about:
+1. When a trade might come
+2. What the system is looking for
+3. Encouragement to be patient
+
+Be supportive and call him Boss."""
+        
+        system = "You are a trading assistant helping set expectations about trade timing. Be encouraging but realistic."
+        messages = [{'role': 'user', 'content': prompt}]
+        
+        response = self.claude_agent._call_claude(messages, system=system, max_tokens=250)
+        return response['content']
+    
+    def _get_recent_trades(self, limit: int = 5) -> List[Dict]:
+        """Get recent trades from trade log"""
+        trades = []
+        
+        # Try to read from paper trades log
+        trades_path = Path(os.path.join(os.path.dirname(__file__), '..', 'logs', 'paper_trades.jsonl'))
+        if trades_path.exists():
+            try:
+                with open(trades_path, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            trades.append(json.loads(line))
+            except Exception as e:
+                logger.error(f"Error reading trades: {e}")
+        
+        # Try trade journal
+        journal_path = Path(os.path.join(os.path.dirname(__file__), '..', 'logs', 'trade_journal.jsonl'))
+        if journal_path.exists():
+            try:
+                with open(journal_path, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            trades.append(json.loads(line))
+            except Exception as e:
+                logger.error(f"Error reading trade journal: {e}")
+        
+        # Sort by timestamp and return most recent
+        trades.sort(key=lambda t: t.get('timestamp_close', t.get('_logged_at', '')), reverse=True)
+        return trades[:limit]
+    
+    def _get_current_market_data(self) -> Dict:
+        """Get current market data for analysis"""
+        # Basic market data - in a real implementation, this would
+        # pull from the market data feed
+        try:
+            # Try to get from live system if available
+            import sys
+            if 'main' in sys.modules:
+                main_module = sys.modules['main']
+                if hasattr(main_module, 'elite_system') and main_module.elite_system:
+                    market_state = main_module.elite_system.market_feed.get_market_state()
+                    if market_state:
+                        tf_15m = market_state.get('timeframes', {}).get('15m', {})
+                        trend_data = tf_15m.get('trend', {})
+                        return {
+                            'trend': trend_data.get('trend_direction', 'unknown'),
+                            'volatility': 'high' if trend_data.get('trend_strength', 0) > 0.5 else 'medium',
+                            'bullish': trend_data.get('trend_direction') == 'bullish',
+                            'bearish': trend_data.get('trend_direction') == 'bearish'
+                        }
+        except Exception as e:
+            logger.debug(f"Could not get live market data: {e}")
+        
+        # Return default data
+        return {
+            'trend': 'scanning',
+            'volatility': 'medium',
+            'bullish': False,
+            'bearish': False
+        }
     
     # =========================================================================
     # SCHEDULED TASKS
