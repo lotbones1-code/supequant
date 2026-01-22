@@ -294,7 +294,7 @@ class EliteQuantSystem:
                 if DASHBOARD_AVAILABLE:
                     try:
                         add_trade({
-                            'symbol': config.SPOT_SYMBOL,
+                            'symbol': config.TRADING_SYMBOL,
                             'side': trade_data.get('direction', 'unknown'),
                             'entry_price': trade_data.get('entry_price', 0),
                             'exit_price': trade_data.get('exit_price', 0),
@@ -406,7 +406,7 @@ class EliteQuantSystem:
 
         logger.info("\n" + "="*60)
         logger.info("🎯 ELITE QUANT SYSTEM STARTED")
-        logger.info(f"Symbol: {config.SPOT_SYMBOL}")
+        logger.info(f"Symbol: {config.TRADING_SYMBOL}")
         logger.info(f"Mode: {'SIMULATED' if config.OKX_SIMULATED else 'LIVE'}")
         logger.info(f"Max Daily Trades: {config.MAX_DAILY_TRADES}")
         logger.info(f"Risk Per Trade: {config.MAX_RISK_PER_TRADE*100}%")
@@ -522,7 +522,7 @@ Manual restart required.
             # Step 2: Fetch market data for SOL (trading) and BTC (reference)
             logger.info(f"📊 Fetching market data...")
             sol_market_state = self.market_data.get_market_state(
-                config.SPOT_SYMBOL,
+                config.TRADING_SYMBOL,
                 self.timeframes
             )
             
@@ -983,7 +983,7 @@ Manual restart required.
         - Smart TP with virtual fallback
         - Background monitoring
         """
-        symbol = config.SPOT_SYMBOL  # Use spot for OKX US compliance
+        symbol = config.TRADING_SYMBOL  # Use spot for OKX US compliance
         
         # Step 1: Prepare account (cleanup)
         logger.info("\n🧹 Preparing account for trade...")
@@ -1108,7 +1108,7 @@ Manual restart required.
         # Update dashboard
         if DASHBOARD_AVAILABLE:
             add_trade({
-                'symbol': config.SPOT_SYMBOL,
+                'symbol': config.TRADING_SYMBOL,
                 'side': signal['direction'],
                 'entry_price': signal['entry_price'],
                 'exit_price': 0,
@@ -1128,7 +1128,7 @@ Manual restart required.
                 update_positions([])
             return
 
-        current_price = self.market_data.get_current_price(config.SPOT_SYMBOL)
+        current_price = self.market_data.get_current_price(config.TRADING_SYMBOL)
         if not current_price:
             return
 
@@ -1149,7 +1149,7 @@ Manual restart required.
             # Format for dashboard
             if DASHBOARD_AVAILABLE:
                 dashboard_positions.append({
-                    'symbol': config.SPOT_SYMBOL,
+                    'symbol': config.TRADING_SYMBOL,
                     'side': position.get('direction', 'long'),
                     'size': position.get('size', 0),
                     'entry_price': position.get('entry_price', 0),

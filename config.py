@@ -34,7 +34,7 @@ REFERENCE_SYMBOL = "BTC-USDT-SWAP"  # Reference symbol (Bitcoin for correlation)
 TRADING_MODE = "perp"  # 'spot' or 'perp'
 
 # Fallback for OKX US compliance (error 51155 blocks perpetuals)
-SPOT_FALLBACK_ENABLED = True  # If perpetuals fail due to compliance, try spot
+SPOT_FALLBACK_ENABLED = False  # DISABLED - Perpetual only. If perpetual fails, stop and report.
 SPOT_SYMBOL = "SOL-USDT"  # Spot trading symbol for fallback
 MAX_DAILY_TRADES = 10  # Increased from 5
 TRADE_INTERVAL_MINUTES = 30  # Reduced from 60 - trade more often

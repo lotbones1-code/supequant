@@ -147,70 +147,82 @@ class ProductionOrderManager:
         journal_status = "enabled" if trade_journal else "disabled"
         notifier_status = "enabled" if notifier else "disabled"
         logger.info(f"✅ ProductionOrderManager initialized (journal: {journal_status}, notifications: {notifier_status})")
-    
+
+    def _is_perpetual(self, symbol: str) -> bool:
+        """Check if symbol is a perpetual contract (ends with -SWAP)"""
+        return symbol.upper().endswith('-SWAP')
+
     # =========================================================================
     # 1. PRE-TRADE CLEANUP
     # =========================================================================
-    
+
     def prepare_for_trade(self, symbol: str = 'SOL-USDT') -> bool:
         """
         Prepare account for a fresh trade by cleaning up any existing state.
-        
+
+        For PERPETUAL (-SWAP): Skip SOL cleanup, only cancel orders
+        For SPOT: Full cleanup including selling SOL
+
         Steps:
         1. Cancel all open orders for the symbol
-        2. Sell any existing SOL at market
+        2. Sell any existing SOL at market (SPOT only)
         3. Wait for settlement
         4. Verify clean state
-        
+
         Returns:
             True if account is ready for trading
         """
+        is_perp = self._is_perpetual(symbol)
         logger.info("\n" + "="*60)
-        logger.info("🧹 PREPARING ACCOUNT FOR TRADE")
+        logger.info(f"🧹 PREPARING ACCOUNT FOR TRADE ({'PERPETUAL' if is_perp else 'SPOT'})")
         logger.info("="*60)
-        
+
         try:
             # Step 1: Cancel all open orders
             logger.info("\n📋 Step 1: Canceling open orders...")
             cancelled = self._cancel_all_orders(symbol)
             logger.info(f"   Cancelled {cancelled} order(s)")
-            
-            # Step 2: Sell any existing SOL
-            logger.info("\n💰 Step 2: Checking for existing SOL...")
-            sol_balance = self.client.get_currency_balance('SOL')
-            
-            if sol_balance and sol_balance > 0.001:  # More than dust
-                logger.info(f"   Found {sol_balance:.4f} SOL - selling at market...")
-                sell_result = self._sell_all_sol(symbol, sol_balance)
-                if sell_result:
-                    logger.info(f"   ✅ Sold {sol_balance:.4f} SOL")
+
+            # Step 2: Sell any existing SOL (SPOT only - perpetuals use margin)
+            if not is_perp:
+                logger.info("\n💰 Step 2: Checking for existing SOL (SPOT mode)...")
+                sol_balance = self.client.get_currency_balance('SOL')
+
+                if sol_balance and sol_balance > 0.001:  # More than dust
+                    logger.info(f"   Found {sol_balance:.4f} SOL - selling at market...")
+                    sell_result = self._sell_all_sol(symbol, sol_balance)
+                    if sell_result:
+                        logger.info(f"   ✅ Sold {sol_balance:.4f} SOL")
+                    else:
+                        logger.warning(f"   ⚠️  Could not sell SOL - may have open orders")
                 else:
-                    logger.warning(f"   ⚠️  Could not sell SOL - may have open orders")
+                    logger.info(f"   No SOL to sell (balance: {sol_balance or 0:.4f})")
             else:
-                logger.info(f"   No SOL to sell (balance: {sol_balance or 0:.4f})")
-            
+                logger.info("\n💰 Step 2: Skipping SOL cleanup (PERPETUAL uses margin)")
+
             # Step 3: Wait for settlement
             logger.info("\n⏳ Step 3: Waiting for settlement...")
             time.sleep(2)
-            
+
             # Step 4: Verify clean state
             logger.info("\n✅ Step 4: Verifying clean state...")
-            
+
             # Check no open orders
             open_orders = self.client.get_open_orders(symbol)
             if open_orders and len(open_orders) > 0:
                 logger.warning(f"   ⚠️  Still have {len(open_orders)} open orders")
                 return False
             logger.info("   ✓ No open orders")
-            
-            # Check no SOL balance
-            sol_balance = self.client.get_currency_balance('SOL')
-            if sol_balance and sol_balance > 0.001:
-                logger.warning(f"   ⚠️  Still have {sol_balance:.4f} SOL")
-                # Not a blocker, but note it
-            else:
-                logger.info("   ✓ No SOL balance")
-            
+
+            # Check SOL balance (SPOT only)
+            if not is_perp:
+                sol_balance = self.client.get_currency_balance('SOL')
+                if sol_balance and sol_balance > 0.001:
+                    logger.warning(f"   ⚠️  Still have {sol_balance:.4f} SOL")
+                    # Not a blocker, but note it
+                else:
+                    logger.info("   ✓ No SOL balance")
+
             # Check USDT available
             usdt_balance = self.client.get_trading_balance('USDT')
             if not usdt_balance or usdt_balance < 1:
@@ -253,8 +265,7 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(amount, 4)),
-                tdMode='cash'
-            )
+                            )
             return result is not None
         except Exception as e:
             logger.error(f"Error selling SOL: {e}")
@@ -343,10 +354,26 @@ class ProductionOrderManager:
             # Calculate actual position size based on direction and available balance
             current_price = signal['entry_price']
             direction = signal['direction'].lower()
+            is_perp = self._is_perpetual(symbol)
 
-            if direction == 'long':
-                # LONG: Use USDT to buy SOL
-                usdt_balance = self.client.get_trading_balance('USDT')
+            # Get USDT balance (used for both perpetual LONG/SHORT and spot LONG)
+            usdt_balance = self.client.get_trading_balance('USDT')
+
+            if is_perp:
+                # PERPETUAL: Both LONG and SHORT use USDT margin
+                if not usdt_balance or usdt_balance < 1:
+                    logger.error(f"❌ Insufficient USDT margin for {direction.upper()} perpetual: ${usdt_balance or 0:.2f}")
+                    position.state = PositionState.FAILED
+                    if self.on_trade_failed:
+                        self.on_trade_failed(direction=direction, reason=f'Insufficient USDT margin: ${usdt_balance or 0:.2f}')
+                    return None
+
+                # For perpetual: position_size = (USDT * 0.95) / price
+                actual_size = (usdt_balance * 0.95) / current_price
+                logger.info(f"💰 {direction.upper()} perpetual: Using ${usdt_balance:.2f} USDT margin")
+
+            elif direction == 'long':
+                # SPOT LONG: Use USDT to buy SOL
                 if not usdt_balance or usdt_balance < 1:
                     logger.error(f"❌ Insufficient USDT for LONG: ${usdt_balance or 0:.2f}")
                     position.state = PositionState.FAILED
@@ -356,13 +383,13 @@ class ProductionOrderManager:
 
                 # For spot LONG: position_size = (USDT * 0.95) / price
                 actual_size = (usdt_balance * 0.95) / current_price
-                logger.info(f"💰 LONG trade: Using ${usdt_balance:.2f} USDT to buy SOL")
+                logger.info(f"💰 LONG spot: Using ${usdt_balance:.2f} USDT to buy SOL")
 
             else:
-                # SHORT: Use SOL balance to sell
+                # SPOT SHORT: Use SOL balance to sell
                 sol_balance = self.client.get_currency_balance('SOL')
                 if not sol_balance or sol_balance < 0.001:
-                    logger.warning(f"⚠️ SHORT trade skipped: Need SOL balance to sell. Current SOL: {sol_balance or 0:.6f}")
+                    logger.warning(f"⚠️ SHORT spot skipped: Need SOL balance to sell. Current SOL: {sol_balance or 0:.6f}")
                     position.state = PositionState.FAILED
                     if self.on_trade_failed:
                         self.on_trade_failed(direction='short', reason=f'No SOL to sell. Balance: {sol_balance or 0:.6f} SOL')
@@ -370,7 +397,7 @@ class ProductionOrderManager:
 
                 # For spot SHORT: use SOL balance * 0.95
                 actual_size = sol_balance * 0.95
-                logger.info(f"💰 SHORT trade: Using {sol_balance:.4f} SOL to sell")
+                logger.info(f"💰 SHORT spot: Using {sol_balance:.4f} SOL to sell")
 
             # Cap at max_position_size if smaller
             if max_position_size < actual_size:
@@ -415,8 +442,7 @@ class ProductionOrderManager:
                     order_type='limit',
                     size=str(round(actual_size, 4)),
                     price=str(limit_price),
-                    tdMode='cash'
-                )
+                                    )
                 
                 if entry_result:
                     used_limit = True
@@ -462,8 +488,7 @@ class ProductionOrderManager:
                     side=side,
                     order_type='market',
                     size=str(round(actual_size, 4)),
-                    tdMode='cash'
-                )
+                                    )
             
             if not entry_result:
                 logger.error("❌ Failed to place entry order")
@@ -583,8 +608,7 @@ class ProductionOrderManager:
                 order_type='limit',
                 size=str(round(size, 4)),
                 price=str(round(price, 2)),
-                tdMode='cash'
-            )
+                            )
             
             if result:
                 order_id = result.get('ordId', '')
@@ -736,8 +760,7 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(size, 4)),
-                tdMode='cash'
-            )
+                            )
             
             if result:
                 if tp_num == 1:
@@ -790,8 +813,7 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(sol_balance, 4)),
-                tdMode='cash'
-            )
+                            )
             
             if result:
                 pnl = (current_price - position.entry_price) * sol_balance
@@ -936,8 +958,7 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(sol_balance, 4)),
-                tdMode='cash'
-            )
+                            )
             
             if result:
                 fill_price = float(result.get('fillPx', current_price))
@@ -1159,8 +1180,7 @@ class ProductionOrderManager:
                     side='sell',
                     order_type='market',
                     size=str(round(sol_balance, 4)),
-                    tdMode='cash'
-                )
+                                    )
                 
                 if result:
                     ticker = self.client.get_ticker(position.symbol)
