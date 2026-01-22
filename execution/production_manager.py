@@ -116,14 +116,17 @@ class ProductionOrderManager:
     7. Telegram notifications for trade events
     """
     
-    def __init__(self, okx_client: Optional[OKXClient] = None, trade_journal=None, notifier=None):
+    def __init__(self, okx_client: Optional[OKXClient] = None, trade_journal=None, notifier=None, on_trade_failed=None):
         self.client = okx_client or OKXClient()
-        
+
         # Trade journal for logging (optional)
         self.trade_journal = trade_journal
-        
+
         # Telegram notifier for alerts (optional)
         self.notifier = notifier
+
+        # Callback for failed trades (optional)
+        self.on_trade_failed = on_trade_failed
         
         # Current managed position
         self.current_position: Optional[ManagedPosition] = None
@@ -337,21 +340,42 @@ class ProductionOrderManager:
         )
         
         try:
-            # Calculate actual position size based on available USDT
-            usdt_balance = self.client.get_trading_balance('USDT')
-            if not usdt_balance or usdt_balance < 1:
-                logger.error(f"❌ Insufficient USDT: ${usdt_balance or 0:.2f}")
-                position.state = PositionState.FAILED
-                return None
-            
-            # For spot: position_size = (USDT * 0.95) / price
+            # Calculate actual position size based on direction and available balance
             current_price = signal['entry_price']
-            actual_size = (usdt_balance * 0.95) / current_price
-            
+            direction = signal['direction'].lower()
+
+            if direction == 'long':
+                # LONG: Use USDT to buy SOL
+                usdt_balance = self.client.get_trading_balance('USDT')
+                if not usdt_balance or usdt_balance < 1:
+                    logger.error(f"❌ Insufficient USDT for LONG: ${usdt_balance or 0:.2f}")
+                    position.state = PositionState.FAILED
+                    if self.on_trade_failed:
+                        self.on_trade_failed(direction='long', reason=f'Insufficient USDT: ${usdt_balance or 0:.2f}')
+                    return None
+
+                # For spot LONG: position_size = (USDT * 0.95) / price
+                actual_size = (usdt_balance * 0.95) / current_price
+                logger.info(f"💰 LONG trade: Using ${usdt_balance:.2f} USDT to buy SOL")
+
+            else:
+                # SHORT: Use SOL balance to sell
+                sol_balance = self.client.get_currency_balance('SOL')
+                if not sol_balance or sol_balance < 0.001:
+                    logger.warning(f"⚠️ SHORT trade skipped: Need SOL balance to sell. Current SOL: {sol_balance or 0:.6f}")
+                    position.state = PositionState.FAILED
+                    if self.on_trade_failed:
+                        self.on_trade_failed(direction='short', reason=f'No SOL to sell. Balance: {sol_balance or 0:.6f} SOL')
+                    return None
+
+                # For spot SHORT: use SOL balance * 0.95
+                actual_size = sol_balance * 0.95
+                logger.info(f"💰 SHORT trade: Using {sol_balance:.4f} SOL to sell")
+
             # Cap at max_position_size if smaller
             if max_position_size < actual_size:
                 actual_size = max_position_size
-            
+
             position.entry_size = actual_size
             
             logger.info(f"\n📊 Trade Details:")

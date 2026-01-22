@@ -247,10 +247,25 @@ class EliteQuantSystem:
         # Production Order Manager (optional, cleaner execution with auto-cleanup)
         self.production_manager = None
         if USE_PRODUCTION_MANAGER:
+            # Callback for failed trades - logs to dashboard and Telegram
+            def on_trade_failed(direction: str, reason: str):
+                logger.error(f"❌ {direction.upper()} trade failed: {reason}")
+                if DASHBOARD_AVAILABLE:
+                    try:
+                        add_error(f"{direction.upper()} trade failed: {reason}")
+                    except:
+                        pass
+                if self.telegram_bot:
+                    try:
+                        self.telegram_bot.send_message(f"❌ {direction.upper()} trade failed: {reason}")
+                    except:
+                        pass
+
             self.production_manager = ProductionOrderManager(
                 self.okx_client,
                 trade_journal=self.trade_journal,
-                notifier=self.notifier
+                notifier=self.notifier,
+                on_trade_failed=on_trade_failed
             )
             logger.info("✅ Production Order Manager enabled (auto-cleanup, smart TPs, trade journal, notifications)")
             
@@ -279,7 +294,7 @@ class EliteQuantSystem:
                 if DASHBOARD_AVAILABLE:
                     try:
                         add_trade({
-                            'symbol': config.TRADING_SYMBOL,
+                            'symbol': config.SPOT_SYMBOL,
                             'side': trade_data.get('direction', 'unknown'),
                             'entry_price': trade_data.get('entry_price', 0),
                             'exit_price': trade_data.get('exit_price', 0),
@@ -391,7 +406,7 @@ class EliteQuantSystem:
 
         logger.info("\n" + "="*60)
         logger.info("🎯 ELITE QUANT SYSTEM STARTED")
-        logger.info(f"Symbol: {config.TRADING_SYMBOL}")
+        logger.info(f"Symbol: {config.SPOT_SYMBOL}")
         logger.info(f"Mode: {'SIMULATED' if config.OKX_SIMULATED else 'LIVE'}")
         logger.info(f"Max Daily Trades: {config.MAX_DAILY_TRADES}")
         logger.info(f"Risk Per Trade: {config.MAX_RISK_PER_TRADE*100}%")
@@ -507,7 +522,7 @@ Manual restart required.
             # Step 2: Fetch market data for SOL (trading) and BTC (reference)
             logger.info(f"📊 Fetching market data...")
             sol_market_state = self.market_data.get_market_state(
-                config.TRADING_SYMBOL,
+                config.SPOT_SYMBOL,
                 self.timeframes
             )
             
@@ -1093,7 +1108,7 @@ Manual restart required.
         # Update dashboard
         if DASHBOARD_AVAILABLE:
             add_trade({
-                'symbol': config.TRADING_SYMBOL,
+                'symbol': config.SPOT_SYMBOL,
                 'side': signal['direction'],
                 'entry_price': signal['entry_price'],
                 'exit_price': 0,
@@ -1113,7 +1128,7 @@ Manual restart required.
                 update_positions([])
             return
 
-        current_price = self.market_data.get_current_price(config.TRADING_SYMBOL)
+        current_price = self.market_data.get_current_price(config.SPOT_SYMBOL)
         if not current_price:
             return
 
@@ -1134,7 +1149,7 @@ Manual restart required.
             # Format for dashboard
             if DASHBOARD_AVAILABLE:
                 dashboard_positions.append({
-                    'symbol': config.TRADING_SYMBOL,
+                    'symbol': config.SPOT_SYMBOL,
                     'side': position.get('direction', 'long'),
                     'size': position.get('size', 0),
                     'entry_price': position.get('entry_price', 0),
