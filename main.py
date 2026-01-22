@@ -44,12 +44,22 @@ from execution import OrderManager, PositionTracker, ProductionOrderManager
 from model_learning import DataCollector
 from backtesting.adaptive_systems import AdaptiveThreshold, TradeResult, create_adaptive_threshold
 
-# Elite Prediction V2 System (75% win rate in backtests)
+# Elite Prediction V1 System ($8k profit in backtests - THE WORKING ONE)
+try:
+    from backtesting.prediction_guided_trading import (
+        create_prediction_guided_trading, ElitePredictionGuidedTrading, PredictionGuidance
+    )
+    from backtesting.price_predictor import create_price_predictor, ElitePricePredictor
+    PREDICTION_V1_AVAILABLE = True
+except ImportError as e:
+    PREDICTION_V1_AVAILABLE = False
+    logging.warning(f"Elite Prediction V1 not available: {e}")
+
+# Elite Prediction V2 System (disabled - was too restrictive)
 try:
     from backtesting.elite_prediction_system import (
         create_elite_prediction_system_v2, ElitePredictionSystemV2
     )
-    from backtesting.price_predictor import create_price_predictor, ElitePricePredictor
     PREDICTION_V2_AVAILABLE = True
 except ImportError as e:
     PREDICTION_V2_AVAILABLE = False
@@ -189,31 +199,32 @@ class EliteQuantSystem:
             self.adaptive_threshold.adjustment_speed = getattr(config, 'ADAPTIVE_THRESHOLD_SPEED', 0.15)
             logger.info(f"🎚️ Adaptive Threshold enabled (base: {self.adaptive_threshold.base_threshold}, range: {self.adaptive_threshold.min_threshold}-{self.adaptive_threshold.max_threshold})")
         
-        # Elite Prediction V2 System (75% win rate in backtests)
-        self.prediction_v2 = None
+        # Elite Prediction V1 System ($8k profit in backtests - THE WORKING ONE)
+        self.prediction_v1 = None
         self.price_predictor = None
         self.prediction_cache = {}  # Cache predictions to avoid recalculating
         self.last_prediction_update = None
         
-        if PREDICTION_V2_AVAILABLE and getattr(config, 'PREDICTION_V2_ENABLED', False):
+        if PREDICTION_V1_AVAILABLE:
             try:
                 # Initialize price predictor
                 symbol = getattr(config, 'TRADING_SYMBOL', 'SOL-USDT-SWAP').replace('-SWAP', '').replace('-USDT', '-USDT')
                 self.price_predictor = create_price_predictor(symbol)
                 
-                # Initialize V2 prediction system
-                self.prediction_v2 = create_elite_prediction_system_v2(
-                    enable_all=True,
-                    strict_mode=getattr(config, 'PREDICTION_V2_BLOCK_ON_CONFLICT', False),
-                    min_confidence=getattr(config, 'PREDICTION_V2_MIN_CONFIDENCE', 0.40),
-                    min_consensus=getattr(config, 'PREDICTION_V2_MIN_CONSENSUS', 0.45)
+                # Initialize V1 prediction system (the one that made $8k!)
+                self.prediction_v1 = create_prediction_guided_trading(
+                    enable_direction_filter=True,
+                    enable_confidence_sizing=True,
+                    enable_market_timing=True,
+                    enable_trend_bias=True
                 )
-                logger.info("🔮 Elite Prediction V2 ENABLED (75% win rate in backtests)")
-                logger.info(f"   Min confidence: {getattr(config, 'PREDICTION_V2_MIN_CONFIDENCE', 0.40):.0%}")
-                logger.info(f"   Min consensus: {getattr(config, 'PREDICTION_V2_MIN_CONSENSUS', 0.45):.0%}")
+                logger.info("🔮 Elite Prediction V1 ENABLED ($8k profit in backtests)")
+                logger.info("   Direction filter: ON")
+                logger.info("   Confidence sizing: ON")
+                logger.info("   Market timing: ON")
             except Exception as e:
-                logger.warning(f"⚠️ Elite Prediction V2 failed to initialize: {e}")
-                self.prediction_v2 = None
+                logger.warning(f"⚠️ Elite Prediction V1 failed to initialize: {e}")
+                self.prediction_v1 = None
                 self.price_predictor = None
         
         # Production Order Manager (optional, cleaner execution with auto-cleanup)
@@ -667,9 +678,9 @@ Manual restart required.
                             })
                         return
 
-            # Step 7.5: Elite Prediction V2 Check (75% win rate in backtests)
+            # Step 7.5: Elite Prediction V1 Check ($8k profit in backtests - THE WORKING ONE)
             prediction_multiplier = 1.0
-            if self.prediction_v2 and self.price_predictor:
+            if self.prediction_v1 and self.price_predictor:
                 try:
                     # Update predictions if needed (once per hour)
                     self._update_predictions(sol_market_state)
@@ -677,36 +688,35 @@ Manual restart required.
                     # Get signal confidence
                     signal_confidence = filter_results.get('final_score', 50) / 100.0
                     
-                    # Evaluate signal with V2
-                    v2_guidance = self.prediction_v2.evaluate_signal(
+                    # Evaluate signal with V1
+                    v1_guidance = self.prediction_v1.evaluate_signal(
                         signal['direction'], 
                         signal_confidence
                     )
                     
-                    if not v2_guidance.should_trade:
-                        logger.warning(f"🔮 V2 PREDICTION BLOCKED: {v2_guidance.reason}")
+                    if not v1_guidance.should_trade:
+                        logger.warning(f"🔮 V1 PREDICTION BLOCKED: {v1_guidance.reason}")
                         if DASHBOARD_AVAILABLE:
                             add_signal({
                                 'type': 'rejected',
                                 'direction': signal['direction'],
-                                'reason': f'V2 Prediction: {v2_guidance.reason}'
+                                'reason': f'V1 Prediction: {v1_guidance.reason}'
                             })
                         return
                     
                     # Apply prediction-based adjustments
-                    prediction_multiplier = v2_guidance.position_multiplier
+                    prediction_multiplier = v1_guidance.position_multiplier
                     signal['prediction_multiplier'] = prediction_multiplier
-                    signal['prediction_direction'] = v2_guidance.direction.value
-                    signal['prediction_confidence'] = v2_guidance.confidence
-                    signal['prediction_consensus'] = v2_guidance.consensus_score
+                    signal['prediction_direction'] = v1_guidance.direction.value
+                    signal['prediction_confidence'] = v1_guidance.confidence
                     
                     if prediction_multiplier != 1.0:
-                        logger.info(f"🔮 V2 Prediction: {v2_guidance.reason}")
+                        logger.info(f"🔮 V1 Prediction: {v1_guidance.reason}")
                         logger.info(f"   Position multiplier: {prediction_multiplier:.2f}x")
                     else:
-                        logger.info(f"🔮 V2 Prediction APPROVED")
+                        logger.info(f"🔮 V1 Prediction APPROVED")
                 except Exception as e:
-                    logger.warning(f"⚠️ V2 Prediction error (continuing): {e}")
+                    logger.warning(f"⚠️ V1 Prediction error (continuing): {e}")
             
             logger.info(f"✅ TRADE APPROVED - EXECUTING")
             if DASHBOARD_AVAILABLE:
