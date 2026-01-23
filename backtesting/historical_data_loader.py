@@ -85,6 +85,13 @@ class HistoricalDataLoader:
         for tf in timeframes:
             cache_file = self._get_cache_filename(symbol, tf, start_date, end_date)
 
+            # Try to find a covering cache file if exact match doesn't exist
+            if not force_refresh and not cache_file.exists():
+                covering_cache = self._find_covering_cache(symbol, tf, start_date, end_date)
+                if covering_cache:
+                    logger.info(f"   📂 {tf}: Found covering cache file: {covering_cache.name}")
+                    cache_file = covering_cache
+
             # Try to load from cache first
             if not force_refresh and cache_file.exists():
                 try:
@@ -465,6 +472,43 @@ class HistoricalDataLoader:
         safe_symbol = symbol.replace('-', '_')
         filename = f"{safe_symbol}_{timeframe}_{start_date}_{end_date}.json"
         return self.cache_dir / filename
+
+    def _find_covering_cache(self, symbol: str, timeframe: str,
+                             start_date: str, end_date: str) -> Optional[Path]:
+        """
+        Find a cache file that covers the requested date range.
+        Returns the cache file path if found, None otherwise.
+        """
+        safe_symbol = symbol.replace('-', '_')
+        pattern = f"{safe_symbol}_{timeframe}_*.json"
+
+        req_start = datetime.strptime(start_date, '%Y-%m-%d')
+        req_end = datetime.strptime(end_date, '%Y-%m-%d')
+
+        best_match = None
+        best_coverage = 0
+
+        for cache_file in self.cache_dir.glob(pattern):
+            try:
+                # Parse dates from filename: SYMBOL_TF_START_END.json
+                parts = cache_file.stem.split('_')
+                if len(parts) >= 6:  # SOL_USDT_SWAP_TF_START_END
+                    cache_start_str = parts[-2]  # e.g., 2025-10-01
+                    cache_end_str = parts[-1]    # e.g., 2026-01-15
+                    cache_start = datetime.strptime(cache_start_str, '%Y-%m-%d')
+                    cache_end = datetime.strptime(cache_end_str, '%Y-%m-%d')
+
+                    # Check if cache covers requested range
+                    if cache_start <= req_start and cache_end >= req_end:
+                        # Calculate coverage score (prefer smaller files that still cover the range)
+                        coverage = (req_end - req_start).days
+                        if coverage > best_coverage:
+                            best_coverage = coverage
+                            best_match = cache_file
+            except (ValueError, IndexError):
+                continue
+
+        return best_match
 
     def _save_to_cache(self, cache_file: Path, data: List[Dict]):
         """Save data to cache file"""

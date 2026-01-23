@@ -18,7 +18,7 @@ Signal Types:
 - Trend Continuation: Strong bias with structure alignment
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from datetime import datetime
 import logging
 

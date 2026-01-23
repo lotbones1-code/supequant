@@ -139,7 +139,7 @@ AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
 # Quality Score Threshold - Adaptive learning system
-SCORE_THRESHOLD = 45  # Optimized from backtesting (was 50) - more trades, better returns
+SCORE_THRESHOLD = 50  # OPTIMIZED: Best balance of return, win rate, and drawdown
 
 # =============================================================================
 # ADAPTIVE THRESHOLD SYSTEM (LIVE) - Auto-adjusts based on recent performance
