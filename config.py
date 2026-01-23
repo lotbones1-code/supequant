@@ -729,7 +729,7 @@ BACKTEST_PRED_MARKET_TIMING = True
 BACKTEST_PRED_MIN_CONF_TO_TRADE = 0.35
 BACKTEST_PRED_TREND_BIAS = True
 BACKTEST_PRED_TREND_THRESHOLD = 0.05
-BACKTEST_PRED_BIAS_BOOST = 1.3
+BACKTEST_PRED_BIAS_BOOST = 1.5  # OPTIMIZED: Best balance for trend-aligned trades
 BACKTEST_PRED_ANTI_BIAS = 2.0  # OPTIMIZED: Contrarian boost for prediction conflicts
 
 # =============================================================================
