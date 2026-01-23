@@ -961,14 +961,14 @@ Manual restart required.
     def _execute_trade_production(self, signal: Dict, position_size: float):
         """
         Execute trade using ProductionOrderManager
-        
+
         Features:
         - Pre-trade cleanup (cancel orders, sell SOL)
         - Actual fill tracking
         - Smart TP with virtual fallback
         - Background monitoring
         """
-        symbol = config.SPOT_SYMBOL  # Use spot for OKX US compliance
+        symbol = config.TRADING_SYMBOL  # Use configured trading symbol (perpetual)
         
         # Step 1: Prepare account (cleanup)
         logger.info("\n🧹 Preparing account for trade...")

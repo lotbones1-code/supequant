@@ -149,7 +149,7 @@ class ProductionOrderManager:
     # 1. PRE-TRADE CLEANUP
     # =========================================================================
     
-    def prepare_for_trade(self, symbol: str = 'SOL-USDT') -> bool:
+    def prepare_for_trade(self, symbol: str = None) -> bool:
         """
         Prepare account for a fresh trade by cleaning up any existing state.
         
@@ -162,10 +162,13 @@ class ProductionOrderManager:
         Returns:
             True if account is ready for trading
         """
+        if symbol is None:
+            symbol = TRADING_SYMBOL
+
         logger.info("\n" + "="*60)
         logger.info("🧹 PREPARING ACCOUNT FOR TRADE")
         logger.info("="*60)
-        
+
         try:
             # Step 1: Cancel all open orders
             logger.info("\n📋 Step 1: Canceling open orders...")
@@ -250,7 +253,7 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(amount, 4)),
-                tdMode='cash'
+                tdMode='cross' if TRADING_MODE == 'perp' else 'cash'
             )
             return result is not None
         except Exception as e:
@@ -297,8 +300,8 @@ class ProductionOrderManager:
         Returns:
             ManagedPosition object or None if failed
         """
-        symbol = SPOT_SYMBOL  # Always use spot for OKX US compliance
-        
+        symbol = TRADING_SYMBOL  # Use configured trading symbol (perpetual)
+
         logger.info("\n" + "="*60)
         logger.info("🚀 EXECUTING TRADE")
         logger.info("="*60)
@@ -326,7 +329,7 @@ class ProductionOrderManager:
             tp1_price=tp1_price,
             tp2_price=tp2_price,
             strategy=signal.get('strategy', 'manual'),
-            trading_mode='spot',
+            trading_mode=TRADING_MODE,
             filters_passed=signal.get('filters_passed', []),
             confidence_score=signal.get('confidence_score'),
             # Arbitrage/time-based exit fields (Phase 4.2)
@@ -337,21 +340,26 @@ class ProductionOrderManager:
         )
         
         try:
-            # Calculate actual position size based on available USDT
-            usdt_balance = self.client.get_trading_balance('USDT')
-            if not usdt_balance or usdt_balance < 1:
-                logger.error(f"❌ Insufficient USDT: ${usdt_balance or 0:.2f}")
-                position.state = PositionState.FAILED
-                return None
-            
-            # For spot: position_size = (USDT * 0.95) / price
+            # Calculate actual position size
+            # For perpetuals: use the max_position_size directly from risk manager
+            # For spot: calculate based on available USDT
             current_price = signal['entry_price']
-            actual_size = (usdt_balance * 0.95) / current_price
-            
-            # Cap at max_position_size if smaller
-            if max_position_size < actual_size:
+
+            if TRADING_MODE == 'perp':
+                # Perpetuals: use risk-managed position size directly
                 actual_size = max_position_size
-            
+            else:
+                # Spot: calculate from available USDT balance
+                usdt_balance = self.client.get_trading_balance('USDT')
+                if not usdt_balance or usdt_balance < 1:
+                    logger.error(f"❌ Insufficient USDT: ${usdt_balance or 0:.2f}")
+                    position.state = PositionState.FAILED
+                    return None
+                actual_size = (usdt_balance * 0.95) / current_price
+                # Cap at max_position_size if smaller
+                if max_position_size < actual_size:
+                    actual_size = max_position_size
+
             position.entry_size = actual_size
             
             logger.info(f"\n📊 Trade Details:")
@@ -391,7 +399,7 @@ class ProductionOrderManager:
                     order_type='limit',
                     size=str(round(actual_size, 4)),
                     price=str(limit_price),
-                    tdMode='cash'
+                    tdMode='cross' if TRADING_MODE == 'perp' else 'cash'
                 )
                 
                 if entry_result:
@@ -438,7 +446,7 @@ class ProductionOrderManager:
                     side=side,
                     order_type='market',
                     size=str(round(actual_size, 4)),
-                    tdMode='cash'
+                    tdMode='cross' if TRADING_MODE == 'perp' else 'cash'
                 )
             
             if not entry_result:
@@ -559,7 +567,7 @@ class ProductionOrderManager:
                 order_type='limit',
                 size=str(round(size, 4)),
                 price=str(round(price, 2)),
-                tdMode='cash'
+                tdMode='cross' if position.trading_mode == 'perp' else 'cash'
             )
             
             if result:
@@ -712,9 +720,9 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(size, 4)),
-                tdMode='cash'
+                tdMode='cross' if position.trading_mode == 'perp' else 'cash'
             )
-            
+
             if result:
                 if tp_num == 1:
                     position.tp1_filled = True
@@ -766,9 +774,9 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(sol_balance, 4)),
-                tdMode='cash'
+                tdMode='cross' if position.trading_mode == 'perp' else 'cash'
             )
-            
+
             if result:
                 pnl = (current_price - position.entry_price) * sol_balance
                 position.realized_pnl += pnl
@@ -912,9 +920,9 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='market',
                 size=str(round(sol_balance, 4)),
-                tdMode='cash'
+                tdMode='cross' if position.trading_mode == 'perp' else 'cash'
             )
-            
+
             if result:
                 fill_price = float(result.get('fillPx', current_price))
                 position.realized_pnl = price_pnl
@@ -1135,9 +1143,9 @@ class ProductionOrderManager:
                     side='sell',
                     order_type='market',
                     size=str(round(sol_balance, 4)),
-                    tdMode='cash'
+                    tdMode='cross' if position.trading_mode == 'perp' else 'cash'
                 )
-                
+
                 if result:
                     ticker = self.client.get_ticker(position.symbol)
                     close_price = float(ticker.get('last', position.entry_price)) if ticker else position.entry_price

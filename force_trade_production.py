@@ -60,8 +60,8 @@ class ProductionForceTrade:
         
         # Step 1: Prepare account (cleanup)
         logger.info("\n📋 STEP 1: Preparing account...")
-        symbol = config.SPOT_SYMBOL  # Use spot for OKX US
-        
+        symbol = config.TRADING_SYMBOL  # Use configured trading symbol (perpetual)
+
         ready = self.production_manager.prepare_for_trade(symbol)
         if not ready:
             logger.error("❌ Account not ready for trading")
