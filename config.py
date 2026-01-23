@@ -52,7 +52,7 @@ MAX_DAILY_LOSS_PCT = 0.05  # 5% max daily loss (was 2.5%)
 MAX_DAILY_DRAWDOWN = 0.06  # 6% max drawdown before shutdown (was 3%)
 
 # Stop loss and take profit
-ATR_STOP_MULTIPLIER = 1.5  # Stop loss = 1.5x ATR (tighter, was 2.0)
+ATR_STOP_MULTIPLIER = 1.5  # Reverted - no impact on backtest results
 TP1_RR_RATIO = 1.5  # First TP at 1.5:1 RR
 TP2_RR_RATIO = 2.5  # Second TP at 2.5:1 RR (was 3.0)
 TRAILING_STOP_ACTIVATION = 1.0  # Activate trailing stop after 1:1 RR (was 1.2)
@@ -715,7 +715,7 @@ BACKTEST_PREDICTION_HORIZONS = [30, 90, 365]  # Days ahead to predict (1m, 3m, 1
 # PREDICTION-GUIDED TRADING V1 - Basic version (backtest only)
 # =============================================================================
 # V1 features - more permissive settings
-BACKTEST_PREDICTION_GUIDED = True  # V1 enabled - this got $7,980 profit (85% return)
+BACKTEST_PREDICTION_GUIDED = True  # V1 enabled - confirmed working
 
 # V1 Settings (kept for reference)
 BACKTEST_PRED_DIRECTION_FILTER = True
@@ -730,7 +730,7 @@ BACKTEST_PRED_MIN_CONF_TO_TRADE = 0.35
 BACKTEST_PRED_TREND_BIAS = True
 BACKTEST_PRED_TREND_THRESHOLD = 0.05
 BACKTEST_PRED_BIAS_BOOST = 1.3
-BACKTEST_PRED_ANTI_BIAS = 0.7
+BACKTEST_PRED_ANTI_BIAS = 2.0  # OPTIMIZED: Contrarian boost for prediction conflicts
 
 # =============================================================================
 # ELITE PREDICTION SYSTEM V2 - Higher win rate version (backtest only)

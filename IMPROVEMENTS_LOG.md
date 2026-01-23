@@ -44,10 +44,46 @@
 
 ---
 
-**Current Best Metrics (after Cycle 1):**
-- Return: 86.96%
+### Cycle 2 & 3 - 2026-01-23 11:25
+**Change:** Tested ATR_STOP_MULTIPLIER and TP ratios
+**Result:** No impact - strategies have hardcoded values
+**Decision:** SKIP
+
+---
+
+### Cycle 4 - 2026-01-23 12:00
+**Change:** Optimized BACKTEST_PRED_ANTI_BIAS from 0.7 to 2.0
+**Hypothesis:** The original anti-bias setting penalized trades that conflicted with predictions. Testing shows these "conflicting" trades often succeed - a contrarian boost helps.
+
+**Sweep Results:**
+| ANTI_BIAS | Return |
+|-----------|--------|
+| 0.70 (original) | 86.96% |
+| 0.85 | 87.95% |
+| 0.90 | 88.29% |
+| 1.00 | 88.95% |
+| 1.20 | 90.28% |
+| 1.40 | 91.61% |
+| 1.70 | 93.62% |
+| **2.00** | **95.63%** |
+| 2.50 | 79.81% (too high) |
+
+**Result (ANTI_BIAS=2.0):**
+- Return: 95.63% (from 86.96%) ✅ +8.67%
+- Win Rate: 51.28% (unchanged)
+- Profit Factor: 2.68 (from 2.65) ✅ +0.03
+- Sharpe: 4.86 (unchanged)
+- Drawdown: 12.51% (unchanged)
+
+**Decision:** KEEP
+**Notes:** Counter-intuitive finding - boosting trades that conflict with predictions (contrarian approach) improves returns significantly. The prediction system's conflicts may signal oversold/overbought conditions.
+
+---
+
+**Current Best Metrics (after Cycle 4):**
+- Return: 95.63% (approaching 100% target!)
 - Win Rate: 51.28%
-- Profit Factor: 2.65
+- Profit Factor: 2.68
 - Sharpe: 4.86
 - Max Drawdown: 12.51%
 

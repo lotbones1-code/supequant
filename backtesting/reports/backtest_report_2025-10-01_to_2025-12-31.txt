@@ -1,7 +1,7 @@
 ================================================================================
 BACKTEST FULL REPORT
 ================================================================================
-Generated: 2026-01-23 11:14:18
+Generated: 2026-01-23 12:01:37
 Run Name: 2025-10-01_to_2025-12-31
 ================================================================================
 
@@ -12,26 +12,26 @@ EXECUTIVE SUMMARY
 
 💰 CAPITAL & RETURNS:
   Initial Capital: $10,000.00
-  Final Capital: $17,979.65
-  Total PnL: $+7,235.51
-  Total Return: +79.80%
-  CAGR: 852.57%
-  Max Drawdown: 17.98%
+  Final Capital: $17,981.18
+  Total PnL: $+7,174.72
+  Total Return: +79.81%
+  CAGR: 852.88%
+  Max Drawdown: 12.51%
 
 📈 TRADE PERFORMANCE:
-  Total Signals: 259
-  Signals Passed Filters: 44 (17.0%)
-  Trades Executed: 44
-  Wins: 21 | Losses: 23 | BE: 0
-  Win Rate: 47.73%
+  Total Signals: 264
+  Signals Passed Filters: 39 (14.8%)
+  Trades Executed: 39
+  Wins: 20 | Losses: 19 | BE: 0
+  Win Rate: 51.28%
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: 3.59
-  Profit Factor: 2.35
-  Expectancy: $164.44/trade
+  Sharpe Ratio: 4.86
+  Profit Factor: 2.41
+  Expectancy: $183.97/trade
 
 🎯 ASSESSMENT:
-  ✅ GOOD SYSTEM - Shows promise, continue validation
+  ✅ EXCELLENT SYSTEM - Strong candidate for live trading (after validation)
 
 
 ============================================================
@@ -39,51 +39,51 @@ PERFORMANCE METRICS REPORT
 ============================================================
 
 📈 RETURNS:
-  Total Return: $+7,979.65 (+79.80%)
-  CAGR: 852.57%
+  Total Return: $+7,981.18 (+79.81%)
+  CAGR: 852.88%
   Period: 95 days (0.26 years)
 
 ⚠️  RISK METRICS:
-  Sharpe Ratio: 3.59
-  Sortino Ratio: 5.15
-  Max Drawdown: 17.98%
-  Volatility: 1.87%
-  Calmar Ratio: 47.41
+  Sharpe Ratio: 4.86
+  Sortino Ratio: 7.17
+  Max Drawdown: 12.51%
+  Volatility: 1.85%
+  Calmar Ratio: 68.19
 
 📊 TRADE STATISTICS:
-  Total Trades: 44
-  Wins: 21 | Losses: 23 | BE: 0
-  Win Rate: 47.73%
-  Profit Factor: 2.35
-  Expectancy: $164.44 per trade
-  Kelly %: 27.40%
-  Avg Win: $600.24
-  Avg Loss: $-233.46
-  Largest Win: $1528.16
-  Largest Loss: $-540.31
-  Max Win Streak: 4
-  Max Loss Streak: 8
+  Total Trades: 39
+  Wins: 20 | Losses: 19 | BE: 0
+  Win Rate: 51.28%
+  Profit Factor: 2.41
+  Expectancy: $183.97 per trade
+  Kelly %: 30.00%
+  Avg Win: $613.23
+  Avg Loss: $-267.89
+  Largest Win: $1528.30
+  Largest Loss: $-540.36
+  Max Win Streak: 5
+  Max Loss Streak: 5
 
 💰 RISK/REWARD ANALYSIS:
-  Avg R:R Achieved: 1.40
-  Avg MFE: 1.62%
-  Avg MAE: 1.19%
-  MFE/MAE Ratio: 1.36
+  Avg R:R Achieved: 1.42
+  Avg MFE: 1.66%
+  Avg MAE: 1.14%
+  MFE/MAE Ratio: 1.45
 
 🎯 CONSISTENCY:
-  Trading Days: 32
-  Winning Days: 15
-  Losing Days: 17
-  Daily Win Rate: 46.88%
-  Avg Daily PnL: $+226.11
-  Best Day: $+3185.86
-  Worst Day: $-540.31
+  Trading Days: 29
+  Winning Days: 16
+  Losing Days: 13
+  Daily Win Rate: 55.17%
+  Avg Daily PnL: $+247.40
+  Best Day: $+3186.13
+  Worst Day: $-540.36
 
 ⏱️  TIME ANALYSIS:
-  Avg Trade Duration: 19.6 bars
-  Avg Win Duration: 25.4 bars
-  Avg Loss Duration: 14.3 bars
-  Exit Reasons: {'timeout': 8, 'stop': 20, 'target': 14, 'tp3_complete': 2}
+  Avg Trade Duration: 19.8 bars
+  Avg Win Duration: 26.0 bars
+  Avg Loss Duration: 13.4 bars
+  Exit Reasons: {'timeout': 8, 'stop': 16, 'target': 13, 'tp3_complete': 2}
 
 ============================================================
 
@@ -93,12 +93,12 @@ FILTER ANALYSIS
 
 📊 FILTER REJECTION BREAKDOWN:
 
-  quality_score: 129 rejections (60.0%)
-  pattern_failure: 82 rejections (38.1%)
+  quality_score: 137 rejections (60.9%)
+  pattern_failure: 83 rejections (36.9%)
 
 🔍 FILTER INSIGHTS:
-  • Most restrictive filter: quality_score (129 rejections)
-  ✅ Filter pass rate (17.0%) is reasonable
+  • Most restrictive filter: quality_score (137 rejections)
+  ✅ Filter pass rate (14.8%) is reasonable
 
 
 ================================================================================
@@ -113,26 +113,26 @@ TRADE ANALYSIS
     PnL: $-59.48
 
   MEAN_REVERSION:
-    Trades: 40
-    Wins: 19 (47.5%)
-    PnL: $+4,507.71
+    Trades: 35
+    Wins: 18 (51.4%)
+    PnL: $+5,453.19
 
   BREAKOUT:
     Trades: 3
     Wins: 2 (66.7%)
-    PnL: $+2,787.27
+    PnL: $+1,781.01
 
 📊 PERFORMANCE BY DIRECTION:
 
   LONG:
-    Trades: 30
-    Wins: 13 (43.3%)
-    PnL: $+5,095.43
+    Trades: 26
+    Wins: 12 (46.2%)
+    PnL: $+4,053.76
 
   SHORT:
-    Trades: 14
-    Wins: 8 (57.1%)
-    PnL: $+2,140.07
+    Trades: 13
+    Wins: 8 (61.5%)
+    PnL: $+3,120.96
 
 
 
