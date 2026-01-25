@@ -33,11 +33,11 @@ TRADING_SYMBOL = "SOL-USDT-SWAP"  # Main trading pair (Solana perpetual)
 REFERENCE_SYMBOL = "BTC-USDT-SWAP"  # Reference symbol (Bitcoin for correlation)
 TRADING_MODE = "perp"  # 'spot' or 'perp'
 
-# Fallback for OKX US compliance (error 51155 blocks perpetuals)
-SPOT_FALLBACK_ENABLED = True  # If perpetuals fail due to compliance, try spot
-SPOT_SYMBOL = "SOL-USDT"  # Spot trading symbol for fallback
-MAX_DAILY_TRADES = 10  # Increased from 5
-TRADE_INTERVAL_MINUTES = 30  # Reduced from 60 - trade more often
+# Spot trading DISABLED - perp-only system (all profits come from perps)
+SPOT_FALLBACK_ENABLED = False  # MUST stay False - perp-only
+SPOT_SYMBOL = "SOL-USDT"  # DEPRECATED - not used
+MAX_DAILY_TRADES = 15  # Increased for more opportunities
+TRADE_INTERVAL_MINUTES = 20  # More frequent checks (was 30)
 
 # =====================================
 # RISK MANAGEMENT
@@ -51,11 +51,11 @@ POSITION_SIZE_PCT = 0.05  # Use 5% of account per position (aggressive for small
 MAX_DAILY_LOSS_PCT = 0.05  # 5% max daily loss (was 2.5%)
 MAX_DAILY_DRAWDOWN = 0.06  # 6% max drawdown before shutdown (was 3%)
 
-# Stop loss and take profit
-ATR_STOP_MULTIPLIER = 1.5  # Reverted - no impact on backtest results
+# Stop loss and take profit - TIGHTER STOPS for capital protection
+ATR_STOP_MULTIPLIER = 1.3  # Tighter stops = smaller losses (was 1.5)
 TP1_RR_RATIO = 1.5  # First TP at 1.5:1 RR
-TP2_RR_RATIO = 2.5  # Second TP at 2.5:1 RR (was 3.0)
-TRAILING_STOP_ACTIVATION = 1.0  # Activate trailing stop after 1:1 RR (was 1.2)
+TP2_RR_RATIO = 2.5  # Second TP at 2.5:1 RR
+TRAILING_STOP_ACTIVATION = 0.8  # Earlier trailing stop (was 1.0)
 
 # =====================================
 # AGGRESSIVE GROWTH MODE - OPTIMIZED FOR SMALL ACCOUNTS ($5 -> $1000+)
@@ -69,11 +69,11 @@ GROWTH_COMPOUND_ENABLED = True  # Increase size as account grows - CRITICAL for 
 GROWTH_CONFIDENCE_MULTIPLIER = True  # Bigger positions on high confidence
 GROWTH_AGGRESSIVE_TP = True  # Use aggressive TP targets (5R, 10R, 20R)
 
-# Growth mode TP targets (if enabled) - AGGRESSIVE for small account growth
-GROWTH_TP1_RR = 5.0  # First TP at 5:1 RR (very aggressive)
-GROWTH_TP2_RR = 10.0  # Second TP at 10:1 RR
-GROWTH_TP3_RR = 20.0  # Third TP at 20:1 RR (let winners run!)
-GROWTH_TP_SPLIT = {1: 0.3, 2: 0.35, 3: 0.35}  # 30/35/35 position split (let winners run longer)
+# Growth mode TP targets - OPTIMIZED for realistic profit capture
+GROWTH_TP1_RR = 3.0  # First TP at 3:1 RR (achievable, locks profit)
+GROWTH_TP2_RR = 6.0  # Second TP at 6:1 RR
+GROWTH_TP3_RR = 10.0  # Third TP at 10:1 RR (let winners run!)
+GROWTH_TP_SPLIT = {1: 0.25, 2: 0.25, 3: 0.50}  # 25/25/50 - let 50% ride to big target
 
 # Small account optimization
 SMALL_ACCOUNT_THRESHOLD = 100.0  # Accounts under $100 use aggressive settings
@@ -107,9 +107,9 @@ LTF_LOOKBACK = 300
 # =====================================
 # FILTER THRESHOLDS - LOOSENED FOR MORE TRADES
 # =====================================
-# Market Regime Filter - MORE PERMISSIVE
-ATR_MIN_PERCENTILE = 10  # Was 20 - accept calmer markets
-ATR_MAX_PERCENTILE = 95  # Was 80 - accept higher volatility
+# Market Regime Filter - AGGRESSIVE for more trades
+ATR_MIN_PERCENTILE = 5  # Accept very calm markets (was 10)
+ATR_MAX_PERCENTILE = 95  # Accept higher volatility
 VOLATILITY_COMPRESSION_THRESHOLD = 0.5  # Was 0.7 - easier to detect compression
 FUNDING_RATE_MAX = 0.001  # Was 0.0005 - more permissive (0.1%)
 FUNDING_RATE_MIN = -0.001

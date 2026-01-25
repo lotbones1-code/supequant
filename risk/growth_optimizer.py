@@ -162,41 +162,71 @@ class GrowthOptimizer:
         
         return leveraged_size, details
     
-    def calculate_aggressive_tp_targets(self, 
+    def calculate_aggressive_tp_targets(self,
                                        entry_price: float,
                                        stop_loss: float,
-                                       direction: str) -> Dict:
+                                       direction: str,
+                                       quality_score: Optional[float] = None) -> Dict:
         """
-        Calculate aggressive take profit targets
-        
+        Calculate aggressive take profit targets with DYNAMIC scaling by signal quality
+
+        Higher quality signals = let more position ride to bigger targets
+        Lower quality signals = take profit earlier, more conservative
+
         Args:
             entry_price: Entry price
             stop_loss: Stop loss price
             direction: 'long' or 'short'
-            
+            quality_score: Signal quality score (0-100)
+
         Returns:
             Dict with TP1, TP2, TP3 prices and risk/reward ratios
         """
         risk = abs(entry_price - stop_loss)
-        
+
+        # DYNAMIC TP SCALING BY QUALITY SCORE
+        # Score 60+: Aggressive - let winners run (20/20/60 split)
+        # Score 50-60: Standard - balanced (25/25/50 split)
+        # Score 45-50: Conservative - lock profits early (50/30/20 split)
+        if quality_score is not None:
+            if quality_score >= 60:
+                # Elite signal - let 60% ride to TP3
+                rr1, rr2, rr3 = 2.0, 4.0, 8.0  # Tighter TP1 to lock some profit
+                split = {1: 0.20, 2: 0.20, 3: 0.60}
+                logger.info(f"📈 ELITE signal (score {quality_score:.0f}) - aggressive TPs, 60% rides to TP3")
+            elif quality_score >= 50:
+                # Standard signal - balanced approach
+                rr1, rr2, rr3 = 3.0, 6.0, 10.0
+                split = {1: 0.25, 2: 0.25, 3: 0.50}
+                logger.info(f"📊 Standard signal (score {quality_score:.0f}) - balanced TPs")
+            else:
+                # Marginal signal - lock profits fast
+                rr1, rr2, rr3 = 1.5, 3.0, 5.0  # Lower targets
+                split = {1: 0.50, 2: 0.30, 3: 0.20}
+                logger.info(f"⚠️ Marginal signal (score {quality_score:.0f}) - conservative TPs, 50% at TP1")
+        else:
+            # Default: standard targets
+            rr1, rr2, rr3 = 3.0, 6.0, 10.0
+            split = {1: 0.25, 2: 0.25, 3: 0.50}
+
         if direction == 'long':
-            # Aggressive targets: 3R, 5R, 8R
-            tp1 = entry_price + (risk * 3.0)  # 3:1 RR
-            tp2 = entry_price + (risk * 5.0)  # 5:1 RR
-            tp3 = entry_price + (risk * 8.0)  # 8:1 RR
+            tp1 = entry_price + (risk * rr1)
+            tp2 = entry_price + (risk * rr2)
+            tp3 = entry_price + (risk * rr3)
         else:  # short
-            tp1 = entry_price - (risk * 3.0)
-            tp2 = entry_price - (risk * 5.0)
-            tp3 = entry_price - (risk * 8.0)
-        
+            tp1 = entry_price - (risk * rr1)
+            tp2 = entry_price - (risk * rr2)
+            tp3 = entry_price - (risk * rr3)
+
         return {
             'take_profit_1': tp1,
             'take_profit_2': tp2,
             'take_profit_3': tp3,
-            'rr_ratio_1': 3.0,
-            'rr_ratio_2': 5.0,
-            'rr_ratio_3': 8.0,
-            'position_split': {1: 0.4, 2: 0.35, 3: 0.25}  # 40/35/25 split
+            'rr_ratio_1': rr1,
+            'rr_ratio_2': rr2,
+            'rr_ratio_3': rr3,
+            'position_split': split,
+            'quality_score': quality_score
         }
     
     def update_performance(self, pnl: float):
