@@ -790,6 +790,55 @@ BACKTEST_V2_CONFLICT_STOP = 1.10         # 10% wider on conflict
 BACKTEST_V2_EARLY_EXIT_CONF = 0.55       # Min confidence to trigger early exit
 BACKTEST_V2_EARLY_EXIT_REVERSAL = 0.03   # 3% reversal needed
 
+# =============================================================================
+# V4 ELITE WEALTH ENGINE (Backtest Only) - Simplified Data-Driven Approach
+# =============================================================================
+# Based on Jul-Dec 2025 6-month backtest analysis:
+# - Breakout: 42% WR, $5,751 PnL (best strategy)
+# - Mean Reversion: 34% WR, $2,872 PnL
+# - Winners hold 33.5 bars, losers 12 bars (patience pays)
+# - tp3_complete: 100% WR, $6,787 (let winners run!)
+# - target: 100% WR, $19,673 (hitting targets is core profit driver)
+# - Winners MAE: 0.79%, Losers MAE: 1.69% (losers show pain early)
+
+# Master switch for V4 systems
+V4_ENABLED = True
+
+# --- V4 STRATEGY BOOST (increase position for high-edge strategies) ---
+V4_STRATEGY_BOOST_ENABLED = True
+V4_BREAKOUT_BOOST = 2.0           # Sweet spot: 265% return, 37% max DD
+V4_MEAN_REVERSION_BOOST = 1.0     # Keep mean reversion at base (34% WR)
+V4_MOMENTUM_BOOST = 0.5           # Reduce momentum (negative PnL in analysis)
+
+# --- LEGACY V4 SYSTEMS (DISABLED - found to hurt performance) ---
+# Winner Predictor
+V4_WINNER_PREDICTOR_ENABLED = False
+V4_WIN_THRESHOLD = 0.55
+V4_ELITE_THRESHOLD = 0.70
+V4_SKIP_THRESHOLD = 0.45
+
+# Directional Bias Filter
+V4_DIRECTIONAL_BIAS_ENABLED = False
+V4_SHORT_MIN_QUALITY = 65
+V4_SHORT_MIN_RSI = 75
+V4_SHORT_POSITION_MULT = 0.7
+
+# Early Exit Mechanism
+V4_EARLY_EXIT_ENABLED = False
+V4_MAE_THRESHOLD_5BAR = 0.012
+V4_MFE_THRESHOLD_8BAR = 0.003
+
+# Kelly Position Sizing
+V4_KELLY_ENABLED = False
+V4_KELLY_FRACTION = 0.5
+V4_KELLY_MIN_MULT = 0.25
+V4_KELLY_MAX_MULT = 3.0
+
+# Regime Prediction
+V4_REGIME_PREDICTION_ENABLED = False
+V4_REGIME_PREDICTION_HORIZON = 12
+V4_USE_PREDICTED_REGIME = True
+
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False').lower() == 'true'
 
 # BACKTEST MODE - Even looser for testing

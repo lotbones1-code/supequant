@@ -625,7 +625,65 @@ class BacktestEngine:
                 self.elite_prediction_v2.early_exit.min_confidence_for_exit = getattr(config, 'BACKTEST_V2_EARLY_EXIT_CONF', 0.55)
                 self.elite_prediction_v2.early_exit.min_prediction_change = getattr(config, 'BACKTEST_V2_EARLY_EXIT_REVERSAL', 0.03)
             logger.info("🔮 ELITE PREDICTION V2: ENABLED (Higher Win Rate Mode)")
-        
+
+        # =================================================================
+        # V4 ELITE WEALTH ENGINE: Maximum profit extraction
+        # =================================================================
+        self.v4_directional_bias = None
+        self.v4_early_exit = None
+        self.v4_kelly_sizer = None
+        self.v4_winner_predictor = None
+        self.v4_regime_predictor = None
+
+        if getattr(config, 'V4_ENABLED', False):
+            logger.info("=" * 60)
+            logger.info("🚀 V4 ELITE WEALTH ENGINE: INITIALIZING")
+            logger.info("=" * 60)
+
+            # V4 Directional Bias Filter (LONG >>> SHORT)
+            if getattr(config, 'V4_DIRECTIONAL_BIAS_ENABLED', True):
+                from backtesting.v4_directional_bias import V4DirectionalBiasFilter
+                self.v4_directional_bias = V4DirectionalBiasFilter()
+                self.v4_directional_bias.SHORT_MIN_QUALITY = getattr(config, 'V4_SHORT_MIN_QUALITY', 65)
+                self.v4_directional_bias.SHORT_MIN_RSI = getattr(config, 'V4_SHORT_MIN_RSI', 75)
+                self.v4_directional_bias.SHORT_POSITION_MULT = getattr(config, 'V4_SHORT_POSITION_MULT', 0.7)
+                logger.info("   ✅ V4 DIRECTIONAL BIAS: ENABLED (LONG 55% WR vs SHORT 8%)")
+
+            # V4 Early Exit Mechanism (MAE/MFE based)
+            if getattr(config, 'V4_EARLY_EXIT_ENABLED', True):
+                from backtesting.v4_early_exit import V4EarlyExitManager
+                self.v4_early_exit = V4EarlyExitManager()
+                self.v4_early_exit.MAE_THRESHOLD_5BAR = getattr(config, 'V4_MAE_THRESHOLD_5BAR', 0.012)
+                self.v4_early_exit.MFE_THRESHOLD_8BAR = getattr(config, 'V4_MFE_THRESHOLD_8BAR', 0.003)
+                logger.info("   ✅ V4 EARLY EXIT: ENABLED (MAE 1.2%, MFE 0.3% thresholds)")
+
+            # V4 Kelly Position Sizer
+            if getattr(config, 'V4_KELLY_ENABLED', True):
+                from backtesting.v4_kelly_sizer import V4KellyPositionSizer
+                self.v4_kelly_sizer = V4KellyPositionSizer()
+                self.v4_kelly_sizer.KELLY_FRACTION = getattr(config, 'V4_KELLY_FRACTION', 0.5)
+                self.v4_kelly_sizer.MIN_POSITION_MULT = getattr(config, 'V4_KELLY_MIN_MULT', 0.25)
+                self.v4_kelly_sizer.MAX_POSITION_MULT = getattr(config, 'V4_KELLY_MAX_MULT', 3.0)
+                logger.info("   ✅ V4 KELLY SIZING: ENABLED (Half-Kelly, 0.25-3.0x)")
+
+            # V4 Winner Predictor (GradientBoosting ML)
+            if getattr(config, 'V4_WINNER_PREDICTOR_ENABLED', True):
+                from backtesting.v4_winner_predictor import V4WinnerPredictor
+                self.v4_winner_predictor = V4WinnerPredictor()
+                self.v4_winner_predictor.TRADE_THRESHOLD = getattr(config, 'V4_WIN_THRESHOLD', 0.55)
+                self.v4_winner_predictor.ELITE_THRESHOLD = getattr(config, 'V4_ELITE_THRESHOLD', 0.70)
+                self.v4_winner_predictor.SKIP_THRESHOLD = getattr(config, 'V4_SKIP_THRESHOLD', 0.45)
+                logger.info("   ✅ V4 WINNER PREDICTOR: ENABLED (ML GradientBoosting)")
+
+            # V4 Regime Predictor (Predictive, not reactive)
+            if getattr(config, 'V4_REGIME_PREDICTION_ENABLED', True):
+                from backtesting.v4_regime_predictor import V4RegimePredictor
+                self.v4_regime_predictor = V4RegimePredictor()
+                self.v4_regime_predictor.prediction_horizon = getattr(config, 'V4_REGIME_PREDICTION_HORIZON', 12)
+                logger.info("   ✅ V4 REGIME PREDICTOR: ENABLED (12-bar lookahead)")
+
+            logger.info("=" * 60)
+
         # Apply backtest confidence multiplier overrides if set
         if getattr(config, 'BACKTEST_CONF_LOW_MULT', None):
             config.CONF_V2_LOW_MULTIPLIER = config.BACKTEST_CONF_LOW_MULT
@@ -1581,7 +1639,81 @@ class BacktestEngine:
                     return
                 else:
                     logger.info(f"🤖 AI APPROVED: {ai_reasoning} (conf: {ai_confidence:.0%})")
-            
+
+            # =================================================================
+            # V4 ELITE WEALTH ENGINE CHECKS
+            # =================================================================
+
+            # V4 REGIME PREDICTOR: Get regime and parameters
+            v4_regime = 'unknown'
+            v4_regime_mult = 1.0
+            if self.v4_regime_predictor:
+                candles = sol_market_state.get('timeframes', {}).get('15m', {}).get('candles', [])
+                predicted_regime, regime_conf, regime_indicators = self.v4_regime_predictor.analyze(candles, sol_market_state)
+                v4_regime = predicted_regime.value if hasattr(predicted_regime, 'value') else str(predicted_regime)
+                v4_regime_mult = self.v4_regime_predictor.get_position_multiplier()
+                signal['v4_regime'] = v4_regime
+                signal['v4_regime_confidence'] = regime_conf
+                signal['v4_regime_mult'] = v4_regime_mult
+                logger.debug(f"🎯 V4 REGIME: {v4_regime} (conf: {regime_conf:.1%}, mult: {v4_regime_mult:.2f}x)")
+
+            # V4 DIRECTIONAL BIAS: Block/reduce shorts
+            if self.v4_directional_bias:
+                quality_score = filter_results.get('final_score', 50)
+                pred_direction = signal.get('prediction_direction', 'neutral')
+
+                dir_allowed, dir_mult, dir_reason = self.v4_directional_bias.check(
+                    signal, sol_market_state, quality_score, v4_regime, pred_direction
+                )
+
+                if not dir_allowed:
+                    logger.info(f"🚫 V4 DIRECTIONAL: {dir_reason}")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['v4_directional_blocked'] = True
+                    trade.filter_results['v4_directional_reason'] = dir_reason
+                    self.trades.append(trade)
+                    return
+                else:
+                    signal['v4_directional_mult'] = dir_mult
+                    if dir_mult < 1.0:
+                        logger.info(f"📉 V4 DIRECTIONAL: {dir_reason}")
+
+            # V4 WINNER PREDICTOR: ML-based trade filtering
+            if self.v4_winner_predictor:
+                quality_score = filter_results.get('final_score', 50)
+                v4_pred = self.v4_winner_predictor.predict_trade(signal, sol_market_state, quality_score)
+
+                signal['v4_win_probability'] = v4_pred.win_probability
+                signal['v4_prediction_decision'] = v4_pred.decision
+
+                if v4_pred.decision == 'SKIP':
+                    logger.info(f"🚫 V4 PREDICTOR: P(win)={v4_pred.win_probability:.1%} < 45% - BLOCKED")
+                    self.stats['signals_rejected'] += 1
+                    trade.filter_passed = False
+                    trade.filter_results['v4_predictor_blocked'] = True
+                    trade.filter_results['v4_win_probability'] = v4_pred.win_probability
+                    self.trades.append(trade)
+                    return
+                else:
+                    signal['v4_prediction_mult'] = v4_pred.position_multiplier
+                    if v4_pred.decision == 'TRADE_ELITE':
+                        logger.info(f"🔥 V4 PREDICTOR: ELITE signal P(win)={v4_pred.win_probability:.1%} -> 2x position")
+                    elif v4_pred.decision == 'TRADE_REDUCED':
+                        logger.info(f"⚠️ V4 PREDICTOR: Marginal P(win)={v4_pred.win_probability:.1%} -> 0.5x position")
+
+            # V4 KELLY SIZING: Optimal position sizing
+            if self.v4_kelly_sizer:
+                direction = signal.get('direction', 'long')
+                v4_win_prob = signal.get('v4_win_probability', None)
+
+                kelly_mult, kelly_details = self.v4_kelly_sizer.calculate_kelly_multiplier(direction, v4_win_prob)
+                signal['v4_kelly_mult'] = kelly_mult
+                signal['v4_kelly_details'] = kelly_details
+
+                if kelly_mult < 0.5 or kelly_mult > 1.5:
+                    logger.info(f"📊 V4 KELLY: {kelly_mult:.2f}x (W={kelly_details['win_rate']:.1%}, R={kelly_details['win_loss_ratio']:.2f})")
+
             self.stats['signals_passed_filters'] += 1
             self._execute_trade(trade, sol_market_state, signal)
         else:
@@ -1613,7 +1745,52 @@ class BacktestEngine:
         if signal and 'prediction_multiplier' in signal:
             pred_mult = signal.get('prediction_multiplier', 1.0)
             position_multiplier *= pred_mult
-        
+
+        # V4 STRATEGY BOOST: Increase position for high-edge strategies
+        if signal and getattr(config, 'V4_ENABLED', False) and getattr(config, 'V4_STRATEGY_BOOST_ENABLED', False):
+            strategy_name = signal.get('strategy', trade.strategy) if signal else trade.strategy
+            strategy_name = strategy_name.lower() if strategy_name else ''
+
+            if 'breakout' in strategy_name:
+                strategy_boost = getattr(config, 'V4_BREAKOUT_BOOST', 1.5)
+            elif 'mean_reversion' in strategy_name or 'mr' in strategy_name:
+                strategy_boost = getattr(config, 'V4_MEAN_REVERSION_BOOST', 1.0)
+            elif 'momentum' in strategy_name:
+                strategy_boost = getattr(config, 'V4_MOMENTUM_BOOST', 0.5)
+            else:
+                strategy_boost = 1.0
+
+            if strategy_boost != 1.0:
+                position_multiplier *= strategy_boost
+                logger.info(f"   🎯 V4 STRATEGY BOOST: {strategy_name} -> {strategy_boost:.2f}x position")
+
+        # V4 ELITE: Apply all V4 position multipliers
+        if signal:
+            # V4 Regime multiplier
+            v4_regime_mult = signal.get('v4_regime_mult', 1.0)
+            if v4_regime_mult != 1.0:
+                position_multiplier *= v4_regime_mult
+
+            # V4 Directional bias multiplier (shorts get reduced)
+            v4_dir_mult = signal.get('v4_directional_mult', 1.0)
+            if v4_dir_mult != 1.0:
+                position_multiplier *= v4_dir_mult
+
+            # V4 Winner predictor multiplier (elite/reduced)
+            v4_pred_mult = signal.get('v4_prediction_mult', 1.0)
+            if v4_pred_mult != 1.0:
+                position_multiplier *= v4_pred_mult
+
+            # V4 Kelly optimal sizing multiplier
+            v4_kelly_mult = signal.get('v4_kelly_mult', 1.0)
+            if v4_kelly_mult != 1.0:
+                position_multiplier *= v4_kelly_mult
+
+            # Log combined V4 effect
+            combined_v4 = v4_regime_mult * v4_dir_mult * v4_pred_mult * v4_kelly_mult
+            if combined_v4 != 1.0:
+                logger.debug(f"   🎯 V4 Combined mult: {combined_v4:.2f}x (regime={v4_regime_mult:.2f}, dir={v4_dir_mult:.2f}, pred={v4_pred_mult:.2f}, kelly={v4_kelly_mult:.2f})")
+
         # Apply V2 dynamic stop adjustment if available
         stop_adjustment = signal.get('prediction_stop_adjustment', 1.0) if signal else 1.0
         if stop_adjustment != 1.0:
@@ -1723,6 +1900,18 @@ class BacktestEngine:
             if should_early_exit:
                 logger.info(f"🔮 V2 EARLY EXIT: {early_exit_reason}")
                 self._close_position(current_price, 'prediction_reversal', current_time)
+                return
+
+        # V4 EARLY EXIT: Check MAE/MFE patterns for loser detection
+        if self.v4_early_exit:
+            should_exit, exit_reason, _ = self.v4_early_exit.check_early_exit(
+                trade, current_price, trade.bars_held
+            )
+            if should_exit:
+                # Calculate savings vs full stop
+                savings = self.v4_early_exit.calculate_savings(trade, current_price, trade.stop_price)
+                logger.info(f"🚀 V4 {exit_reason} (saved ~${savings:.2f} vs full stop)")
+                self._close_position(current_price, 'v4_early_exit', current_time)
                 return
 
         # Check exit conditions - Support multiple TP levels (V3)
@@ -2009,7 +2198,25 @@ class BacktestEngine:
         # System 3: Filter Learning - learn which filters predict wins
         if self.filter_learner and filter_scores:
             self.filter_learner.record_trade(filter_scores, pnl_dollar, trade.win)
-        
+
+        # =================================================================
+        # V4 ELITE: Record trade results for learning
+        # =================================================================
+
+        # V4 Kelly Sizer: Update rolling statistics
+        if self.v4_kelly_sizer:
+            direction = trade.direction
+            self.v4_kelly_sizer.update_from_trade(pnl_dollar, trade.win, direction)
+
+        # V4 Winner Predictor: Add training sample
+        if self.v4_winner_predictor and hasattr(trade, 'signal_data'):
+            # Get market state from signal if available
+            signal_data = getattr(trade, 'signal_data', {})
+            market_state = getattr(trade, 'market_state_at_entry', {})
+            self.v4_winner_predictor.add_training_sample(
+                signal_data, market_state, trade.win, pnl_dollar
+            )
+
         # Log
         result_emoji = "✅" if trade.win else "❌"
         regime_str = f" [{trade.entry_regime}]" if hasattr(trade, 'entry_regime') else ""
