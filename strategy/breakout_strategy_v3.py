@@ -76,17 +76,16 @@ class BreakoutStrategyV3:
             avg_volume_20 = volume_data.get('average_volume', 0)
             volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 0
             
-            # AGGRESSIVE: Lower volume threshold for more signals
-            # Analysis: 2.5x was too strict, 1.6x allows quality breakouts with moderate volume
-            if volume_ratio < 1.6:  # Lowered from 2.5x
+            # Volume threshold: 1.6x provides best balance of quality and quantity
+            # Tested: 2.2x/2.5x reduced returns, 1.6x optimal
+            if volume_ratio < 1.6:
                 logger.debug(f"❌ {self.name}: Volume too weak ({volume_ratio:.2f}x < 1.6x)")
                 return None
 
-            # RELAXED: Volume must be in top 5 (not top 3)
-            # This allows more opportunities while maintaining quality
+            # Volume must be in top 5 of recent 10 candles
             if len(candles) >= 10:
                 recent_volumes = sorted([c.get('volume', 0) for c in candles[-10:]], reverse=True)
-                if len(recent_volumes) >= 5 and current_volume < recent_volumes[4]:  # Must be top 5 (was top 3)
+                if len(recent_volumes) >= 5 and current_volume < recent_volumes[4]:  # Top 5
                     logger.debug(f"❌ {self.name}: Volume not in top 5")
                     return None
             

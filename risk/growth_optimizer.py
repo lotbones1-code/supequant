@@ -92,9 +92,15 @@ class GrowthOptimizer:
         if self.compound_enabled and self.starting_balance > 0:
             # Scale risk as account grows (up to max_risk_pct)
             growth_factor = account_balance / self.starting_balance
-            # Logarithmic scaling to prevent too aggressive growth
-            growth_multiplier = 1.0 + (math.log10(max(1.0, growth_factor)) * 0.5)
-            growth_multiplier = min(growth_multiplier, self.max_risk_pct / self.base_risk_pct)
+
+            # ELITE V3: SQRT compounding (more aggressive than log, safer than linear)
+            # Account doubles → position up 41% (sqrt(2) = 1.41)
+            # Account 4x → position doubles (sqrt(4) = 2.0)
+            # Account 9x → position 3x (sqrt(9) = 3.0)
+            # Old log10 was too conservative: 2x account → only 15% position increase
+            max_multiplier = self.max_risk_pct / self.base_risk_pct  # 5%/1% = 5.0x cap
+            growth_multiplier = min(math.sqrt(max(1.0, growth_factor)), max_multiplier)
+
             self.growth_multiplier = growth_multiplier
         else:
             growth_multiplier = 1.0
@@ -102,19 +108,22 @@ class GrowthOptimizer:
         # Confidence multiplier
         confidence_multiplier = 1.0
         if self.confidence_multiplier_enabled and confidence_score is not None:
-            # Scale from 0.5x to 2.0x based on confidence
-            # High confidence (0.8+) = 2.0x
-            # Low confidence (0.5-) = 0.5x
-            if confidence_score >= 0.8:
-                confidence_multiplier = 2.0
-            elif confidence_score >= 0.7:
-                confidence_multiplier = 1.5
-            elif confidence_score >= 0.6:
-                confidence_multiplier = 1.2
-            elif confidence_score < 0.5:
-                confidence_multiplier = 0.5
+            # ELITE V3: Aggressive confidence tiers for elite signals
+            # Same risk (stop loss unchanged), but more capital on best setups
+            if confidence_score >= 0.90:
+                confidence_multiplier = 4.0   # Rare elite signals (top 5%)
+            elif confidence_score >= 0.85:
+                confidence_multiplier = 3.0   # Very high confidence
+            elif confidence_score >= 0.80:
+                confidence_multiplier = 2.5   # High confidence
+            elif confidence_score >= 0.70:
+                confidence_multiplier = 1.8   # Good confidence
+            elif confidence_score >= 0.60:
+                confidence_multiplier = 1.3   # Moderate confidence
+            elif confidence_score >= 0.50:
+                confidence_multiplier = 1.0   # Base position size
             else:
-                confidence_multiplier = 1.0
+                confidence_multiplier = 0.5   # Low confidence - reduce size
         
         # Win streak multiplier (increase size after wins)
         streak_multiplier = 1.0

@@ -138,8 +138,8 @@ AI_CONFIDENCE_THRESHOLD = 40  # Was 70 - allow more trades through
 AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
-# Quality Score Threshold - OPTIMIZED for best returns
-SCORE_THRESHOLD = 50  # Sweet spot: 109.57% return, 53.66% win rate, 41 trades
+# Quality Score Threshold - Keep at 50 (47 reduced win rate too much)
+SCORE_THRESHOLD = 50  # Stay at 50 - quality over quantity
 
 # =============================================================================
 # ELITE V3 OPTIMIZATIONS - Experimental improvements
@@ -157,6 +157,11 @@ BLOCK_HOURS_UTC = []  # Disabled - didn't improve in backtest
 ELITE_TRAILING_AFTER_TP1 = False  # Disabled for now
 ELITE_TRAILING_PERCENT = 2.0     # 2% trailing stop distance
 ELITE_TRAILING_ACTIVATION_R = 1.5  # Activate trailing after 1.5R profit
+
+# ELITE V3: Dynamic position timeout (let winners run)
+TIMEOUT_BASE_BARS = 50           # 12.5 hours default
+TIMEOUT_AFTER_TP1_BARS = 120     # 30 hours after TP1 (let winner finish)
+TIMEOUT_PROFITABLE_BARS = 80     # 20 hours if position profitable
 
 # =============================================================================
 # ADAPTIVE THRESHOLD SYSTEM (LIVE) - Auto-adjusts based on recent performance
@@ -332,12 +337,12 @@ MEAN_REVERSION_ENABLED = True  # Re-enabled with dynamic sizing
 MR_REQUIRE_RANGING_REGIME = True       # Only trade when market is RANGING
 MR_MAX_TREND_STRENGTH = 0.30           # TIGHTENED (was 0.50) - only trade in clear ranging markets
 
-# RSI settings
+# RSI settings - ELITE V3: Relaxed to capture premium reversal zone
 MR_RSI_PERIOD = 14
-MR_RSI_OVERSOLD = 30                   # Strict - only extreme oversold
-MR_RSI_OVERBOUGHT = 70                 # Strict - only extreme overbought
-MR_RSI_EXTREME_OVERSOLD = 20           # Extra strong long signal
-MR_RSI_EXTREME_OVERBOUGHT = 80         # Extra strong short signal
+MR_RSI_OVERSOLD = 30                   # Keep at 30 - 35 reduced quality
+MR_RSI_OVERBOUGHT = 70                 # Keep at 70 - 65 reduced quality
+MR_RSI_EXTREME_OVERSOLD = 25           # Extra strong long signal
+MR_RSI_EXTREME_OVERBOUGHT = 75         # Extra strong short signal
 
 # Bollinger Bands settings
 MR_BB_PERIOD = 20

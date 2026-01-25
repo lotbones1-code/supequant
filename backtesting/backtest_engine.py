@@ -90,10 +90,12 @@ class BacktestTrade:
     
     # Position tracking for partial exits
     remaining_position: float = 0.0  # Remaining position size after partial exits
+    tp1_hit: bool = False  # TP1 price was reached (may not have exited yet)
     tp1_exited: bool = False
     tp2_exited: bool = False
     tp3_exited: bool = False
     partial_exits_pnl: float = 0.0  # Cumulative PnL from partial exits
+    unrealized_pnl: float = 0.0  # Current unrealized PnL for dynamic timeout
 
     # Filter results
     filter_results: Dict = field(default_factory=dict)
@@ -1629,9 +1631,17 @@ class BacktestEngine:
         # Register trade for V2 early exit monitoring
         if self.elite_prediction_v2:
             self.elite_prediction_v2.register_trade_for_early_exit(trade.signal_id, trade.direction)
-        
-        # Calculate position size with multiplier
-        base_risk = config.MAX_RISK_PER_TRADE * position_multiplier
+
+        # ELITE V3: Sqrt compounding with boost - scale risk as account grows
+        import math
+        growth_factor = self.current_capital / self.initial_capital
+        # Sqrt scaling with 1.15x boost: balances growth and risk
+        # 2x account = 1.63x risk, 3x = 2.0x risk, 4x = 2.3x risk
+        max_multiplier = 5.0  # Safety cap
+        growth_multiplier = min(math.sqrt(max(1.0, growth_factor)) * 1.15, max_multiplier)
+
+        # Calculate position size with multiplier AND growth compounding
+        base_risk = config.MAX_RISK_PER_TRADE * position_multiplier * growth_multiplier
         account_risk = self.current_capital * base_risk
         stop_distance = abs(trade.entry_price - trade.stop_price)
         position_size = account_risk / stop_distance if stop_distance > 0 else 0
@@ -1696,9 +1706,13 @@ class BacktestEngine:
         if trade.direction == 'long':
             excursion = (high - trade.actual_entry_price) / trade.actual_entry_price
             adverse = (trade.actual_entry_price - low) / trade.actual_entry_price
+            # Update unrealized PnL for dynamic timeout
+            trade.unrealized_pnl = (current_price - trade.actual_entry_price) * trade.remaining_position
         else:
             excursion = (trade.actual_entry_price - low) / trade.actual_entry_price
             adverse = (high - trade.actual_entry_price) / trade.actual_entry_price
+            # Update unrealized PnL for dynamic timeout
+            trade.unrealized_pnl = (trade.actual_entry_price - current_price) * trade.remaining_position
 
         trade.max_favorable_excursion = max(trade.max_favorable_excursion, excursion)
         trade.max_adverse_excursion = max(trade.max_adverse_excursion, adverse)
@@ -1782,8 +1796,25 @@ class BacktestEngine:
                     exit_reason = 'target'
                     exit_triggered = True
 
-        # Timeout after 50 bars (for 15m TF = 12.5 hours) - closes remaining position
-        if trade.bars_held >= 50 and trade.remaining_position > 0:
+        # ELITE V3: Dynamic timeout based on trade progress
+        # Winners that hit TP1 get more time to reach TP2/TP3
+        # Profitable positions get moderate extension
+        base_timeout = getattr(config, 'TIMEOUT_BASE_BARS', 50)
+        timeout_after_tp1 = getattr(config, 'TIMEOUT_AFTER_TP1_BARS', 120)
+        timeout_profitable = getattr(config, 'TIMEOUT_PROFITABLE_BARS', 80)
+
+        # Determine appropriate timeout based on trade status
+        if trade.tp1_hit or trade.tp1_exited:
+            # TP1 hit = winner in progress, let it run to TP2/TP3
+            timeout_bars = timeout_after_tp1
+        elif trade.unrealized_pnl > 0:
+            # Profitable but no TP hit yet - moderate extension
+            timeout_bars = timeout_profitable
+        else:
+            # Not profitable - use base timeout
+            timeout_bars = base_timeout
+
+        if trade.bars_held >= timeout_bars and trade.remaining_position > 0:
             exit_price = current_price
             exit_reason = 'timeout'
             exit_triggered = True
@@ -1802,6 +1833,7 @@ class BacktestEngine:
             current_time: Current timestamp
         """
         if tp_level == 1:
+            trade.tp1_hit = True  # Mark TP1 as hit for dynamic timeout
             trade.tp1_exited = True
             split_pct = trade.position_split.get(1, 0.5)
             
