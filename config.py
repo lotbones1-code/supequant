@@ -142,6 +142,23 @@ AI_FEATURE_WINDOW = 50
 SCORE_THRESHOLD = 50  # Sweet spot: 109.57% return, 53.66% win rate, 41 trades
 
 # =============================================================================
+# ELITE V3 OPTIMIZATIONS - Experimental improvements
+# =============================================================================
+# Optimization 1: SHORT SIGNAL BOOST
+# Shorts have 66.7% WR vs Longs 46.2% - capitalize on this edge
+SHORT_SIGNAL_QUALITY_BOOST = 0  # Disabled - didn't improve in backtest
+
+# Optimization 2: TIME-OF-DAY BLOCKING
+# Only block worst hour (23:00 UTC has 25% WR)
+BLOCK_HOURS_UTC = []  # Disabled - didn't improve in backtest
+
+# Optimization 3: TRAILING STOP AFTER TP1
+# Disabled - was causing earlier exits than fixed TP2 in backtests
+ELITE_TRAILING_AFTER_TP1 = False  # Disabled for now
+ELITE_TRAILING_PERCENT = 2.0     # 2% trailing stop distance
+ELITE_TRAILING_ACTIVATION_R = 1.5  # Activate trailing after 1.5R profit
+
+# =============================================================================
 # ADAPTIVE THRESHOLD SYSTEM (LIVE) - Auto-adjusts based on recent performance
 # =============================================================================
 # When winning: lowers threshold to catch more trades

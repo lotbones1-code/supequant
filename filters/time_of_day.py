@@ -272,7 +272,15 @@ class TimeOfDayFilter:
         time_str = now.strftime('%H:%M UTC')
         
         # === DECISION LOGIC ===
-        
+
+        # ELITE V3: BLOCK SPECIFIC HOURS (based on backtest analysis)
+        # Hours 20-23 UTC have poor win rates (25-50% WR, losing money)
+        blocked_hours = getattr(config, 'BLOCK_HOURS_UTC', [])
+        if now.hour in blocked_hours:
+            reason = f"🚫 Hour {now.hour}:00 UTC blocked (poor historical performance)"
+            logger.warning(f"❌ {self.name}: {reason}")
+            return False, reason
+
         # WEEKEND: Hard reject
         if session == TradingSession.WEEKEND:
             if getattr(config, 'AVOID_WEEKENDS', True):

@@ -76,7 +76,13 @@ class ManagedPosition:
     tp2_filled: bool = False
     tp2_fill_price: float = 0.0
     tp2_fill_time: datetime = None
-    
+
+    # ELITE V3: Trailing stop after TP1
+    trailing_stop_active: bool = False
+    trailing_stop_price: float = 0.0
+    trailing_stop_high: float = 0.0  # Highest price since TP1 (for longs)
+    trailing_stop_low: float = 0.0   # Lowest price since TP1 (for shorts)
+
     # State tracking
     state: PositionState = PositionState.PENDING
     trading_mode: str = "spot"  # 'spot' or 'perp'
@@ -678,15 +684,46 @@ class ProductionOrderManager:
                     logger.info(f"🎯 TP1 TRIGGERED @ ${current_price:.2f}")
                     self._execute_virtual_tp(position, 1, current_price)
             
-            # Check TP2 (if virtual and not filled, and TP1 is filled)
-            if position.tp2_is_virtual and not position.tp2_filled and position.tp1_filled:
+            # ELITE V3: Check trailing stop (if active after TP1)
+            if position.trailing_stop_active and position.tp1_filled and not position.tp2_filled:
+                import config
+                trailing_pct = getattr(config, 'ELITE_TRAILING_PERCENT', 2.0) / 100
+
+                if position.direction == 'long':
+                    # Update high water mark
+                    if current_price > position.trailing_stop_high:
+                        position.trailing_stop_high = current_price
+                        position.trailing_stop_price = current_price * (1 - trailing_pct)
+                        logger.debug(f"   📈 Trailing stop updated: high=${current_price:.2f}, stop=${position.trailing_stop_price:.2f}")
+
+                    # Check if trailing stop hit
+                    if current_price <= position.trailing_stop_price:
+                        logger.info(f"🔄 TRAILING STOP HIT @ ${current_price:.2f} (was ${position.trailing_stop_high:.2f})")
+                        self._execute_virtual_tp(position, 2, current_price)  # Close remaining position
+                        return
+
+                else:  # short
+                    # Update low water mark
+                    if current_price < position.trailing_stop_low:
+                        position.trailing_stop_low = current_price
+                        position.trailing_stop_price = current_price * (1 + trailing_pct)
+                        logger.debug(f"   📉 Trailing stop updated: low=${current_price:.2f}, stop=${position.trailing_stop_price:.2f}")
+
+                    # Check if trailing stop hit
+                    if current_price >= position.trailing_stop_price:
+                        logger.info(f"🔄 TRAILING STOP HIT @ ${current_price:.2f} (was ${position.trailing_stop_low:.2f})")
+                        self._execute_virtual_tp(position, 2, current_price)  # Close remaining position
+                        return
+
+            # Check TP2 (if virtual and not filled, and TP1 is filled, and NO trailing stop)
+            elif position.tp2_is_virtual and not position.tp2_filled and position.tp1_filled and not position.trailing_stop_active:
                 if position.direction == 'long' and current_price >= position.tp2_price:
                     logger.info(f"🎯 TP2 TRIGGERED @ ${current_price:.2f}")
                     self._execute_virtual_tp(position, 2, current_price)
                 elif position.direction == 'short' and current_price <= position.tp2_price:
                     logger.info(f"🎯 TP2 TRIGGERED @ ${current_price:.2f}")
                     self._execute_virtual_tp(position, 2, current_price)
-            
+
             # Check if limit orders filled (for non-virtual TPs)
             self._check_limit_order_fills(position)
             
@@ -724,6 +761,20 @@ class ProductionOrderManager:
                     pnl = (current_price - position.entry_price) * size
                     position.realized_pnl += pnl
                     logger.info(f"   ✅ TP1 executed: {size:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
+
+                    # ELITE V3: Activate trailing stop after TP1
+                    import config
+                    if getattr(config, 'ELITE_TRAILING_AFTER_TP1', False):
+                        trailing_pct = getattr(config, 'ELITE_TRAILING_PERCENT', 2.0) / 100
+                        position.trailing_stop_active = True
+                        if position.direction == 'long':
+                            position.trailing_stop_high = current_price
+                            position.trailing_stop_price = current_price * (1 - trailing_pct)
+                        else:  # short
+                            position.trailing_stop_low = current_price
+                            position.trailing_stop_price = current_price * (1 + trailing_pct)
+                        logger.info(f"   🔄 TRAILING STOP ACTIVATED: {trailing_pct*100:.1f}% @ ${position.trailing_stop_price:.2f}")
+
                     # Send TP1 notification
                     if self.notifier:
                         remaining = position.tp2_size if not position.tp2_filled else 0

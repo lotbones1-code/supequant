@@ -215,10 +215,17 @@ class FilterManager:
             except Exception as e:
                 logger.debug(f"   Pattern matching failed: {e}")
         
+        # ELITE V3: Boost short signals (shorts have 66.7% WR vs longs 46.2%)
+        short_boost = getattr(config, 'SHORT_SIGNAL_QUALITY_BOOST', 0)
+        if signal_direction == 'short' and short_boost > 0:
+            score += short_boost
+            score_breakdown['short_signal_boost'] = short_boost
+            logger.debug(f"   📉 Short signal boost: +{short_boost} points (total: {score:.1f})")
+
         results['score'] = score
         results['score_breakdown'] = score_breakdown
         self.filter_stats['score_distribution'].append(score)
-        
+
         # Step 3: Check if score meets threshold (adaptive - starts at 45, raises to 55 after learning)
         score_threshold = getattr(config, 'SCORE_THRESHOLD', 45)
         
