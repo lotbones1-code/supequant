@@ -1,0 +1,149 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-24 17:25:33
+Run Name: elite_v3_relaxed_kelly_f025_m20
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $12,948.96
+  Total PnL: $+2,514.39
+  Total Return: +29.49%
+  CAGR: 423.24%
+  Max Drawdown: 8.60%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 169
+  Signals Passed Filters: 34 (20.1%)
+  Trades Executed: 34
+  Wins: 15 | Losses: 19 | BE: 0
+  Win Rate: 44.12%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 1.80
+  Profit Factor: 1.54
+  Expectancy: $73.95/trade
+
+🎯 ASSESSMENT:
+  ✅ GOOD SYSTEM - Shows promise, continue validation
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $+2,948.96 (+29.49%)
+  CAGR: 423.24%
+  Period: 57 days (0.16 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 1.80
+  Sortino Ratio: 2.40
+  Max Drawdown: 8.60%
+  Volatility: 2.15%
+  Calmar Ratio: 49.22
+
+📊 TRADE STATISTICS:
+  Total Trades: 34
+  Wins: 15 | Losses: 19 | BE: 0
+  Win Rate: 44.12%
+  Profit Factor: 1.54
+  Expectancy: $73.95 per trade
+  Kelly %: 15.41%
+  Avg Win: $479.86
+  Avg Loss: $-246.50
+  Largest Win: $1352.46
+  Largest Loss: $-484.59
+  Max Win Streak: 3
+  Max Loss Streak: 3
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.32
+  Avg MFE: 1.74%
+  Avg MAE: 1.33%
+  MFE/MAE Ratio: 1.30
+
+🎯 CONSISTENCY:
+  Trading Days: 28
+  Winning Days: 15
+  Losing Days: 13
+  Daily Win Rate: 53.57%
+  Avg Daily PnL: $+89.80
+  Best Day: $+1077.91
+  Worst Day: $-484.59
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 19.1 bars
+  Avg Win Duration: 28.8 bars
+  Avg Loss Duration: 11.4 bars
+  Exit Reasons: {'stop': 18, 'timeout': 6, 'target': 9, 'tp3_complete': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 84 rejections (62.2%)
+  pattern_failure: 46 rejections (34.1%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (84 rejections)
+  ✅ Filter pass rate (20.1%) is reasonable
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  MEAN_REVERSION:
+    Trades: 31
+    Wins: 13 (41.9%)
+    PnL: $+1,108.72
+
+  BREAKOUT:
+    Trades: 3
+    Wins: 2 (66.7%)
+    PnL: $+1,405.67
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 25
+    Wins: 11 (44.0%)
+    PnL: $+2,228.53
+
+  SHORT:
+    Trades: 9
+    Wins: 4 (44.4%)
+    PnL: $+285.86
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+
+✅ SYSTEM SHOWS PROMISE:
+   Next steps:
+   1. Run on different time periods (walk-forward)
+   2. Test on different market conditions
+   3. Paper trade for 30-90 days
+   4. Start live with reduced size (0.25% risk)
+
+
+================================================================================
+END OF REPORT
+================================================================================

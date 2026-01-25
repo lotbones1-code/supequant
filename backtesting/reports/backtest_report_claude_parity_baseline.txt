@@ -1,0 +1,163 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-24 18:31:14
+Run Name: claude_parity_baseline
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $6,358.89
+  Total PnL: $-3,732.60
+  Total Return: -36.41%
+  CAGR: -94.49%
+  Max Drawdown: 59.71%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 408
+  Signals Passed Filters: 301 (73.8%)
+  Trades Executed: 301
+  Wins: 119 | Losses: 182 | BE: 0
+  Win Rate: 39.53%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 0.77
+  Profit Factor: 0.92
+  Expectancy: $-12.40/trade
+
+🎯 ASSESSMENT:
+  ❌ LOSING SYSTEM - Do not trade live
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $-3,641.11 (-36.41%)
+  CAGR: -94.49%
+  Period: 57 days (0.16 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 0.77
+  Sortino Ratio: 1.08
+  Max Drawdown: 59.71%
+  Volatility: 0.81%
+  Calmar Ratio: -1.58
+
+📊 TRADE STATISTICS:
+  Total Trades: 301
+  Wins: 119 | Losses: 182 | BE: 0
+  Win Rate: 39.53%
+  Profit Factor: 0.92
+  Expectancy: $-12.40 per trade
+  Kelly %: -3.64%
+  Avg Win: $340.80
+  Avg Loss: $-243.34
+  Largest Win: $805.60
+  Largest Loss: $-524.38
+  Max Win Streak: 4
+  Max Loss Streak: 8
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.33
+  Avg MFE: 0.57%
+  Avg MAE: 0.47%
+  MFE/MAE Ratio: 1.21
+
+🎯 CONSISTENCY:
+  Trading Days: 46
+  Winning Days: 20
+  Losing Days: 26
+  Daily Win Rate: 43.48%
+  Avg Daily PnL: $-81.14
+  Best Day: $+2201.42
+  Worst Day: $-2002.25
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 4.9 bars
+  Avg Win Duration: 6.7 bars
+  Avg Loss Duration: 3.7 bars
+  Exit Reasons: {'stop': 181, 'timeout': 5, 'target': 114, 'backtest_end': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 62 rejections (57.9%)
+  pattern_failure: 38 rejections (35.5%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (62 rejections)
+  ⚠️  WARNING: High filter pass rate (>50%)
+     Filters may not be selective enough
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  MEANREVERSION:
+    Trades: 27
+    Wins: 12 (44.4%)
+    PnL: $+1,361.77
+
+  BREAKOUTV3:
+    Trades: 2
+    Wins: 1 (50.0%)
+    PnL: $-81.18
+
+  HFT_SCALPING:
+    Trades: 272
+    Wins: 106 (39.0%)
+    PnL: $-5,013.19
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 143
+    Wins: 58 (40.6%)
+    PnL: $-1,529.22
+
+  SHORT:
+    Trades: 158
+    Wins: 61 (38.6%)
+    PnL: $-2,203.38
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+📉 LOW WIN RATE: Win rate is below 40%. Consider:
+   - Reviewing entry criteria
+   - Adjusting stop loss placement
+   - Checking if market conditions suit strategies
+❌ NEGATIVE EXPECTANCY: Profit factor < 1.0
+   - System is losing money
+   - DO NOT trade this live
+   - Major strategy revision needed
+⚠️  HIGH DRAWDOWN: Max DD > 20%
+   - Reduce position size
+   - Implement stricter daily loss limits
+   - Consider risk per trade < 0.5%
+📊 LOW RISK-ADJUSTED RETURNS: Sharpe < 1.0
+   - Returns not adequate for risk taken
+   - Consider less risky instruments
+
+
+================================================================================
+END OF REPORT
+================================================================================

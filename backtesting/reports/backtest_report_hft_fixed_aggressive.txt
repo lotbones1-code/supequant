@@ -1,0 +1,154 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-24 18:09:11
+Run Name: hft_fixed_aggressive
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $11,201.97
+  Total PnL: $+871.54
+  Total Return: +12.02%
+  CAGR: 174.69%
+  Max Drawdown: 16.63%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 134
+  Signals Passed Filters: 22 (16.4%)
+  Trades Executed: 22
+  Wins: 10 | Losses: 12 | BE: 0
+  Win Rate: 45.45%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 1.82
+  Profit Factor: 1.23
+  Expectancy: $39.62/trade
+
+🎯 ASSESSMENT:
+  ⚠️  Insufficient data (< 30 trades) - Results inconclusive
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $+1,201.97 (+12.02%)
+  CAGR: 174.69%
+  Period: 41 days (0.11 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 1.82
+  Sortino Ratio: 2.29
+  Max Drawdown: 16.63%
+  Volatility: 1.73%
+  Calmar Ratio: 10.51
+
+📊 TRADE STATISTICS:
+  Total Trades: 22
+  Wins: 10 | Losses: 12 | BE: 0
+  Win Rate: 45.45%
+  Profit Factor: 1.23
+  Expectancy: $39.62 per trade
+  Kelly %: 8.42%
+  Avg Win: $470.74
+  Avg Loss: $-319.66
+  Largest Win: $1297.57
+  Largest Loss: $-632.39
+  Max Win Streak: 3
+  Max Loss Streak: 5
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.23
+  Avg MFE: 1.49%
+  Avg MAE: 1.18%
+  MFE/MAE Ratio: 1.27
+
+🎯 CONSISTENCY:
+  Trading Days: 18
+  Winning Days: 9
+  Losing Days: 9
+  Daily Win Rate: 50.00%
+  Avg Daily PnL: $+48.42
+  Best Day: $+1034.07
+  Worst Day: $-705.00
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 17.2 bars
+  Avg Win Duration: 27.0 bars
+  Avg Loss Duration: 9.0 bars
+  Exit Reasons: {'stop': 11, 'timeout': 5, 'target': 5, 'tp3_complete': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 65 rejections (58.0%)
+  pattern_failure: 41 rejections (36.6%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (65 rejections)
+  ✅ Filter pass rate (16.4%) is reasonable
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  SCALPING:
+    Trades: 1
+    Wins: 0 (0.0%)
+    PnL: $-240.04
+
+  MEAN_REVERSION:
+    Trades: 20
+    Wins: 9 (45.0%)
+    PnL: $-185.99
+
+  BREAKOUT:
+    Trades: 1
+    Wins: 1 (100.0%)
+    PnL: $+1,297.57
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 15
+    Wins: 7 (46.7%)
+    PnL: $+877.02
+
+  SHORT:
+    Trades: 7
+    Wins: 3 (42.9%)
+    PnL: $-5.48
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+⚠️  LOW PROFIT FACTOR: PF < 1.5 is marginal
+   - Account for commissions and slippage
+   - May not be profitable after costs
+⚠️  INSUFFICIENT SAMPLE SIZE: < 30 trades
+   - Results may not be statistically significant
+   - Test on longer time period
+   - Minimum 100 trades recommended for validation
+
+
+================================================================================
+END OF REPORT
+================================================================================

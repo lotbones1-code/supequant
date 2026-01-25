@@ -64,7 +64,7 @@ TRAILING_STOP_ACTIVATION = 0.8  # Earlier trailing stop (was 1.0)
 GROWTH_MODE_ENABLED = os.getenv('GROWTH_MODE_ENABLED', 'True').lower() == 'true'
 GROWTH_BASE_RISK_PCT = 0.02  # Base risk (2% - aggressive for small accounts)
 GROWTH_MAX_RISK_PCT = 0.10  # Max risk (10% - aggressive but controlled)
-GROWTH_LEVERAGE = 5  # Leverage multiplier (5x for faster growth, max 10x)
+GROWTH_LEVERAGE = 5  # Leverage multiplier (5x - optimal for this system)
 GROWTH_COMPOUND_ENABLED = True  # Increase size as account grows - CRITICAL for small accounts
 GROWTH_CONFIDENCE_MULTIPLIER = True  # Bigger positions on high confidence
 GROWTH_AGGRESSIVE_TP = True  # Use aggressive TP targets (5R, 10R, 20R)
@@ -138,8 +138,8 @@ AI_CONFIDENCE_THRESHOLD = 40  # Was 70 - allow more trades through
 AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
-# Quality Score Threshold - Adaptive learning system
-SCORE_THRESHOLD = 50  # OPTIMIZED: Best balance of return, win rate, and drawdown
+# Quality Score Threshold - OPTIMIZED for best returns
+SCORE_THRESHOLD = 50  # Sweet spot: 109.57% return, 53.66% win rate, 41 trades
 
 # =============================================================================
 # ADAPTIVE THRESHOLD SYSTEM (LIVE) - Auto-adjusts based on recent performance

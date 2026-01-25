@@ -1,0 +1,163 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-24 18:20:10
+Run Name: hft_daily_short_window_hftlabel_spread15_tp60
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $7,002.72
+  Total PnL: $-2,997.28
+  Total Return: -29.97%
+  CAGR: -95.14%
+  Max Drawdown: 42.34%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 271
+  Signals Passed Filters: 189 (69.7%)
+  Trades Executed: 189
+  Wins: 73 | Losses: 116 | BE: 0
+  Win Rate: 38.62%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 0.54
+  Profit Factor: 0.88
+  Expectancy: $-15.86/trade
+
+🎯 ASSESSMENT:
+  ❌ LOSING SYSTEM - Do not trade live
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $-2,997.28 (-29.97%)
+  CAGR: -95.14%
+  Period: 43 days (0.12 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 0.54
+  Sortino Ratio: 0.73
+  Max Drawdown: 42.34%
+  Volatility: 0.69%
+  Calmar Ratio: -2.25
+
+📊 TRADE STATISTICS:
+  Total Trades: 189
+  Wins: 73 | Losses: 116 | BE: 0
+  Win Rate: 38.62%
+  Profit Factor: 0.88
+  Expectancy: $-15.86 per trade
+  Kelly %: -5.09%
+  Avg Win: $311.61
+  Avg Loss: $-221.94
+  Largest Win: $692.40
+  Largest Loss: $-492.62
+  Max Win Streak: 4
+  Max Loss Streak: 7
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.31
+  Avg MFE: 0.56%
+  Avg MAE: 0.44%
+  MFE/MAE Ratio: 1.26
+
+🎯 CONSISTENCY:
+  Trading Days: 32
+  Winning Days: 14
+  Losing Days: 18
+  Daily Win Rate: 43.75%
+  Avg Daily PnL: $-93.66
+  Best Day: $+1393.50
+  Worst Day: $-1399.64
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 4.3 bars
+  Avg Win Duration: 6.2 bars
+  Avg Loss Duration: 3.1 bars
+  Exit Reasons: {'stop': 114, 'timeout': 4, 'target': 70, 'backtest_end': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 47 rejections (57.3%)
+  pattern_failure: 31 rejections (37.8%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (47 rejections)
+  ⚠️  WARNING: High filter pass rate (>50%)
+     Filters may not be selective enough
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  SCALPING:
+    Trades: 1
+    Wins: 0 (0.0%)
+    PnL: $-240.04
+
+  MEANREVERSION:
+    Trades: 18
+    Wins: 8 (44.4%)
+    PnL: $-71.67
+
+  HFT_SCALPING:
+    Trades: 170
+    Wins: 65 (38.2%)
+    PnL: $-2,685.56
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 86
+    Wins: 38 (44.2%)
+    PnL: $+1,384.11
+
+  SHORT:
+    Trades: 103
+    Wins: 35 (34.0%)
+    PnL: $-4,381.39
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+📉 LOW WIN RATE: Win rate is below 40%. Consider:
+   - Reviewing entry criteria
+   - Adjusting stop loss placement
+   - Checking if market conditions suit strategies
+❌ NEGATIVE EXPECTANCY: Profit factor < 1.0
+   - System is losing money
+   - DO NOT trade this live
+   - Major strategy revision needed
+⚠️  HIGH DRAWDOWN: Max DD > 20%
+   - Reduce position size
+   - Implement stricter daily loss limits
+   - Consider risk per trade < 0.5%
+📊 LOW RISK-ADJUSTED RETURNS: Sharpe < 1.0
+   - Returns not adequate for risk taken
+   - Consider less risky instruments
+
+
+================================================================================
+END OF REPORT
+================================================================================

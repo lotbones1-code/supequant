@@ -1,0 +1,160 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-24 17:31:43
+Run Name: elite_v3_relaxed_score_45
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $13,379.11
+  Total PnL: $+2,938.40
+  Total Return: +33.79%
+  CAGR: 545.03%
+  Max Drawdown: 16.12%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 170
+  Signals Passed Filters: 33 (19.4%)
+  Trades Executed: 33
+  Wins: 15 | Losses: 18 | BE: 0
+  Win Rate: 45.45%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 2.44
+  Profit Factor: 1.46
+  Expectancy: $89.04/trade
+
+🎯 ASSESSMENT:
+  ⚠️  MARGINAL SYSTEM - May not be profitable after costs
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $+3,379.11 (+33.79%)
+  CAGR: 545.03%
+  Period: 57 days (0.16 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 2.44
+  Sortino Ratio: 3.31
+  Max Drawdown: 16.12%
+  Volatility: 2.14%
+  Calmar Ratio: 33.80
+
+📊 TRADE STATISTICS:
+  Total Trades: 33
+  Wins: 15 | Losses: 18 | BE: 0
+  Win Rate: 45.45%
+  Profit Factor: 1.46
+  Expectancy: $89.04 per trade
+  Kelly %: 14.40%
+  Avg Win: $618.15
+  Avg Loss: $-351.88
+  Largest Win: $1568.97
+  Largest Loss: $-680.74
+  Max Win Streak: 3
+  Max Loss Streak: 2
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.33
+  Avg MFE: 1.72%
+  Avg MAE: 1.29%
+  MFE/MAE Ratio: 1.33
+
+🎯 CONSISTENCY:
+  Trading Days: 28
+  Winning Days: 14
+  Losing Days: 14
+  Daily Win Rate: 50.00%
+  Avg Daily PnL: $+104.94
+  Best Day: $+1568.97
+  Worst Day: $-680.74
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 17.3 bars
+  Avg Win Duration: 28.8 bars
+  Avg Loss Duration: 7.8 bars
+  Exit Reasons: {'stop': 17, 'timeout': 6, 'target': 9, 'tp3_complete': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 84 rejections (61.3%)
+  pattern_failure: 46 rejections (33.6%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (84 rejections)
+  ✅ Filter pass rate (19.4%) is reasonable
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  SCALPING:
+    Trades: 1
+    Wins: 0 (0.0%)
+    PnL: $-239.96
+
+  MEAN_REVERSION:
+    Trades: 29
+    Wins: 13 (44.8%)
+    PnL: $+1,902.61
+
+  BREAKOUT:
+    Trades: 3
+    Wins: 2 (66.7%)
+    PnL: $+1,275.75
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 24
+    Wins: 11 (45.8%)
+    PnL: $+3,063.92
+
+  SHORT:
+    Trades: 9
+    Wins: 4 (44.4%)
+    PnL: $-125.52
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+⚠️  LOW PROFIT FACTOR: PF < 1.5 is marginal
+   - Account for commissions and slippage
+   - May not be profitable after costs
+✅ EXCELLENT RISK-ADJUSTED RETURNS: Sharpe > 2.0
+   - Strong risk/return profile
+   - Verify results with forward testing
+
+✅ SYSTEM SHOWS PROMISE:
+   Next steps:
+   1. Run on different time periods (walk-forward)
+   2. Test on different market conditions
+   3. Paper trade for 30-90 days
+   4. Start live with reduced size (0.25% risk)
+
+
+================================================================================
+END OF REPORT
+================================================================================

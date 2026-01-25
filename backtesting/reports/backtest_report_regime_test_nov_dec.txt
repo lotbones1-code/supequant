@@ -1,0 +1,160 @@
+================================================================================
+BACKTEST FULL REPORT
+================================================================================
+Generated: 2026-01-24 18:25:55
+Run Name: regime_test_nov_dec
+================================================================================
+
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+💰 CAPITAL & RETURNS:
+  Initial Capital: $10,000.00
+  Final Capital: $6,797.72
+  Total PnL: $-3,293.44
+  Total Return: -32.02%
+  CAGR: -91.56%
+  Max Drawdown: 57.28%
+
+📈 TRADE PERFORMANCE:
+  Total Signals: 400
+  Signals Passed Filters: 299 (74.8%)
+  Trades Executed: 299
+  Wins: 119 | Losses: 180 | BE: 0
+  Win Rate: 39.80%
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 1.01
+  Profit Factor: 0.93
+  Expectancy: $-11.01/trade
+
+🎯 ASSESSMENT:
+  ❌ LOSING SYSTEM - Do not trade live
+
+
+============================================================
+PERFORMANCE METRICS REPORT
+============================================================
+
+📈 RETURNS:
+  Total Return: $-3,202.28 (-32.02%)
+  CAGR: -91.56%
+  Period: 57 days (0.16 years)
+
+⚠️  RISK METRICS:
+  Sharpe Ratio: 1.01
+  Sortino Ratio: 1.46
+  Max Drawdown: 57.28%
+  Volatility: 0.80%
+  Calmar Ratio: -1.60
+
+📊 TRADE STATISTICS:
+  Total Trades: 299
+  Wins: 119 | Losses: 180 | BE: 0
+  Win Rate: 39.80%
+  Profit Factor: 0.93
+  Expectancy: $-11.01 per trade
+  Kelly %: -2.79%
+  Avg Win: $395.28
+  Avg Loss: $-279.62
+  Largest Win: $887.11
+  Largest Loss: $-528.61
+  Max Win Streak: 4
+  Max Loss Streak: 8
+
+💰 RISK/REWARD ANALYSIS:
+  Avg R:R Achieved: 1.33
+  Avg MFE: 0.57%
+  Avg MAE: 0.45%
+  MFE/MAE Ratio: 1.26
+
+🎯 CONSISTENCY:
+  Trading Days: 46
+  Winning Days: 20
+  Losing Days: 26
+  Daily Win Rate: 43.48%
+  Avg Daily PnL: $-71.60
+  Best Day: $+2200.61
+  Worst Day: $-2123.10
+
+⏱️  TIME ANALYSIS:
+  Avg Trade Duration: 4.9 bars
+  Avg Win Duration: 6.7 bars
+  Avg Loss Duration: 3.7 bars
+  Exit Reasons: {'stop': 179, 'timeout': 5, 'target': 114, 'backtest_end': 1}
+
+============================================================
+
+================================================================================
+FILTER ANALYSIS
+================================================================================
+
+📊 FILTER REJECTION BREAKDOWN:
+
+  quality_score: 59 rejections (58.4%)
+  pattern_failure: 35 rejections (34.7%)
+
+🔍 FILTER INSIGHTS:
+  • Most restrictive filter: quality_score (59 rejections)
+  ⚠️  WARNING: High filter pass rate (>50%)
+     Filters may not be selective enough
+
+
+================================================================================
+TRADE ANALYSIS
+================================================================================
+
+📊 PERFORMANCE BY STRATEGY:
+
+  MEANREVERSION:
+    Trades: 25
+    Wins: 12 (48.0%)
+    PnL: $+1,998.36
+
+  BREAKOUTV3:
+    Trades: 2
+    Wins: 1 (50.0%)
+    PnL: $-97.30
+
+  HFT_SCALPING:
+    Trades: 272
+    Wins: 106 (39.0%)
+    PnL: $-5,194.50
+
+📊 PERFORMANCE BY DIRECTION:
+
+  LONG:
+    Trades: 143
+    Wins: 58 (40.6%)
+    PnL: $-1,542.68
+
+  SHORT:
+    Trades: 156
+    Wins: 61 (39.1%)
+    PnL: $-1,750.76
+
+
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+📉 LOW WIN RATE: Win rate is below 40%. Consider:
+   - Reviewing entry criteria
+   - Adjusting stop loss placement
+   - Checking if market conditions suit strategies
+❌ NEGATIVE EXPECTANCY: Profit factor < 1.0
+   - System is losing money
+   - DO NOT trade this live
+   - Major strategy revision needed
+⚠️  HIGH DRAWDOWN: Max DD > 20%
+   - Reduce position size
+   - Implement stricter daily loss limits
+   - Consider risk per trade < 0.5%
+
+
+================================================================================
+END OF REPORT
+================================================================================
