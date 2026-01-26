@@ -249,14 +249,16 @@ class ProductionOrderManager:
         return cancelled
     
     def _sell_all_sol(self, symbol: str, amount: float) -> bool:
-        """Sell all SOL at market price"""
+        """Sell all SOL at market price on SPOT market (for cleanup)"""
         try:
+            # Always use spot symbol for SOL cleanup, regardless of trading mode
+            spot_symbol = 'SOL-USDT'
             result = self.client.place_order(
-                symbol=symbol,
+                symbol=spot_symbol,
                 side='sell',
                 order_type='market',
                 size=str(round(amount, 4)),
-                tdMode='cash'
+                tdMode='cash'  # Keep cash for spot cleanup
             )
             return result is not None
         except Exception as e:
@@ -303,7 +305,7 @@ class ProductionOrderManager:
         Returns:
             ManagedPosition object or None if failed
         """
-        symbol = SPOT_SYMBOL  # Always use spot for OKX US compliance
+        symbol = TRADING_SYMBOL  # Use perpetual symbol from config (SOL-USDT-SWAP)
         
         logger.info("\n" + "="*60)
         logger.info("🚀 EXECUTING TRADE")
@@ -396,8 +398,7 @@ class ProductionOrderManager:
                     side=side,
                     order_type='limit',
                     size=str(round(actual_size, 4)),
-                    price=str(limit_price),
-                    tdMode='cash'
+                    price=str(limit_price)
                 )
                 
                 if entry_result:
@@ -443,8 +444,7 @@ class ProductionOrderManager:
                     symbol=symbol,
                     side=side,
                     order_type='market',
-                    size=str(round(actual_size, 4)),
-                    tdMode='cash'
+                    size=str(round(actual_size, 4))
                 )
             
             if not entry_result:
@@ -564,8 +564,7 @@ class ProductionOrderManager:
                 side='sell',
                 order_type='limit',
                 size=str(round(size, 4)),
-                price=str(round(price, 2)),
-                tdMode='cash'
+                price=str(round(price, 2))
             )
             
             if result:
@@ -748,10 +747,9 @@ class ProductionOrderManager:
                 symbol=position.symbol,
                 side='sell',
                 order_type='market',
-                size=str(round(size, 4)),
-                tdMode='cash'
+                size=str(round(size, 4))
             )
-            
+
             if result:
                 if tp_num == 1:
                     position.tp1_filled = True
@@ -816,10 +814,9 @@ class ProductionOrderManager:
                 symbol=position.symbol,
                 side='sell',
                 order_type='market',
-                size=str(round(sol_balance, 4)),
-                tdMode='cash'
+                size=str(round(sol_balance, 4))
             )
-            
+
             if result:
                 pnl = (current_price - position.entry_price) * sol_balance
                 position.realized_pnl += pnl
@@ -962,10 +959,9 @@ class ProductionOrderManager:
                 symbol=position.symbol,
                 side='sell',
                 order_type='market',
-                size=str(round(sol_balance, 4)),
-                tdMode='cash'
+                size=str(round(sol_balance, 4))
             )
-            
+
             if result:
                 fill_price = float(result.get('fillPx', current_price))
                 position.realized_pnl = price_pnl
@@ -1185,10 +1181,9 @@ class ProductionOrderManager:
                     symbol=position.symbol,
                     side='sell',
                     order_type='market',
-                    size=str(round(sol_balance, 4)),
-                    tdMode='cash'
+                    size=str(round(sol_balance, 4))
                 )
-                
+
                 if result:
                     ticker = self.client.get_ticker(position.symbol)
                     close_price = float(ticker.get('last', position.entry_price)) if ticker else position.entry_price
