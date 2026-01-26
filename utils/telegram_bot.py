@@ -67,6 +67,14 @@ try:
 except ImportError:
     ANALYTICS_AVAILABLE = False
 
+# Comprehensive context builder for AI
+try:
+    from utils.context_builder import get_context_builder, SystemContextBuilder
+    CONTEXT_BUILDER_AVAILABLE = True
+except ImportError:
+    CONTEXT_BUILDER_AVAILABLE = False
+    logger.warning("Context builder not available - AI responses will be limited")
+
 
 # =============================================================================
 # DATA CLASSES
@@ -483,6 +491,19 @@ class EnhancedTelegramBot:
                 logger.info("🤖 ChatGPT enabled for enhanced Telegram bot responses")
             except Exception as e:
                 logger.warning(f"Could not initialize ChatGPT agent: {e}")
+
+        # Comprehensive context builder for AI (gives ChatGPT access to everything)
+        self.context_builder = None
+        if CONTEXT_BUILDER_AVAILABLE:
+            try:
+                self.context_builder = get_context_builder()
+                logger.info("📊 Context builder enabled - AI has full system visibility")
+            except Exception as e:
+                logger.warning(f"Could not initialize context builder: {e}")
+
+        # Track last diagnostic time for proactive alerts
+        self._last_diagnostic = None
+        self._last_proactive_alert = None
         
         # Natural language triggers (conversational) - narrowed to reduce false note prompts
         self.triggers = {
@@ -502,6 +523,14 @@ class EnhancedTelegramBot:
             'note': self._show_notes_menu,
             'remind': self._show_reminder_menu,
             'reminder': self._show_reminder_menu,
+            # New diagnostic triggers
+            'diagnose': self._handle_diagnose,
+            'diagnostic': self._handle_diagnose,
+            'review': self._handle_diagnose,
+            'check': self._handle_diagnose,
+            'why': self._handle_why_no_trades,
+            'filters': self._handle_filters,
+            'config': self._handle_config,
         }
         
         # Question patterns that trigger AI chat
@@ -520,6 +549,20 @@ class EnhancedTelegramBot:
             'no signals',
             'what happened',
             'explain',
+            # New patterns for enhanced AI
+            'what is wrong',
+            'any errors',
+            'any issues',
+            'any problems',
+            'is it working',
+            'system ok',
+            'how are we doing',
+            'performance',
+            'win rate',
+            'which filter',
+            'what strategy',
+            'should i change',
+            'recommend',
         ]
         
         # Command handlers (still supported)
@@ -537,6 +580,11 @@ class EnhancedTelegramBot:
             '/menu': self._show_main_menu,
             '/search': self._handle_search,
             '/ask': self._handle_ask_command,
+            '/diagnose': self._handle_diagnose,
+            '/review': self._handle_diagnose,
+            '/why': self._handle_why_no_trades,
+            '/filters': self._handle_filters,
+            '/config': self._handle_config,
             '/market': self._handle_market_question,
         }
         
@@ -675,6 +723,7 @@ class EnhancedTelegramBot:
                 self._check_note_reminders()
                 self._check_hourly_update()
                 self._check_daily_report()
+                self._check_proactive_alerts()
             except Exception as e:
                 logger.error(f"Error in scheduler loop: {e}")
             time.sleep(30)
@@ -1338,35 +1387,253 @@ Type a word or #tag to search:
 • Status: UNKNOWN (health checker error)
 • Mode: {mode}
             """.strip())
-    
+
+    def _handle_diagnose(self, args: str = None):
+        """Run full system diagnostic with AI analysis."""
+        self.send_message("🔍 <i>Running comprehensive system diagnostic...</i>")
+
+        if not self.context_builder:
+            self.send_message("❌ Context builder not available. Basic health check only.")
+            self._handle_health()
+            return
+
+        try:
+            # Run diagnostic
+            diagnostic = self.context_builder.run_diagnostic()
+
+            # Format for display
+            issues = diagnostic.get('issues_found', [])
+            recommendations = diagnostic.get('recommendations', [])
+            trading = diagnostic.get('trading', {})
+            filters = diagnostic.get('filters', {})
+
+            # Determine health status
+            if not issues:
+                status = "✅ HEALTHY"
+            elif len(issues) <= 2:
+                status = "⚠️ NEEDS ATTENTION"
+            else:
+                status = "🔴 ISSUES FOUND"
+
+            # Build response
+            response = f"""
+🔍 <b>SYSTEM DIAGNOSTIC</b>
+
+<b>Status:</b> {status}
+
+<b>Trading:</b>
+• Last trade: {trading.get('last_trade_age_hours', 0):.1f}h ago
+• Today: {trading.get('today_trades', 0)} trades, ${trading.get('today_pnl', 0):+.2f}
+• Win rate: {trading.get('all_time_win_rate', 0):.0f}%
+
+<b>Filters:</b>
+• Pass rate: {filters.get('pass_rate', 0)*100:.1f}%
+• Most restrictive: {filters.get('most_restrictive_filter', 'N/A')}
+"""
+
+            if issues:
+                response += "\n<b>Issues Found:</b>\n"
+                for issue in issues[:5]:
+                    response += f"• {issue}\n"
+
+            if recommendations:
+                response += "\n<b>Recommendations:</b>\n"
+                for rec in recommendations[:3]:
+                    response += f"• {rec}\n"
+
+            self.send_message(response.strip())
+
+            # Also get AI analysis if available
+            if self.chatgpt_agent and issues:
+                self._get_ai_diagnostic_analysis(diagnostic)
+
+        except Exception as e:
+            logger.error(f"Diagnostic failed: {e}")
+            self.send_message(f"❌ Diagnostic error: {str(e)[:100]}")
+
+    def _get_ai_diagnostic_analysis(self, diagnostic: Dict):
+        """Get ChatGPT analysis of diagnostic results."""
+        try:
+            issues = diagnostic.get('issues_found', [])
+            recommendations = diagnostic.get('recommendations', [])
+
+            prompt = f"""Boss Shamil ran a system diagnostic. Analyze and give a brief, positive assessment.
+
+Issues found: {issues}
+Recommendations: {recommendations}
+
+In 2-3 sentences:
+1. Is this concerning or normal?
+2. What's the #1 thing to check?
+3. End with encouragement.
+
+Be specific and helpful. Call him Boss."""
+
+            response = self._call_ai_chatgpt(
+                [{'role': 'user', 'content': prompt}],
+                system="You are Boss Shamil's trading AI. Be concise, specific, and positive.",
+                max_tokens=200
+            )
+
+            if response:
+                self.send_message(f"🤖 <b>AI Analysis:</b>\n\n{response}")
+
+        except Exception as e:
+            logger.error(f"AI diagnostic analysis failed: {e}")
+
+    def _handle_why_no_trades(self, args: str = None):
+        """Explain why system isn't trading."""
+        self.send_message("🔍 <i>Analyzing why no trades...</i>")
+
+        if not self.context_builder:
+            self.send_message("Context builder not available. Checking basic stats...")
+            self._handle_health()
+            return
+
+        try:
+            explanation = self.context_builder.explain_no_trades()
+
+            # Send formatted explanation
+            self.send_message(f"""
+📊 <b>WHY NO TRADES?</b>
+
+{explanation}
+
+<i>Say "diagnose" for full system review.</i>
+            """.strip())
+
+            # Get AI perspective if available
+            if self.chatgpt_agent:
+                self._get_ai_no_trades_analysis(explanation)
+
+        except Exception as e:
+            logger.error(f"Why no trades failed: {e}")
+            self.send_message(f"❌ Analysis error. Try /health for basic status.")
+
+    def _get_ai_no_trades_analysis(self, explanation: str):
+        """Get AI perspective on why no trades."""
+        try:
+            prompt = f"""Boss Shamil is asking why the system isn't trading. Here's the data:
+
+{explanation}
+
+In 2-3 short sentences:
+1. Is this normal or concerning?
+2. When might we expect a trade?
+3. Encourage patience if appropriate.
+
+Be specific about the data. Call him Boss."""
+
+            response = self._call_ai_chatgpt(
+                [{'role': 'user', 'content': prompt}],
+                system="You are Boss Shamil's trading AI. Be concise, data-driven, and encouraging.",
+                max_tokens=150
+            )
+
+            if response:
+                self.send_message(f"🤖 <i>{response}</i>")
+
+        except Exception as e:
+            logger.error(f"AI no-trades analysis failed: {e}")
+
+    def _handle_filters(self, args: str = None):
+        """Show filter statistics."""
+        if not self.context_builder:
+            self.send_message("❌ Context builder not available.")
+            return
+
+        try:
+            filters = self.context_builder.get_filter_summary()
+
+            response = f"""
+📊 <b>FILTER STATISTICS</b>
+
+• Total checks: {filters.get('total_checks', 0)}
+• Pass rate: {filters.get('pass_rate', 0)*100:.1f}%
+• Score threshold: {filters.get('score_threshold', 50)}
+• Most restrictive: {filters.get('most_restrictive_filter', 'unknown')}
+"""
+
+            rejections = filters.get('rejections_by_filter', {})
+            if rejections:
+                response += "\n<b>Rejections by Filter:</b>\n"
+                sorted_rej = sorted(rejections.items(), key=lambda x: x[1], reverse=True)[:5]
+                for name, count in sorted_rej:
+                    response += f"• {name}: {count}\n"
+
+            recent = filters.get('recent_rejections', [])
+            if recent:
+                response += "\n<b>Recent Rejections:</b>\n"
+                for r in recent[:3]:
+                    response += f"• Score {r.get('score', 0)}: {', '.join(r.get('failed_filters', [])[:2])}\n"
+
+            self.send_message(response.strip())
+
+        except Exception as e:
+            logger.error(f"Filter stats failed: {e}")
+            self.send_message(f"❌ Error getting filter stats.")
+
+    def _handle_config(self, args: str = None):
+        """Show key configuration values."""
+        if not self.context_builder:
+            self.send_message("❌ Context builder not available.")
+            return
+
+        try:
+            cfg = self.context_builder.get_config_summary()
+
+            response = f"""
+⚙️ <b>CONFIGURATION</b>
+
+<b>Trading:</b>
+• Mode: {cfg.get('trading_mode', 'UNKNOWN')}
+• Score threshold: {cfg.get('score_threshold', 50)}
+• Risk per trade: {cfg.get('max_risk_per_trade', 0.02)*100:.1f}%
+• Leverage: {cfg.get('leverage', 5)}x
+
+<b>V4 Settings:</b>
+• V4 enabled: {'✅' if cfg.get('v4_enabled') else '❌'}
+• Strategy boost: {'✅' if cfg.get('v4_strategy_boost') else '❌'}
+• Breakout boost: {cfg.get('v4_breakout_boost', 1.0)}x
+
+<b>Strategies:</b>
+{', '.join(cfg.get('strategies_enabled', []))}
+            """
+
+            self.send_message(response.strip())
+
+        except Exception as e:
+            logger.error(f"Config display failed: {e}")
+            self.send_message(f"❌ Error getting config.")
+
     def _handle_help(self, args: str = None):
         """Show help"""
         self.send_message("""
 🤖 <b>SUPEQUANT BOT</b>
 
-<b>Just Talk to Me:</b>
-• "notes" - Manage your ideas
+<b>Quick Commands:</b>
 • "status" - Quick update
 • "stats" - Performance
-• "remind" - Set reminders
-• "menu" - Main menu
+• "diagnose" - Full system review
+• "why" - Why no trades?
+• "filters" - Filter statistics
+• "config" - Current settings
 
 <b>Ask Me Anything:</b>
 • "Why did we lose?"
-• "Why did we win?"
 • "How is the market?"
-• "When is the next trade?"
-• "Analyze the market"
+• "Which filter rejects most?"
+• "What should I change?"
+• "Are there any errors?"
 
-<b>Commands (Power Users):</b>
-/note text - Quick save
-/notes - List all
-/remind 2h text - Set reminder
-/ask question - Ask AI anything
-/market - Market analysis
+<b>Commands:</b>
+/diagnose - Full system diagnostic
+/why - Why no trades
+/filters - Filter stats
+/config - Settings
 /status /stats /pnl /streak
 
-<i>Boss Shamil, I'm always here! 🚀</i>
+<i>Boss Shamil, I know EVERYTHING about the system! 🚀</i>
         """.strip())
     
     # =========================================================================
@@ -1630,12 +1897,26 @@ AI APIs are not configured. To enable:
         try:
             context = self._build_system_context()
 
-            system_prompt = """You are Boss Shamil's personal trading AI assistant.
-Keep it tight: 3-4 bullets, <60 words, no preamble.
-Use the provided context (mode, PnL, streak, alerts, regime, recent trades).
-If no trades, say when the last trade was and whether open positions exist.
-Offer concrete next checks (errors/regime/market) but do not suggest executing trades.
-Never claim you executed or changed anything."""
+            system_prompt = """You are Boss Shamil's elite trading AI assistant for his SUPEQUANT crypto system.
+
+PERSONALITY:
+- Call him "Boss" - you work for him and respect his vision
+- Be CONFIDENT and POSITIVE - every problem has a solution
+- Be SPECIFIC - use the exact numbers from context
+- Be CONCISE - 3-5 bullets max, under 80 words
+
+YOU HAVE ACCESS TO:
+- All trade history and performance stats
+- Filter statistics and rejection reasons
+- System health, errors, and configuration
+- Why the system isn't trading (if asked)
+
+RULES:
+- You CANNOT execute trades or change settings - only analyze and recommend
+- When suggesting changes, be specific (e.g., "lower SCORE_THRESHOLD from 50 to 45")
+- If system hasn't traded, explain WHY with data from context
+- Always end with actionable recommendation or encouragement
+- Never be doom-and-gloom - stay solution-oriented"""
             
             messages = [
                 {'role': 'user', 'content': f"{context}\n\nBoss Shamil asks: {question}"}
@@ -1680,7 +1961,15 @@ Or use /status for a quick update.
         return cleaned
 
     def _build_system_context(self) -> str:
-        """Build a compact system context for AI responses (read-only)."""
+        """Build comprehensive system context for AI responses (read-only)."""
+        # Use context builder if available (provides much more data)
+        if self.context_builder:
+            try:
+                return self.context_builder.build_full_context()
+            except Exception as e:
+                logger.warning(f"Context builder failed, using fallback: {e}")
+
+        # Fallback to basic context
         today = self.performance.get_today_stats()
         streak = self.performance.get_streak()
         weekly = self.performance.get_weekly_stats()
@@ -1955,7 +2244,61 @@ Be supportive and call him Boss."""
         
         self._last_daily_report = now
         self.send_daily_summary()
-    
+
+    def _check_proactive_alerts(self):
+        """Check for issues and send proactive alerts every 4 hours."""
+        now = datetime.now(timezone.utc)
+
+        # Only check every 4 hours
+        if self._last_proactive_alert:
+            time_since = now - self._last_proactive_alert
+            if time_since.total_seconds() < 4 * 3600:  # 4 hours
+                return
+
+        self._last_proactive_alert = now
+
+        # Skip if context builder not available
+        if not self.context_builder:
+            return
+
+        try:
+            alerts = []
+
+            # Check 1: No trades in 24+ hours
+            trading_summary = self.context_builder.get_trading_summary()
+            last_trade_hours = trading_summary.get('last_trade_age_hours', 0)
+            if last_trade_hours > 24:
+                alerts.append(f"⏰ No trades in {last_trade_hours:.0f}+ hours")
+
+            # Check 2: High error rate
+            health_summary = self.context_builder.get_system_health()
+            error_count = health_summary.get('error_count_1h', 0)
+            if error_count > 10:
+                alerts.append(f"⚠️ High error rate: {error_count} errors in last hour")
+
+            # Check 3: Filter pass rate too low (filters may be too strict)
+            filter_summary = self.context_builder.get_filter_summary()
+            pass_rate = filter_summary.get('pass_rate', 100)
+            signals_evaluated = filter_summary.get('total_checks', 0)
+            if signals_evaluated > 10 and pass_rate < 1:
+                alerts.append(f"🔒 Filters very strict: {pass_rate:.1f}% pass rate")
+
+            # Check 4: Critical errors detected (check alerts list)
+            system_alerts = health_summary.get('alerts', [])
+            critical_alerts = [a for a in system_alerts if 'CRITICAL' in str(a).upper()]
+            if critical_alerts:
+                alerts.append(f"🚨 CRITICAL errors detected!")
+
+            # Send alert if any issues found
+            if alerts:
+                alert_msg = "<b>🔔 PROACTIVE ALERT</b>\n\n"
+                alert_msg += "\n".join(alerts)
+                alert_msg += "\n\n<i>Use /diagnose for full system check</i>"
+                self.send_message(alert_msg)
+
+        except Exception as e:
+            logger.debug(f"Error in proactive alerts: {e}")
+
     def _format_age(self, iso_timestamp: str) -> str:
         """Format timestamp as age string"""
         try:
