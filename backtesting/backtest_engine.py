@@ -1714,6 +1714,20 @@ class BacktestEngine:
                 if kelly_mult < 0.5 or kelly_mult > 1.5:
                     logger.info(f"📊 V4 KELLY: {kelly_mult:.2f}x (W={kelly_details['win_rate']:.1%}, R={kelly_details['win_loss_ratio']:.2f})")
 
+            # V4 QUALITY GATE: Stricter entry when V4 active (reduces bad trades)
+            if getattr(config, 'V4_ENABLED', False):
+                v4_min = getattr(config, 'V4_QUALITY_THRESHOLD', None)
+                if v4_min is not None:
+                    q = filter_results.get('score', filter_results.get('final_score', 50))
+                    if q < v4_min:
+                        logger.info(f"🚫 V4 QUALITY GATE: score {q:.0f} < {v4_min} - BLOCKED")
+                        self.stats['signals_rejected'] += 1
+                        trade.filter_passed = False
+                        trade.filter_results['v4_quality_blocked'] = True
+                        trade.filter_results['v4_quality_score'] = q
+                        self.trades.append(trade)
+                        return
+
             self.stats['signals_passed_filters'] += 1
             self._execute_trade(trade, sol_market_state, signal)
         else:
@@ -1730,8 +1744,30 @@ class BacktestEngine:
         """
         Execute a trade (simulate)
         """
+        # V4 PYRAMID: Use 30/35/35 split to let winners run (less at TP1, more at TP2/TP3)
+        if getattr(config, 'V4_ENABLED', False) and getattr(config, 'V4_PYRAMID_ENABLED', False):
+            tp1 = getattr(config, 'V4_PYRAMID_TP1_PCT', 0.30)
+            tp2 = getattr(config, 'V4_PYRAMID_TP2_PCT', 0.35)
+            tp3 = getattr(config, 'V4_PYRAMID_TP3_PCT', 0.35)
+            trade.position_split = {1: tp1, 2: tp2, 3: tp3}
+            logger.info(f"   🎯 V4 PYRAMID: TP split {tp1:.0%}/{tp2:.0%}/{tp3:.0%} (let winners run)")
+
         # Get position size multiplier from filter results (based on score)
         position_multiplier = trade.filter_results.get('position_size_multiplier', 1.0)
+
+        # V4 SCORE SIZING: Reduce size on marginal quality, boost on high (no blocking)
+        if getattr(config, 'V4_ENABLED', False) and getattr(config, 'V4_SCORE_SIZING_ENABLED', False):
+            q = trade.filter_results.get('score', trade.filter_results.get('final_score', 50))
+            low_max = getattr(config, 'V4_SCORE_LOW_MAX', 54)
+            high_min = getattr(config, 'V4_SCORE_HIGH_MIN', 65)
+            if q <= low_max:
+                mult = getattr(config, 'V4_SCORE_LOW_MULT', 0.90)
+                position_multiplier *= mult
+                logger.info(f"   📉 V4 SCORE SIZING: score {q:.0f} <= {low_max} -> {mult:.2f}x")
+            elif q >= high_min:
+                mult = getattr(config, 'V4_SCORE_HIGH_MULT', 1.05)
+                position_multiplier *= mult
+                logger.info(f"   📈 V4 SCORE SIZING: score {q:.0f} >= {high_min} -> {mult:.2f}x")
         
         # Apply regime-based position sizing if available
         regime_mult = 1.0
@@ -1791,6 +1827,14 @@ class BacktestEngine:
             if combined_v4 != 1.0:
                 logger.debug(f"   🎯 V4 Combined mult: {combined_v4:.2f}x (regime={v4_regime_mult:.2f}, dir={v4_dir_mult:.2f}, pred={v4_pred_mult:.2f}, kelly={v4_kelly_mult:.2f})")
 
+        # V4 safety cap on total multiplier
+        if getattr(config, 'V4_ENABLED', False):
+            max_mult = getattr(config, 'V4_MAX_POSITION_MULT', None)
+            if max_mult and position_multiplier > max_mult:
+                pre_cap = position_multiplier
+                position_multiplier = max_mult
+                logger.info(f"   🛡️ V4 cap applied: {pre_cap:.2f}x -> {position_multiplier:.2f}x")
+
         # Apply V2 dynamic stop adjustment if available
         stop_adjustment = signal.get('prediction_stop_adjustment', 1.0) if signal else 1.0
         if stop_adjustment != 1.0:
@@ -1826,9 +1870,9 @@ class BacktestEngine:
         if position_size <= 0:
             return
 
-        # Apply slippage (0.02% = 2 basis points)
-        slippage_pct = 0.0002
-        
+        # Apply slippage from config (default 0.05% = 5 basis points)
+        slippage_pct = getattr(config, 'BACKTEST_SLIPPAGE', 0.0005)
+
         # BACKTEST: Entry improvement (simulate limit order fill at better price)
         entry_improvement = getattr(config, 'BACKTEST_ENTRY_IMPROVEMENT', 0) or 0
         
@@ -1991,6 +2035,11 @@ class BacktestEngine:
         base_timeout = getattr(config, 'TIMEOUT_BASE_BARS', 50)
         timeout_after_tp1 = getattr(config, 'TIMEOUT_AFTER_TP1_BARS', 120)
         timeout_profitable = getattr(config, 'TIMEOUT_PROFITABLE_BARS', 80)
+        # V4: Longer timeout after TP1 when V4 enabled (let winners run)
+        if getattr(config, 'V4_ENABLED', False):
+            v4_tp1 = getattr(config, 'V4_TIMEOUT_AFTER_TP1_BARS', None)
+            if v4_tp1 is not None:
+                timeout_after_tp1 = v4_tp1
 
         # Determine appropriate timeout based on trade status
         if trade.tp1_hit or trade.tp1_exited:
@@ -2026,13 +2075,16 @@ class BacktestEngine:
             trade.tp1_exited = True
             split_pct = trade.position_split.get(1, 0.5)
             
-            # Move stop to breakeven after TP1 (ELITE mode OR backtest test)
+            # Move stop to breakeven after TP1 (ELITE mode, backtest test, or V4-only)
             use_breakeven = (
                 (getattr(config, 'ELITE_BACKTEST_MODE', False) and getattr(config, 'ELITE_BREAKEVEN_AFTER_TP1', False))
                 or getattr(config, 'BACKTEST_BREAKEVEN_AFTER_TP1', False)
+                or (getattr(config, 'V4_ENABLED', False) and getattr(config, 'V4_BREAKEVEN_AFTER_TP1', False))
             )
             if use_breakeven:
-                buffer = getattr(config, 'ELITE_BREAKEVEN_BUFFER', 0.001)
+                buffer = getattr(config, 'V4_BREAKEVEN_BUFFER', None) if getattr(config, 'V4_ENABLED', False) else None
+                if buffer is None:
+                    buffer = getattr(config, 'ELITE_BREAKEVEN_BUFFER', 0.001)
                 old_stop = trade.stop_price
                 if trade.direction == 'long':
                     # Move stop to just below entry (with buffer)
@@ -2059,8 +2111,8 @@ class BacktestEngine:
         # Calculate position size to exit
         exit_size = trade.position_size * split_pct
         
-        # Apply exit slippage
-        slippage_pct = 0.0002
+        # Apply exit slippage from config
+        slippage_pct = getattr(config, 'BACKTEST_SLIPPAGE', 0.0005)
         if trade.direction == 'long':
             actual_exit = exit_price * (1 - slippage_pct)
         else:
@@ -2097,8 +2149,8 @@ class BacktestEngine:
 
         trade = self.open_position
 
-        # Apply exit slippage
-        slippage_pct = 0.0002
+        # Apply exit slippage from config
+        slippage_pct = getattr(config, 'BACKTEST_SLIPPAGE', 0.0005)
         if trade.direction == 'long':
             actual_exit = exit_price * (1 - slippage_pct)
         else:

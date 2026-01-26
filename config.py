@@ -77,6 +77,11 @@ GROWTH_TP_SPLIT = {1: 0.25, 2: 0.25, 3: 0.50}  # 25/25/50 - let 50% ride to big 
 
 # Small account optimization
 SMALL_ACCOUNT_THRESHOLD = 100.0  # Accounts under $100 use aggressive settings
+
+# MINIMUM POSITION SIZE - ensures we meet exchange minimums
+# OKX minimum for SOL-USDT-SWAP is 0.1 SOL (~$12 notional, ~$2.5 margin at 5x)
+MIN_POSITION_USDT = 3.0  # Minimum $3 margin to ensure 0.1 SOL minimum is met
+MIN_SOL_CONTRACT = 0.1   # OKX minimum contract size
 SMALL_ACCOUNT_RISK_MULTIPLIER = 2.0  # 2x risk for small accounts
 SMALL_ACCOUNT_COMPOUND_RATE = 1.5  # Compound 50% faster on wins
 
@@ -562,7 +567,8 @@ KILL_SWITCH_FILE = "KILL_SWITCH.txt"
 BACKTEST_START_DATE = "2025-12-01"
 BACKTEST_END_DATE = "2025-12-15"
 BACKTEST_INITIAL_CAPITAL = 10000
-BACKTEST_COMMISSION = 0.0006
+BACKTEST_COMMISSION = 0.0008  # 0.08% (taker fee + slippage estimate)
+BACKTEST_SLIPPAGE = 0.0005    # 0.05% additional slippage per trade
 
 # =====================================
 # ELITE BACKTEST IMPROVEMENTS (BACKTEST ONLY)
@@ -665,6 +671,7 @@ BACKTEST_MR_RSI_OVERBOUGHT = None  # Reset (None = use live value)
 # - RANGING: Enable MR, disable TF, normal settings
 # - CHOPPY: Minimal trading, reduced size
 BACKTEST_REGIME_ADAPTIVE = False      # Disabled - not detecting trends properly yet
+LIVE_REGIME_ADAPTIVE = True           # Enable for Telegram status display (regime filters still active)
 
 # TREND FILTER TESTS (one at a time)
 # Test 1: ADX-based trend detection
@@ -793,6 +800,9 @@ BACKTEST_V2_EARLY_EXIT_REVERSAL = 0.03   # 3% reversal needed
 # =============================================================================
 # V4 ELITE WEALTH ENGINE (Backtest Only) - Simplified Data-Driven Approach
 # =============================================================================
+# Winning setup (Oct-Dec: 372% return, 54% WR, 15.5% DD; 6mo: 318%, 35% WR):
+#   V4_STRATEGY_BOOST + V4_SCORE_SIZING only. Pyramid/BE/timeout/quality gate off.
+#
 # Based on Jul-Dec 2025 6-month backtest analysis:
 # - Breakout: 42% WR, $5,751 PnL (best strategy)
 # - Mean Reversion: 34% WR, $2,872 PnL
@@ -806,9 +816,33 @@ V4_ENABLED = True
 
 # --- V4 STRATEGY BOOST (increase position for high-edge strategies) ---
 V4_STRATEGY_BOOST_ENABLED = True
-V4_BREAKOUT_BOOST = 2.0           # Sweet spot: 265% return, 37% max DD
-V4_MEAN_REVERSION_BOOST = 1.0     # Keep mean reversion at base (34% WR)
-V4_MOMENTUM_BOOST = 0.5           # Reduce momentum (negative PnL in analysis)
+V4_BREAKOUT_BOOST = 2.5           # Breakout is 42% WR vs 33% MR - max boost
+V4_MEAN_REVERSION_BOOST = 0.85    # Reduce MR slightly (33% WR, more losers)
+V4_MOMENTUM_BOOST = 0.3           # Minimize momentum (negative PnL)
+
+# Optional cap on total position multiplier (after all boosts); set to None to disable
+V4_MAX_POSITION_MULT = None       # Example: 2.4 to clamp stacked multipliers
+
+# --- V4 ELITE: Win more, lose less (data-driven) ---
+# Stricter entry: only take trades with quality >= this; None = no extra gate
+V4_QUALITY_THRESHOLD = None       # Disabled: 55 blocked too many, hurt returns
+# Let winners run: take less at TP1, more at TP2/TP3 (tp3_complete = 100% WR)
+V4_PYRAMID_ENABLED = False        # Disabled: 30/35/35 split hurt vs 50/30/20
+V4_PYRAMID_TP1_PCT = 0.30
+V4_PYRAMID_TP2_PCT = 0.35
+V4_PYRAMID_TP3_PCT = 0.35
+# Breakeven after TP1: lock profit, let remainder run (V4-only)
+V4_BREAKEVEN_AFTER_TP1 = False    # Disabled: caused BE stop-outs, hurt returns
+V4_BREAKEVEN_BUFFER = 0.001
+# Longer timeout after TP1 so winners can reach TP2/TP3
+V4_TIMEOUT_AFTER_TP1_BARS = None  # None = use default 120; 150 hurt
+
+# Score-based sizing: reduce size on marginal, boost on high quality
+V4_SCORE_SIZING_ENABLED = True
+V4_SCORE_LOW_MAX = 54             # score <= this: reduce size
+V4_SCORE_HIGH_MIN = 60            # score >= this: boost (lowered from 65)
+V4_SCORE_LOW_MULT = 0.75          # 75% size when score 50-54 (more aggressive)
+V4_SCORE_HIGH_MULT = 1.15         # 115% size when score 60+ (more aggressive)
 
 # --- LEGACY V4 SYSTEMS (DISABLED - found to hurt performance) ---
 # Winner Predictor
@@ -823,10 +857,10 @@ V4_SHORT_MIN_QUALITY = 65
 V4_SHORT_MIN_RSI = 75
 V4_SHORT_POSITION_MULT = 0.7
 
-# Early Exit Mechanism
-V4_EARLY_EXIT_ENABLED = False
-V4_MAE_THRESHOLD_5BAR = 0.012
-V4_MFE_THRESHOLD_8BAR = 0.003
+# Early Exit Mechanism - Cuts losers before full stop loss
+V4_EARLY_EXIT_ENABLED = True        # Saves capital on bad trades
+V4_MAE_THRESHOLD_5BAR = 0.018       # 1.8% MAE in 5 bars = clear loser
+V4_MFE_THRESHOLD_8BAR = 0.002       # 0.2% MFE by bar 12 = no momentum
 
 # Kelly Position Sizing
 V4_KELLY_ENABLED = False

@@ -28,6 +28,8 @@ from config import (
     GROWTH_MAX_RISK_PCT,
     GROWTH_LEVERAGE,
     GROWTH_COMPOUND_ENABLED,
+    MIN_POSITION_USDT,
+    MIN_SOL_CONTRACT,
     GROWTH_CONFIDENCE_MULTIPLIER,
     GROWTH_AGGRESSIVE_TP
 )
@@ -170,6 +172,22 @@ class RiskManager:
                 'account_balance': account_balance,
                 'growth_mode': False
             }
+
+        # CRITICAL: Enforce minimum position size for exchange requirements
+        # OKX SOL-USDT-SWAP minimum is 0.1 SOL
+        if position_size < MIN_SOL_CONTRACT:
+            min_margin_needed = MIN_SOL_CONTRACT * entry_price / GROWTH_LEVERAGE
+            if min_margin_needed <= account_balance * 0.5:  # Only if we have 2x minimum margin
+                logger.warning(f"⚠️  Position {position_size:.4f} SOL < minimum {MIN_SOL_CONTRACT}")
+                logger.warning(f"   Adjusting to minimum: {MIN_SOL_CONTRACT} SOL")
+                position_size = MIN_SOL_CONTRACT
+                details['position_size'] = position_size
+                details['notional_value'] = position_size * entry_price
+                details['adjusted_to_minimum'] = True
+            else:
+                logger.error(f"❌ Insufficient margin for minimum position")
+                logger.error(f"   Need ${min_margin_needed:.2f}, have ${account_balance:.2f}")
+                details['insufficient_margin'] = True
 
         logger.info(f"💰 Position size: {position_size:.4f} (${details['notional_value']:.2f})")
         logger.info(f"   Risk: ${max_loss_usd:.2f} ({MAX_RISK_PER_TRADE*100}%)")
