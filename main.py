@@ -67,6 +67,14 @@ except ImportError as e:
 
 import config
 
+# V4 Elite Early Exit (cuts losers early based on MAE/MFE patterns)
+V4_EARLY_EXIT_AVAILABLE = False
+try:
+    from backtesting.v4_early_exit import V4EarlyExitManager
+    V4_EARLY_EXIT_AVAILABLE = True
+except ImportError:
+    logging.warning("V4 Early Exit not available")
+
 # Use Production Order Manager for cleaner execution
 USE_PRODUCTION_MANAGER = True  # Set to True to use the new production manager
 
@@ -366,6 +374,20 @@ class EliteQuantSystem:
         self.trading_paused = False
         self.pause_reason = ""
         self.pause_start_time = None
+
+        # V4 Elite Early Exit Manager (cuts losers early based on MAE/MFE patterns)
+        self.v4_early_exit = None
+        self.position_bars_held = {}  # Track bars held per position
+        if V4_EARLY_EXIT_AVAILABLE and getattr(config, 'V4_ENABLED', False) and getattr(config, 'V4_EARLY_EXIT_ENABLED', False):
+            try:
+                self.v4_early_exit = V4EarlyExitManager()
+                # Apply config thresholds
+                self.v4_early_exit.MAE_THRESHOLD_5BAR = getattr(config, 'V4_MAE_THRESHOLD_5BAR', 0.018)
+                self.v4_early_exit.MFE_THRESHOLD_12BAR = getattr(config, 'V4_MFE_THRESHOLD_8BAR', 0.002)
+                logger.info(f"🛡️ V4 Early Exit ENABLED (MAE {self.v4_early_exit.MAE_THRESHOLD_5BAR*100:.1f}%, MFE {self.v4_early_exit.MFE_THRESHOLD_12BAR*100:.1f}%)")
+            except Exception as e:
+                logger.warning(f"⚠️ V4 Early Exit init failed: {e}")
+                self.v4_early_exit = None
 
         # Timeframes to analyze
         self.timeframes = [
@@ -1145,6 +1167,47 @@ Manual restart required.
                 position['position_id'],
                 current_price
             )
+
+            # V4 Early Exit Check - cut losers early based on MAE/MFE patterns
+            if self.v4_early_exit:
+                position_id = position['position_id']
+
+                # Track bars held (increment each cycle, ~30s per cycle = ~2 bars per minute on 15m TF)
+                if position_id not in self.position_bars_held:
+                    self.position_bars_held[position_id] = 0
+                self.position_bars_held[position_id] += 1
+                bars_held = self.position_bars_held[position_id] // 2  # Approximate bars (30s cycles)
+
+                # Create a simple position object for the early exit check
+                class PositionProxy:
+                    pass
+                pos_proxy = PositionProxy()
+                pos_proxy.entry_price = position.get('entry_price', 0)
+                pos_proxy.actual_entry_price = position.get('entry_price', 0)
+                pos_proxy.direction = position.get('direction', 'long')
+
+                should_exit, exit_reason, exit_price = self.v4_early_exit.check_early_exit(
+                    pos_proxy, current_price, bars_held
+                )
+
+                if should_exit:
+                    logger.warning(f"🛡️ V4 EARLY EXIT TRIGGERED: {exit_reason}")
+                    logger.warning(f"   Position: {position_id}, Bars: {bars_held}, Price: ${current_price:.2f}")
+
+                    # Close the position early
+                    if self.production_manager:
+                        try:
+                            self.production_manager.close_position(
+                                position_id=position_id,
+                                reason=f"v4_early_exit_{exit_reason}",
+                                current_price=current_price
+                            )
+                            # Clean up bars tracking
+                            if position_id in self.position_bars_held:
+                                del self.position_bars_held[position_id]
+                            continue  # Skip to next position
+                        except Exception as e:
+                            logger.error(f"Failed to execute V4 early exit: {e}")
 
             # Log position status
             logger.info(
