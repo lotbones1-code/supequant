@@ -224,12 +224,15 @@ class SystemContextBuilder:
             'best_trade': 0.0,
             'worst_trade': 0.0,
             'current_streak': {'type': 'none', 'count': 0},
-            'last_trade_age_hours': 999,
+            'last_trade_age_hours': 0,  # 0 means no trades yet (not 999)
             'recent_trades': [],
             'open_positions': 0,
+            'system_status': 'scanning',  # scanning, trading, paused
+            'has_trade_history': False,
         }
 
         if not self.trade_journal:
+            summary['system_status'] = 'scanning - no trade history yet'
             return summary
 
         try:
@@ -237,7 +240,11 @@ class SystemContextBuilder:
             trades = self.trade_journal.get_recent_trades(days=90)
 
             if not trades:
+                summary['system_status'] = 'scanning - waiting for first trade setup'
                 return summary
+
+            summary['has_trade_history'] = True
+            summary['system_status'] = 'active - has trade history'
 
             # Calculate last trade age
             if trades:
@@ -577,12 +584,28 @@ class SystemContextBuilder:
     def _format_trading_section(self, data: Dict) -> str:
         """Format trading summary for context."""
         lines = ["=== TRADING PERFORMANCE ==="]
+
+        # Show system status first
+        status = data.get('system_status', 'unknown')
+        lines.append(f"System Status: {status}")
+
+        if not data.get('has_trade_history', False):
+            lines.append("NOTE: System is NEW - no completed trades yet. This is normal.")
+            lines.append("The system scans every minute and trades when conditions are perfect.")
+            lines.append("Expected: 3-4 trades per week with ~54% win rate.")
+            return "\n".join(lines)
+
         lines.append(f"Today: {data['today_trades']} trades ({data['today_wins']}W/{data['today_losses']}L) PnL: ${data['today_pnl']:+.2f} WR: {data['today_win_rate']:.0f}%")
         lines.append(f"Week: {data['week_trades']} trades PnL: ${data['week_pnl']:+.2f} WR: {data['week_win_rate']:.0f}%")
         lines.append(f"All-time: {data['all_time_trades']} trades PnL: ${data['all_time_pnl']:+.2f} WR: {data['all_time_win_rate']:.0f}%")
         lines.append(f"Best: ${data['best_trade']:+.2f} | Worst: ${data['worst_trade']:+.2f}")
         lines.append(f"Streak: {data['current_streak']['count']} {data['current_streak']['type']}s")
-        lines.append(f"Last trade: {data['last_trade_age_hours']:.1f} hours ago")
+
+        last_hours = data['last_trade_age_hours']
+        if last_hours > 0:
+            lines.append(f"Last trade: {last_hours:.1f} hours ago")
+        else:
+            lines.append("Last trade: No trades yet")
 
         if data['recent_trades']:
             lines.append("Recent trades:")

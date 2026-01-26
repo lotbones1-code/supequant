@@ -75,6 +75,14 @@ except ImportError:
     CONTEXT_BUILDER_AVAILABLE = False
     logger.warning("Context builder not available - AI responses will be limited")
 
+# Monitoring system for V4 trade logging and equity tracking
+try:
+    from utils.monitoring import get_monitoring_system, MonitoringSystem
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    logger.warning("Monitoring system not available")
+
 
 # =============================================================================
 # DATA CLASSES
@@ -584,6 +592,9 @@ class EnhancedTelegramBot:
             '/review': self._handle_diagnose,
             '/why': self._handle_why_no_trades,
             '/filters': self._handle_filters,
+            '/v4': self._handle_v4_performance,
+            '/equity': self._handle_equity_curve,
+            '/report': self._handle_full_report,
             '/config': self._handle_config,
             '/market': self._handle_market_question,
         }
@@ -1681,6 +1692,115 @@ Just type your question, for example:
     def _handle_market_question(self, args: str = None):
         """Handle /market command"""
         self._get_market_outlook(args or "How is the market looking?")
+
+    def _handle_v4_performance(self, args: str = None):
+        """Handle /v4 command - show V4 Elite performance"""
+        if not MONITORING_AVAILABLE:
+            self.send_message("📊 V4 monitoring not available. Run system first.")
+            return
+
+        try:
+            monitor = get_monitoring_system()
+            perf = monitor.get_v4_performance(days=30)
+
+            v4 = perf['v4']
+            non_v4 = perf['non_v4']
+
+            msg_lines = ["🚀 <b>V4 ELITE PERFORMANCE (30 Days)</b>", ""]
+
+            if v4['trades'] > 0:
+                msg_lines.append("<b>V4 Boosted Trades:</b>")
+                msg_lines.append(f"  Trades: {v4['trades']}")
+                msg_lines.append(f"  PnL: ${v4['pnl']:+.2f}")
+                msg_lines.append(f"  Win Rate: {v4['win_rate']:.1f}%")
+                msg_lines.append(f"  Avg PnL: ${v4['avg_pnl']:+.2f}")
+            else:
+                msg_lines.append("<i>No V4 boosted trades yet</i>")
+
+            msg_lines.append("")
+
+            if non_v4['trades'] > 0:
+                msg_lines.append("<b>Regular Trades:</b>")
+                msg_lines.append(f"  Trades: {non_v4['trades']}")
+                msg_lines.append(f"  PnL: ${non_v4['pnl']:+.2f}")
+                msg_lines.append(f"  Win Rate: {non_v4['win_rate']:.1f}%")
+                msg_lines.append(f"  Avg PnL: ${non_v4['avg_pnl']:+.2f}")
+
+            # Summary
+            if v4['trades'] > 0 and non_v4['trades'] > 0:
+                v4_better = v4['avg_pnl'] > non_v4['avg_pnl']
+                diff = v4['avg_pnl'] - non_v4['avg_pnl']
+                msg_lines.append("")
+                if v4_better:
+                    msg_lines.append(f"✅ V4 boost outperforming by ${diff:+.2f}/trade")
+                else:
+                    msg_lines.append(f"⚠️ V4 boost underperforming by ${diff:.2f}/trade")
+
+            self.send_message("\n".join(msg_lines))
+
+        except Exception as e:
+            logger.error(f"Error getting V4 performance: {e}")
+            self.send_message(f"❌ Error getting V4 stats: {str(e)}")
+
+    def _handle_equity_curve(self, args: str = None):
+        """Handle /equity command - show balance history"""
+        if not MONITORING_AVAILABLE:
+            self.send_message("📊 Equity tracking not available. Run system first.")
+            return
+
+        try:
+            monitor = get_monitoring_system()
+            equity = monitor.get_equity_curve(days=7)
+
+            if not equity:
+                self.send_message("📊 No balance history yet. Run system to start tracking.")
+                return
+
+            # Get key stats
+            first = equity[0]
+            last = equity[-1]
+            start_bal = first['total_balance']
+            end_bal = last['total_balance']
+            change = end_bal - start_bal
+            change_pct = ((end_bal / start_bal) - 1) * 100 if start_bal else 0
+
+            # Find high/low
+            balances = [e['total_balance'] for e in equity]
+            high = max(balances)
+            low = min(balances)
+
+            msg_lines = ["💰 <b>EQUITY CURVE (7 Days)</b>", ""]
+            msg_lines.append(f"Start: ${start_bal:.2f}")
+            msg_lines.append(f"Current: ${end_bal:.2f}")
+            msg_lines.append(f"Change: <b>${change:+.2f}</b> ({change_pct:+.1f}%)")
+            msg_lines.append("")
+            msg_lines.append(f"High: ${high:.2f}")
+            msg_lines.append(f"Low: ${low:.2f}")
+            msg_lines.append(f"Drawdown: ${high - low:.2f}")
+            msg_lines.append("")
+            msg_lines.append(f"<i>Data points: {len(equity)}</i>")
+
+            self.send_message("\n".join(msg_lines))
+
+        except Exception as e:
+            logger.error(f"Error getting equity curve: {e}")
+            self.send_message(f"❌ Error: {str(e)}")
+
+    def _handle_full_report(self, args: str = None):
+        """Handle /report command - generate full daily report"""
+        if not MONITORING_AVAILABLE:
+            self.send_message("📊 Monitoring not available.")
+            return
+
+        self.send_message("📝 <i>Generating report...</i>")
+
+        try:
+            monitor = get_monitoring_system()
+            report = monitor.format_daily_summary_telegram()
+            self.send_message(report)
+        except Exception as e:
+            logger.error(f"Error generating report: {e}")
+            self.send_message(f"❌ Error: {str(e)}")
     
     def _analyze_last_trade(self, trade_type: str = None, question: str = ""):
         """Analyze why the last trade won or lost"""
@@ -1897,26 +2017,32 @@ AI APIs are not configured. To enable:
         try:
             context = self._build_system_context()
 
-            system_prompt = """You are Boss Shamil's elite trading AI assistant for his SUPEQUANT crypto system.
+            system_prompt = """You are Boss Shamil's elite trading AI assistant for his SUPEQUANT V4 Elite crypto system.
 
 PERSONALITY:
 - Call him "Boss" - you work for him and respect his vision
-- Be CONFIDENT and POSITIVE - every problem has a solution
-- Be SPECIFIC - use the exact numbers from context
+- Be CONFIDENT and POSITIVE - the system is profitable (190% backtest return)
+- Be SPECIFIC - use exact numbers from context
 - Be CONCISE - 3-5 bullets max, under 80 words
 
-YOU HAVE ACCESS TO:
-- All trade history and performance stats
-- Filter statistics and rejection reasons
-- System health, errors, and configuration
-- Why the system isn't trading (if asked)
+CRITICAL LIMITATIONS:
+- You CANNOT edit code, modify files, or change any settings
+- You can ONLY read data and provide analysis/recommendations
+- Tell Boss to ask Claude (the CLI assistant) for any actual changes
+- You have NO access to the codebase - only trading stats and logs
+
+CURRENT SYSTEM STATE (V4 Elite):
+- Score threshold: 45 (lowered for more trades)
+- V4 features: Strategy boost (2.5x breakout), Score sizing, Early exit
+- Trading: SOL-USDT-SWAP perpetual with 5x leverage
+- Expected: 3-4 trades per week, ~54% win rate
+- If "last trade 999 hours" - means no trade history yet, system is NEW
 
 RULES:
-- You CANNOT execute trades or change settings - only analyze and recommend
-- When suggesting changes, be specific (e.g., "lower SCORE_THRESHOLD from 50 to 45")
-- If system hasn't traded, explain WHY with data from context
-- Always end with actionable recommendation or encouragement
-- Never be doom-and-gloom - stay solution-oriented"""
+- If no trades recently: System is SCANNING and WAITING for setups - this is NORMAL
+- Don't suggest lowering threshold below 45 or disabling V4 features
+- If something needs code changes, say "Ask Claude to review/fix this"
+- Always be encouraging - the system is designed to profit"""
             
             messages = [
                 {'role': 'user', 'content': f"{context}\n\nBoss Shamil asks: {question}"}
@@ -2372,10 +2498,10 @@ Be supportive and call him Boss."""
         """.strip())
     
     def send_daily_summary(self):
-        """Send end-of-day summary"""
+        """Send end-of-day summary with V4 details"""
         today = self.performance.get_today_stats()
         week = self.performance.get_weekly_stats()
-        
+
         if today['pnl'] > 0:
             emoji = "🎉"
             msg = "Great day Boss!"
@@ -2385,7 +2511,36 @@ Be supportive and call him Boss."""
         else:
             emoji = "➖"
             msg = "Flat day. Rest up."
-        
+
+        # Try to get enhanced V4 stats from monitoring system
+        v4_section = ""
+        strategy_section = ""
+        if MONITORING_AVAILABLE:
+            try:
+                monitor = get_monitoring_system()
+                summary = monitor.generate_daily_summary()
+
+                # V4 performance
+                if summary.get('v4_trades', 0) > 0:
+                    v4_section = f"""
+
+<b>🚀 V4 Boosted:</b>
+  Trades: {summary['v4_trades']} ({summary['v4_pct_of_trades']:.0f}% of total)
+  V4 PnL: ${summary['v4_pnl']:+.2f}"""
+
+                # Strategy breakdown
+                by_strat = summary.get('by_strategy', {})
+                if by_strat:
+                    strat_lines = []
+                    for strat, data in by_strat.items():
+                        wr = (data['wins'] / data['trades'] * 100) if data['trades'] else 0
+                        strat_lines.append(f"  • {strat[:12]}: ${data['pnl']:+.2f} ({wr:.0f}%WR)")
+                    if strat_lines:
+                        strategy_section = "\n\n<b>📋 By Strategy:</b>\n" + "\n".join(strat_lines[:4])
+
+            except Exception as e:
+                logger.debug(f"Could not get V4 summary: {e}")
+
         self.send_message(f"""
 {emoji} <b>DAILY SUMMARY</b>
 <i>{msg}</i>
@@ -2393,7 +2548,7 @@ Be supportive and call him Boss."""
 <b>Today:</b>
   Trades: {today['trades']}
   Win Rate: {today['win_rate']:.0f}%
-  PnL: ${today['pnl']:+.2f}
+  PnL: ${today['pnl']:+.2f}{v4_section}{strategy_section}
 
 <b>This Week:</b>
   Trades: {week['trades']}

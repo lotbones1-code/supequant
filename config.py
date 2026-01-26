@@ -143,8 +143,8 @@ AI_CONFIDENCE_THRESHOLD = 40  # Was 70 - allow more trades through
 AI_MODEL_PATH = "model_learning/rejection_model.pkl"
 AI_FEATURE_WINDOW = 50
 
-# Quality Score Threshold - Keep at 50 (47 reduced win rate too much)
-SCORE_THRESHOLD = 50  # Stay at 50 - quality over quantity
+# Quality Score Threshold - Lowered to 45 for more trade opportunities
+SCORE_THRESHOLD = 45  # Lowered from 50 to capture more trades
 
 # =============================================================================
 # ELITE V3 OPTIMIZATIONS - Experimental improvements

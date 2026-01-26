@@ -75,6 +75,22 @@ try:
 except ImportError:
     logging.warning("V4 Early Exit not available")
 
+# Monitoring system (READ-ONLY - does not affect trading)
+MONITORING_AVAILABLE = False
+try:
+    from utils.monitoring import get_monitoring_system
+    MONITORING_AVAILABLE = True
+except ImportError:
+    logging.warning("Monitoring system not available")
+
+# Screenshot system (READ-ONLY - saves chart images on trades)
+SCREENSHOTS_AVAILABLE = False
+try:
+    from utils.trade_screenshots import get_screenshot_system
+    SCREENSHOTS_AVAILABLE = True
+except ImportError:
+    logging.warning("Screenshot system not available")
+
 # Use Production Order Manager for cleaner execution
 USE_PRODUCTION_MANAGER = True  # Set to True to use the new production manager
 
@@ -490,6 +506,22 @@ Check logs and restart when ready.
                         logger.warning("⚠️ System health degraded:")
                         logger.warning(self.system_health.get_health_report())
 
+                    # Log balance for equity curve (READ-ONLY monitoring)
+                    if MONITORING_AVAILABLE:
+                        try:
+                            monitor = get_monitoring_system()
+                            balance_info = self.client.get_account_balance()
+                            if balance_info:
+                                monitor.log_balance(
+                                    total_balance=balance_info.get('total', 0),
+                                    available_balance=balance_info.get('available', 0),
+                                    unrealized_pnl=balance_info.get('unrealized_pnl', 0),
+                                    margin_used=balance_info.get('margin_used', 0),
+                                    open_positions=len(self.position_tracker.get_open_positions())
+                                )
+                        except Exception as e:
+                            logger.debug(f"Balance logging failed (non-critical): {e}")
+
         except KeyboardInterrupt:
             logger.info("\n⚠️  Keyboard interrupt received")
             self.shutdown()
@@ -529,7 +561,11 @@ Manual restart required.
                 config.TRADING_SYMBOL,
                 self.timeframes
             )
-            
+
+            # Store price history for screenshots (READ-ONLY)
+            if sol_market_state:
+                self._last_price_history = sol_market_state.get('candles', sol_market_state.get('ohlcv', []))
+
             # Heartbeat - market data fetched successfully
             if sol_market_state:
                 self.system_health.beat('market_data')
@@ -807,7 +843,10 @@ Manual restart required.
                 account_balance,
                 confidence_score=confidence_score
             )
-            
+
+            # Store size_details for monitoring (READ-ONLY logging)
+            self._last_size_details = size_details
+
             # Apply V1 prediction multiplier to position size
             if prediction_multiplier != 1.0:
                 original_size = position_size
@@ -1059,7 +1098,32 @@ Manual restart required.
                 self.telegram_bot.send_trade_opened(trade_data)
             except Exception as e:
                 logger.warning(f"Failed to send trade opened notification: {e}")
-        
+
+        # Log to monitoring system (READ-ONLY - does not affect trading)
+        if MONITORING_AVAILABLE:
+            try:
+                monitor = get_monitoring_system()
+                size_details = getattr(self, '_last_size_details', {})
+                trade_id = monitor.log_trade_entry(
+                    signal=signal,
+                    position_details=size_details,
+                    account_balance=self.risk_manager.get_account_balance() or 0
+                )
+                # Store trade_id for exit logging
+                managed_position.monitoring_trade_id = trade_id
+            except Exception as e:
+                logger.debug(f"Monitoring log failed (non-critical): {e}")
+
+        # Capture trade entry screenshot (READ-ONLY)
+        if SCREENSHOTS_AVAILABLE:
+            try:
+                screenshots = get_screenshot_system()
+                price_history = getattr(self, '_last_price_history', [])
+                size_details = getattr(self, '_last_size_details', {})
+                screenshots.capture_trade_entry(signal, price_history, size_details)
+            except Exception as e:
+                logger.debug(f"Screenshot capture failed (non-critical): {e}")
+
         # Update dashboard
         if DASHBOARD_AVAILABLE:
             add_trade({
@@ -1194,20 +1258,21 @@ Manual restart required.
                     logger.warning(f"🛡️ V4 EARLY EXIT TRIGGERED: {exit_reason}")
                     logger.warning(f"   Position: {position_id}, Bars: {bars_held}, Price: ${current_price:.2f}")
 
-                    # Close the position early
-                    if self.production_manager:
-                        try:
-                            self.production_manager.close_position(
-                                position_id=position_id,
-                                reason=f"v4_early_exit_{exit_reason}",
-                                current_price=current_price
-                            )
-                            # Clean up bars tracking
-                            if position_id in self.position_bars_held:
-                                del self.position_bars_held[position_id]
-                            continue  # Skip to next position
-                        except Exception as e:
-                            logger.error(f"Failed to execute V4 early exit: {e}")
+                    # Close the position early using the correct method
+                    try:
+                        if self.production_manager and self.production_manager.current_position:
+                            # Use close_position_now() which is the correct method
+                            self.production_manager.close_position_now(reason=f"v4_early_exit_{exit_reason}")
+                        else:
+                            # Fallback to position_tracker if no production manager
+                            self.position_tracker.close_position(position_id, current_price, f"v4_early_exit_{exit_reason}")
+
+                        # Clean up bars tracking
+                        if position_id in self.position_bars_held:
+                            del self.position_bars_held[position_id]
+                        continue  # Skip to next position
+                    except Exception as e:
+                        logger.error(f"Failed to execute V4 early exit: {e}")
 
             # Log position status
             logger.info(
@@ -1261,7 +1326,31 @@ Manual restart required.
                 
                 # Process all completed trades (for success rate tracking)
                 self.claude_system.process_completed_trade(trade_dict)
-                
+
+                # Log to monitoring system (READ-ONLY)
+                if MONITORING_AVAILABLE:
+                    try:
+                        monitor = get_monitoring_system()
+                        # Try to get trade_id from managed position if available
+                        trade_id = position.get('monitoring_trade_id', position.get('position_id', 'unknown'))
+                        monitor.log_trade_exit(
+                            trade_id=trade_id,
+                            exit_price=position.get('exit_price', 0),
+                            pnl_usd=position.get('pnl', 0),
+                            pnl_pct=position.get('pnl_pct', 0),
+                            close_reason=position.get('close_reason', 'unknown')
+                        )
+                    except Exception as e:
+                        logger.debug(f"Monitoring exit log failed (non-critical): {e}")
+
+                # Capture exit screenshot (READ-ONLY)
+                if SCREENSHOTS_AVAILABLE:
+                    try:
+                        screenshots = get_screenshot_system()
+                        screenshots.capture_trade_exit(position, getattr(self, '_last_candles', []))
+                    except Exception as e:
+                        logger.debug(f"Exit screenshot failed (non-critical): {e}")
+
                 # Only analyze losing trades for learning
                 if position.get('pnl', 0) < 0:
                     logger.info(f"🤖 Sending losing trade to Claude for analysis: {trade_dict['trade_id']}")

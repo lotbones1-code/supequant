@@ -5,7 +5,7 @@ Tracks open positions and manages position lifecycle
 
 from typing import Dict, Optional, List
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from data_feed.okx_client import OKXClient
 from config import TRADING_SYMBOL
 
@@ -163,6 +163,32 @@ class PositionTracker:
     def get_closed_positions(self, limit: int = 50) -> List[Dict]:
         """Get recent closed positions"""
         return self.closed_positions[-limit:] if self.closed_positions else []
+
+    def get_recently_closed_positions(self, since_minutes: int = 5) -> List[Dict]:
+        """
+        Get positions closed within the last N minutes.
+        Used by Claude learning system to analyze recent losses.
+
+        Args:
+            since_minutes: How far back to look (default 5 minutes)
+
+        Returns:
+            List of recently closed positions
+        """
+        if not self.closed_positions:
+            return []
+
+        cutoff = datetime.now() - timedelta(minutes=since_minutes)
+        recent = []
+
+        for pos in reversed(self.closed_positions):
+            exit_time = pos.get('exit_time')
+            if exit_time and exit_time >= cutoff:
+                recent.append(pos)
+            elif exit_time and exit_time < cutoff:
+                break  # Positions are in chronological order, stop searching
+
+        return recent
 
     def get_total_pnl(self) -> float:
         """Get total PnL from all closed positions"""
