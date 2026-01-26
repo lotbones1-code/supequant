@@ -653,9 +653,9 @@ class BacktestEngine:
             if getattr(config, 'V4_EARLY_EXIT_ENABLED', True):
                 from backtesting.v4_early_exit import V4EarlyExitManager
                 self.v4_early_exit = V4EarlyExitManager()
-                self.v4_early_exit.MAE_THRESHOLD_5BAR = getattr(config, 'V4_MAE_THRESHOLD_5BAR', 0.012)
-                self.v4_early_exit.MFE_THRESHOLD_8BAR = getattr(config, 'V4_MFE_THRESHOLD_8BAR', 0.003)
-                logger.info("   ✅ V4 EARLY EXIT: ENABLED (MAE 1.2%, MFE 0.3% thresholds)")
+                self.v4_early_exit.MAE_THRESHOLD_5BAR = getattr(config, 'V4_MAE_THRESHOLD_5BAR', 0.018)
+                self.v4_early_exit.MFE_THRESHOLD_12BAR = getattr(config, 'V4_MFE_THRESHOLD_8BAR', 0.002)
+                logger.info(f"   ✅ V4 EARLY EXIT: ENABLED (MAE {self.v4_early_exit.MAE_THRESHOLD_5BAR*100:.1f}%, MFE {self.v4_early_exit.MFE_THRESHOLD_12BAR*100:.1f}%)")
 
             # V4 Kelly Position Sizer
             if getattr(config, 'V4_KELLY_ENABLED', True):

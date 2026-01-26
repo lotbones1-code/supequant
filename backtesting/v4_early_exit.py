@@ -42,13 +42,13 @@ class V4EarlyExitManager:
 
         # CONSERVATIVE THRESHOLDS (only catch clear losers)
         # Winners MAE avg: 0.69%, Losers MAE avg: 2.06%
-        # Threshold set at 1.5% (closer to loser average, don't cut winners)
-        self.MAE_THRESHOLD_5BAR = 0.015  # 1.5% (was 1.2%)
+        # Threshold set at 1.8% (closer to loser average, don't cut winners)
+        self.MAE_THRESHOLD_5BAR = 0.018  # 1.8% - matches config.V4_MAE_THRESHOLD_5BAR
 
         # Winners MFE avg: 2.10%, Losers MFE avg: 0.49%
         # Threshold set at 0.2% (very low - only exit if NO momentum at all)
-        self.MFE_THRESHOLD_12BAR = 0.002  # 0.2% (was 0.3% at bar 8)
-        self.MFE_CHECK_BAR = 12  # Check later (was bar 8)
+        self.MFE_THRESHOLD_12BAR = 0.002  # 0.2% - matches config.V4_MFE_THRESHOLD_8BAR
+        self.MFE_CHECK_BAR = 12  # Check at bar 12 (config name says 8BAR but actually bar 12)
 
         # If MAE > MFE by significant margin, trade is struggling
         self.MAE_MFE_RATIO_THRESHOLD = 1.5  # MAE must be 1.5x MFE (was 1.0x)

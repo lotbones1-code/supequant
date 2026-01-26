@@ -33,6 +33,19 @@ from config import (
     GROWTH_CONFIDENCE_MULTIPLIER,
     GROWTH_AGGRESSIVE_TP
 )
+
+# V4 Elite imports
+import config
+V4_ENABLED = getattr(config, 'V4_ENABLED', False)
+V4_STRATEGY_BOOST_ENABLED = getattr(config, 'V4_STRATEGY_BOOST_ENABLED', False)
+V4_BREAKOUT_BOOST = getattr(config, 'V4_BREAKOUT_BOOST', 1.5)
+V4_MEAN_REVERSION_BOOST = getattr(config, 'V4_MEAN_REVERSION_BOOST', 1.0)
+V4_MOMENTUM_BOOST = getattr(config, 'V4_MOMENTUM_BOOST', 0.5)
+V4_SCORE_SIZING_ENABLED = getattr(config, 'V4_SCORE_SIZING_ENABLED', False)
+V4_SCORE_LOW_MAX = getattr(config, 'V4_SCORE_LOW_MAX', 54)
+V4_SCORE_HIGH_MIN = getattr(config, 'V4_SCORE_HIGH_MIN', 60)
+V4_SCORE_LOW_MULT = getattr(config, 'V4_SCORE_LOW_MULT', 0.75)
+V4_SCORE_HIGH_MULT = getattr(config, 'V4_SCORE_HIGH_MULT', 1.15)
 from .growth_optimizer import GrowthOptimizer
 import os
 
@@ -172,6 +185,58 @@ class RiskManager:
                 'account_balance': account_balance,
                 'growth_mode': False
             }
+
+        # =====================================================================
+        # V4 ELITE: Strategy Boost + Score Sizing (LIVE TRADING)
+        # =====================================================================
+        v4_multiplier = 1.0
+        v4_details = {}
+
+        if V4_ENABLED:
+            # V4 Strategy Boost - favor breakout, reduce momentum
+            if V4_STRATEGY_BOOST_ENABLED:
+                strategy_name = signal.get('strategy', signal.get('strategy_name', '')).lower()
+                strategy_boost = 1.0
+
+                if 'breakout' in strategy_name:
+                    strategy_boost = V4_BREAKOUT_BOOST  # 2.5x default
+                elif 'mean_reversion' in strategy_name or 'mr' in strategy_name:
+                    strategy_boost = V4_MEAN_REVERSION_BOOST  # 0.85x default
+                elif 'momentum' in strategy_name:
+                    strategy_boost = V4_MOMENTUM_BOOST  # 0.3x default
+
+                v4_multiplier *= strategy_boost
+                v4_details['strategy_boost'] = strategy_boost
+                v4_details['strategy_name'] = strategy_name
+
+                if strategy_boost != 1.0:
+                    logger.info(f"📊 V4 Strategy Boost: {strategy_boost}x for {strategy_name}")
+
+            # V4 Score Sizing - boost high scores, reduce low scores
+            if V4_SCORE_SIZING_ENABLED:
+                score = signal.get('score', signal.get('quality_score', 55))
+                score_mult = 1.0
+
+                if score <= V4_SCORE_LOW_MAX:
+                    score_mult = V4_SCORE_LOW_MULT  # 0.75x for low scores
+                elif score >= V4_SCORE_HIGH_MIN:
+                    score_mult = V4_SCORE_HIGH_MULT  # 1.15x for high scores
+
+                v4_multiplier *= score_mult
+                v4_details['score'] = score
+                v4_details['score_mult'] = score_mult
+
+                if score_mult != 1.0:
+                    logger.info(f"📊 V4 Score Sizing: {score_mult}x for score {score}")
+
+            # Apply V4 multiplier to position size
+            if v4_multiplier != 1.0:
+                position_size *= v4_multiplier
+                details['position_size'] = position_size
+                details['notional_value'] = position_size * entry_price
+                details['v4_multiplier'] = v4_multiplier
+                details['v4_details'] = v4_details
+                logger.info(f"🚀 V4 Total Multiplier: {v4_multiplier:.2f}x → Position: {position_size:.4f}")
 
         # CRITICAL: Enforce minimum position size for exchange requirements
         # OKX SOL-USDT-SWAP minimum is 0.1 SOL
