@@ -85,7 +85,7 @@ class ManagedPosition:
 
     # State tracking
     state: PositionState = PositionState.PENDING
-    trading_mode: str = "spot"  # 'spot' or 'perp'
+    trading_mode: str = "perp"  # 'spot' or 'perp' - default to perp
     
     # PnL tracking
     realized_pnl: float = 0.0
@@ -332,7 +332,7 @@ class ProductionOrderManager:
             tp1_price=tp1_price,
             tp2_price=tp2_price,
             strategy=signal.get('strategy', 'manual'),
-            trading_mode='spot',
+            trading_mode=TRADING_MODE,  # Use config: 'perp' or 'spot'
             filters_passed=signal.get('filters_passed', []),
             confidence_score=signal.get('confidence_score'),
             # Arbitrage/time-based exit fields (Phase 4.2)
