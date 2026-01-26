@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Elite Telegram Bot - Conversational UI with Smart Features
 
@@ -22,6 +23,8 @@ import logging
 import threading
 import time
 import requests
+import sys
+import signal
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, asdict, field
@@ -30,19 +33,39 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+# Ensure project root is on path so config/agents resolve when run standalone
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 # Import config
 try:
     import config
 except ImportError:
     config = None
 
-# Import Claude agent for AI chat
+# Import ChatGPT agent for enhanced AI chat
 try:
-    from agents.claude_agent import ClaudeAgent
-    CLAUDE_AVAILABLE = True
+    from agents.chatgpt_agent import ChatGPTAgent
+    CHATGPT_AVAILABLE = True
 except ImportError:
-    CLAUDE_AVAILABLE = False
-    logger.warning("Claude agent not available for AI chat")
+    CHATGPT_AVAILABLE = False
+    logger.warning("ChatGPT agent not available for AI chat")
+
+# TradeJournal (runs/) - canonical live trade log
+try:
+    from utils.trade_journal import TradeJournal
+    TRADE_JOURNAL_AVAILABLE = True
+except ImportError:
+    TRADE_JOURNAL_AVAILABLE = False
+
+# Analytics helpers
+try:
+    from utils.scope_parser import parse_scope
+    from utils.analytics_responder import analyze_trades
+    ANALYTICS_AVAILABLE = True
+except ImportError:
+    ANALYTICS_AVAILABLE = False
 
 
 # =============================================================================
@@ -253,6 +276,18 @@ class PerformanceTracker:
     """Track trading performance for stats"""
     
     def __init__(self, trades_path: str = None):
+        # Use TradeJournal to load live trades (runs/ directory)
+        # Falls back to old paper_trades.jsonl if TradeJournal fails
+        try:
+            from utils.trade_journal import TradeJournal
+            self.trade_journal = TradeJournal(base_path="runs", enabled=True)
+            self.use_journal = True
+        except Exception as e:
+            logger.warning(f"Could not initialize TradeJournal, using file-based: {e}")
+            self.trade_journal = None
+            self.use_journal = False
+        
+        # Keep old path for backward compatibility
         if trades_path is None:
             trades_path = os.path.join(os.path.dirname(__file__), '..', 'logs', 'paper_trades.jsonl')
         self.trades_path = Path(trades_path)
@@ -351,16 +386,31 @@ class PerformanceTracker:
         }
     
     def _load_trades(self) -> List[Dict]:
-        """Load trades from file"""
+        """Load trades from TradeJournal (runs/ directory) or fallback to file"""
         trades = []
+        
+        # Try TradeJournal first (live trades from runs/ directory)
+        if self.use_journal and self.trade_journal:
+            try:
+                trades = self.trade_journal.get_recent_trades(days=90)  # Last 90 days
+                if trades:
+                    logger.debug(f"Loaded {len(trades)} trades from TradeJournal")
+                    return trades
+            except Exception as e:
+                logger.warning(f"Error loading from TradeJournal: {e}, falling back to file")
+        
+        # Fallback to old paper_trades.jsonl file (backward compatibility)
         if self.trades_path.exists():
             try:
                 with open(self.trades_path, 'r') as f:
                     for line in f:
                         if line.strip():
                             trades.append(json.loads(line))
+                if trades:
+                    logger.debug(f"Loaded {len(trades)} trades from {self.trades_path}")
             except Exception as e:
-                logger.error(f"Error loading trades: {e}")
+                logger.error(f"Error loading trades from file: {e}")
+        
         return trades
     
     def _get_trade_date(self, trade: Dict):
@@ -421,23 +471,21 @@ class EnhancedTelegramBot:
         self._scheduler_thread = None
         self._last_hourly_update = None
         self._last_daily_report = None
+        self._lock_path = Path("telegram_bot.lock")
+        self._pid = os.getpid()
+        self._last_details: Optional[str] = None
         
-        # AI Chat agent (for answering questions)
-        self.claude_agent = None
-        if CLAUDE_AVAILABLE:
+        # AI Chat agent (ChatGPT only; no Claude fallback)
+        self.chatgpt_agent = None
+        if CHATGPT_AVAILABLE:
             try:
-                self.claude_agent = ClaudeAgent(timeout_seconds=30.0)
-                logger.info("🤖 AI Chat enabled for Telegram bot")
+                self.chatgpt_agent = ChatGPTAgent(timeout_seconds=10.0)
+                logger.info("🤖 ChatGPT enabled for enhanced Telegram bot responses")
             except Exception as e:
-                logger.warning(f"Could not initialize Claude agent for chat: {e}")
+                logger.warning(f"Could not initialize ChatGPT agent: {e}")
         
-        # Natural language triggers (conversational)
+        # Natural language triggers (conversational) - narrowed to reduce false note prompts
         self.triggers = {
-            'notes': self._show_notes_menu,
-            'note': self._show_notes_menu,
-            'idea': self._start_new_note,
-            'remind': self._show_reminder_menu,
-            'reminder': self._show_reminder_menu,
             'status': self._handle_status,
             'stats': self._handle_stats,
             'pnl': self._handle_pnl,
@@ -449,32 +497,29 @@ class EnhancedTelegramBot:
             'hi': self._show_main_menu,
             'hello': self._show_main_menu,
             'hey': self._show_main_menu,
+            # note/remind only when explicitly asked
+            'notes': self._show_notes_menu,
+            'note': self._show_notes_menu,
+            'remind': self._show_reminder_menu,
+            'reminder': self._show_reminder_menu,
         }
         
         # Question patterns that trigger AI chat
         self.ai_question_patterns = [
             'why did we lose',
             'why did we win',
-            'why did it lose',
-            'why did it win',
             'why loss',
             'why won',
             'how is the market',
-            'market looking',
             'market outlook',
             'when will we trade',
             'when is the next trade',
             'trade coming',
             'will we trade',
-            'should i trade',
-            'what happened',
-            'explain the trade',
-            'analyze',
-            'what do you think',
-            'is it good',
-            'is it bad',
             'why no trades',
             'no signals',
+            'what happened',
+            'explain',
         ]
         
         # Command handlers (still supported)
@@ -535,6 +580,14 @@ class EnhancedTelegramBot:
         """Start the bot listener and scheduler"""
         if not self.enabled:
             return
+
+        # Single-instance lock
+        if self._lock_path.exists():
+            logger.warning("⚠️ Telegram bot lock found - another instance may be running")
+        try:
+            self._lock_path.write_text(str(self._pid))
+        except Exception as e:
+            logger.warning(f"Could not write lock file: {e}")
         
         self.running = True
         
@@ -558,6 +611,11 @@ class EnhancedTelegramBot:
             self._listener_thread.join(timeout=5)
         if self._scheduler_thread:
             self._scheduler_thread.join(timeout=5)
+        try:
+            if self._lock_path.exists():
+                self._lock_path.unlink()
+        except Exception:
+            pass
         logger.info("🛑 Telegram bot stopped")
     
     # =========================================================================
@@ -706,8 +764,8 @@ class EnhancedTelegramBot:
                 self._handle_ai_question(text)
                 return
         
-        # If nothing matched, treat it as a potential note
-        self._suggest_save_as_note(text)
+        # If nothing matched, treat it as a generic AI question (no more forced notes)
+        self._ask_ai_generic(text)
     
     def _handle_callback(self, callback_query: Dict):
         """Handle inline button clicks"""
@@ -1129,6 +1187,22 @@ Type a word or #tag to search:
         """Quick system status"""
         today = self.performance.get_today_stats()
         streak = self.performance.get_streak()
+        regime_on = getattr(config, 'LIVE_REGIME_ADAPTIVE', False)
+        regime = "ON" if regime_on else "OFF"
+        last_trade_line = ""
+        alerts_line = ""
+        try:
+            from utils.system_health import get_health_checker
+            checker = get_health_checker()
+            report = checker.get_health_report()
+            staleness = report.get('data_staleness', {}) or {}
+            alerts = report.get('alerts', []) or []
+            if staleness.get('last_trade_age_hours') is not None:
+                last_trade_line = f"  Last trade: {staleness['last_trade_age_hours']:.1f}h ago\n"
+            if alerts:
+                alerts_line = f"  Alerts: {', '.join(alerts[:3])}\n"
+        except Exception:
+            pass
         
         streak_emoji = "🔥" if streak['type'] == 'win' else "❄️" if streak['type'] == 'loss' else "➖"
         streak_text = f"{streak['count']} {streak['type']}s" if streak['count'] > 0 else "No streak"
@@ -1150,7 +1224,8 @@ Type a word or #tag to search:
   Win Rate: {today['win_rate']:.0f}%
 
 <b>Streak:</b> {streak_emoji} {streak_text}
-<b>Mode:</b> {mode} | <b>System:</b> ✅ Running
+<b>Mode:</b> {mode} | <b>Regime:</b> {regime} | <b>System:</b> ✅ Running
+{last_trade_line}{alerts_line}
         """.strip(), reply_markup=keyboard)
     
     def _handle_stats(self, args: str = None):
@@ -1230,21 +1305,39 @@ Type a word or #tag to search:
     
     def _handle_health(self, args: str = None):
         """System health check"""
-        checks = []
-        checks.append("✅ Bot running")
-        checks.append("✅ Notes storage OK")
-        checks.append("✅ Performance tracker OK")
-        
         mode = "PAPER" if getattr(config, 'OKX_SIMULATED', True) else "LIVE"
-        checks.append(f"✅ Mode: {mode}")
-        
-        self.send_message(f"""
+        try:
+            from utils.system_health import get_health_checker
+            checker = get_health_checker()
+            report = checker.get_health_report()
+            staleness = report.get('data_staleness', {}) or {}
+            uptime = report.get('uptime', 'N/A')
+            overall = report.get('overall_status', 'unknown').upper()
+            error_rate = report.get('error_rate_per_hour', 0)
+            alerts = report.get('alerts', []) or []
+            last_trade_age = staleness.get('last_trade_age_hours')
+
+            staleness_line = f"Last trade: {last_trade_age:.1f}h ago" if last_trade_age is not None else "Last trade: n/a"
+            alerts_line = f"Alerts: {', '.join(alerts[:3])}" if alerts else "Alerts: none"
+
+            self.send_message(f"""
 🏥 <b>SYSTEM HEALTH</b>
 
-{chr(10).join(checks)}
+• Status: {overall}
+• Uptime: {uptime}
+• Error rate: {error_rate}/hr
+• {staleness_line}
+• {alerts_line}
+• Mode: {mode}
+            """.strip())
+        except Exception as e:
+            logger.warning(f"Health check failed: {e}")
+            self.send_message(f"""
+🏥 <b>SYSTEM HEALTH</b>
 
-<b>Last Check:</b> {datetime.now(timezone.utc).strftime('%H:%M:%S')} UTC
-        """.strip())
+• Status: UNKNOWN (health checker error)
+• Mode: {mode}
+            """.strip())
     
     def _handle_help(self, args: str = None):
         """Show help"""
@@ -1283,9 +1376,13 @@ Type a word or #tag to search:
     def _handle_ai_question(self, question: str):
         """Handle natural language AI questions"""
         question_lower = question.lower()
-        
-        # Determine question type and route accordingly
-        if any(w in question_lower for w in ['why did we lose', 'why loss', 'why did it lose']):
+
+        # Priority: system/health, then trading Qs, then generic AI
+        if any(w in question_lower for w in ['errors', 'issues', 'problem', 'wrong', 'health']):
+            self._handle_health()
+        elif 'details' in question_lower:
+            self._handle_details_request()
+        elif any(w in question_lower for w in ['why did we lose', 'why loss', 'why did it lose']):
             self._analyze_last_trade('loss', question)
         elif any(w in question_lower for w in ['why did we win', 'why won', 'why did it win']):
             self._analyze_last_trade('win', question)
@@ -1296,7 +1393,6 @@ Type a word or #tag to search:
         elif any(w in question_lower for w in ['what happened', 'explain']):
             self._analyze_last_trade(None, question)
         else:
-            # Generic AI question
             self._ask_ai_generic(question)
     
     def _handle_ask_command(self, args: str):
@@ -1324,7 +1420,7 @@ Just type your question, for example:
         self.send_message("🔍 <i>Analyzing... one moment Boss</i>")
         
         # Get recent trades
-        trades = self._get_recent_trades(limit=5)
+        trades = self._get_recent_trades(limit=50)
         
         if not trades:
             self.send_message("""
@@ -1351,6 +1447,14 @@ The system is scanning for opportunities.
         else:
             trade_to_analyze = trades[0]
         
+        # Scope-aware analysis (summary + details)
+        analysis_scope = parse_scope(question) if ANALYTICS_AVAILABLE else None
+        if ANALYTICS_AVAILABLE:
+            analysis = analyze_trades(trades, scope=analysis_scope)
+            self._last_details = analysis.details
+            self.send_message(analysis.summary + ("\n\n<i>Say \"details\" for full breakdown.</i>" if analysis.details else ""))
+            return
+
         # Build trade context
         direction = trade_to_analyze.get('direction', 'unknown').upper()
         entry = trade_to_analyze.get('entry_price', 0)
@@ -1362,12 +1466,12 @@ The system is scanning for opportunities.
         result_emoji = "💰" if pnl > 0 else "📉"
         result_text = "WIN" if pnl > 0 else "LOSS"
         
-        # Try to get AI analysis
-        if self.claude_agent:
+        # Try to get AI analysis (ChatGPT only)
+        if self.chatgpt_agent:
             try:
                 analysis = self._get_ai_trade_analysis(trade_to_analyze, question)
-                
-                self.send_message(f"""
+                if analysis:
+                    self.send_message(f"""
 {result_emoji} <b>TRADE ANALYSIS - {result_text}</b>
 
 <b>Trade Details:</b>
@@ -1380,12 +1484,18 @@ The system is scanning for opportunities.
 
 <b>🤖 AI Analysis:</b>
 {analysis}
-                """.strip())
+                    """.strip())
+                    return
             except Exception as e:
                 logger.error(f"AI analysis failed: {e}")
-                self._send_basic_trade_analysis(trade_to_analyze)
+        self._send_basic_trade_analysis(trade_to_analyze)
+
+    def _handle_details_request(self):
+        """Send last stored details if available."""
+        if self._last_details:
+            self.send_message(f"🧠 <b>DETAILS</b>\n\n{self._last_details}")
         else:
-            self._send_basic_trade_analysis(trade_to_analyze)
+            self.send_message("ℹ️ No details available yet. Ask an analysis question first (e.g., \"why did we lose last 10 trades?\").")
     
     def _send_basic_trade_analysis(self, trade: Dict):
         """Send basic trade analysis without AI"""
@@ -1423,22 +1533,21 @@ The system is scanning for opportunities.
         # Get current market data
         market_data = self._get_current_market_data()
         
-        if self.claude_agent:
+        if self.chatgpt_agent:
             try:
                 analysis = self._get_ai_market_analysis(market_data, question)
-                
-                self.send_message(f"""
+                if analysis:
+                    self.send_message(f"""
 📊 <b>MARKET ANALYSIS</b>
 
 {analysis}
 
 <i>This is AI-generated analysis. Always verify before trading.</i>
-                """.strip())
+                    """.strip())
+                    return
             except Exception as e:
                 logger.error(f"AI market analysis failed: {e}")
-                self._send_basic_market_outlook(market_data)
-        else:
-            self._send_basic_market_outlook(market_data)
+        self._send_basic_market_outlook(market_data)
     
     def _send_basic_market_outlook(self, market_data: Dict):
         """Send basic market outlook without AI"""
@@ -1463,11 +1572,11 @@ The system is scanning for opportunities.
         all_time = self.performance.get_all_time_stats()
         market_data = self._get_current_market_data()
         
-        if self.claude_agent:
+        if self.chatgpt_agent:
             try:
                 forecast = self._get_ai_trade_forecast(today, all_time, market_data, question)
-                
-                self.send_message(f"""
+                if forecast:
+                    self.send_message(f"""
 🔮 <b>TRADE FORECAST</b>
 
 {forecast}
@@ -1478,12 +1587,11 @@ The system is scanning for opportunities.
 • System: ✅ Scanning
 
 <i>The system trades when high-quality setups appear. Patience pays!</i>
-                """.strip())
+                    """.strip())
+                    return
             except Exception as e:
                 logger.error(f"AI forecast failed: {e}")
-                self._send_basic_forecast(today, market_data)
-        else:
-            self._send_basic_forecast(today, market_data)
+        self._send_basic_forecast(today, market_data)
     
     def _send_basic_forecast(self, today: Dict, market_data: Dict):
         """Send basic forecast without AI"""
@@ -1506,54 +1614,46 @@ The system waits for high-quality setups. It uses:
         """.strip())
     
     def _ask_ai_generic(self, question: str):
-        """Handle generic AI questions"""
-        if not self.claude_agent:
+        """Handle generic AI questions with ChatGPT primary, Claude fallback"""
+        if not self.chatgpt_agent:
             self.send_message("""
 🤖 <b>AI CHAT UNAVAILABLE</b>
 
-Claude API is not configured. To enable:
-1. Set ANTHROPIC_API_KEY in .env
+AI APIs are not configured. To enable:
+1. Set OPENAI_API_KEY in .env
 2. Restart the bot
 
 <i>Basic commands still work: /status, /stats, /pnl</i>
             """.strip())
             return
         
-        self.send_message("🤔 <i>Thinking...</i>")
-        
         try:
-            # Get context
-            today = self.performance.get_today_stats()
-            streak = self.performance.get_streak()
-            recent_trades = self._get_recent_trades(limit=3)
-            
-            context = f"""
-Trading System Context:
-- Today's trades: {today['trades']} ({today['wins']}W/{today['losses']}L)
-- Today's PnL: ${today['pnl']:.2f}
-- Win rate: {today['win_rate']:.0f}%
-- Current streak: {streak['count']} {streak['type']}
-- Recent trades: {len(recent_trades)} in history
-- Mode: {'PAPER' if getattr(config, 'OKX_SIMULATED', True) else 'LIVE'}
-- Using V1 Prediction System (the $8k profit system)
-"""
-            
-            system_prompt = """You are Boss Shamil's personal trading AI assistant. 
-You help him understand his SOL-USDT perpetual futures trading bot.
-Be concise, supportive, and call him "Boss".
-Focus on actionable insights and keep responses under 150 words."""
+            context = self._build_system_context()
+
+            system_prompt = """You are Boss Shamil's personal trading AI assistant.
+Keep it tight: 3-4 bullets, <60 words, no preamble.
+Use the provided context (mode, PnL, streak, alerts, regime, recent trades).
+If no trades, say when the last trade was and whether open positions exist.
+Offer concrete next checks (errors/regime/market) but do not suggest executing trades.
+Never claim you executed or changed anything."""
             
             messages = [
                 {'role': 'user', 'content': f"{context}\n\nBoss Shamil asks: {question}"}
             ]
             
-            response = self.claude_agent._call_claude(messages, system=system_prompt, max_tokens=500)
+            response_content = None
+            ai_source = "ChatGPT"
+            response_content = self._call_ai_chatgpt(messages, system_prompt, max_tokens=400)
             
-            self.send_message(f"""
-🤖 <b>AI RESPONSE</b>
+            if response_content:
+                response_content = self._truncate_ai_response(response_content)
+                self.send_message(f"""
+🤖 <b>AI RESPONSE</b> <i>({ai_source})</i>
 
-{response['content']}
-            """.strip())
+{response_content}
+                """.strip())
+            else:
+                raise Exception("Both AI agents failed")
             
         except Exception as e:
             logger.error(f"Generic AI question failed: {e}")
@@ -1567,9 +1667,83 @@ Couldn't process that question. Try:
 
 Or use /status for a quick update.
             """.strip())
+
+    def _truncate_ai_response(self, text: str, max_words: int = 70, max_chars: int = 650) -> str:
+        """Trim AI output to keep responses concise and readable."""
+        cleaned = " ".join(text.strip().split())
+        if len(cleaned) > max_chars:
+            cleaned = cleaned[:max_chars].rsplit(" ", 1)[0] + "…"
+
+        words = cleaned.split()
+        if len(words) > max_words:
+            cleaned = " ".join(words[:max_words]).rstrip() + "…"
+        return cleaned
+
+    def _build_system_context(self) -> str:
+        """Build a compact system context for AI responses (read-only)."""
+        today = self.performance.get_today_stats()
+        streak = self.performance.get_streak()
+        weekly = self.performance.get_weekly_stats()
+        all_time = self.performance.get_all_time_stats()
+        recent_trades = self._get_recent_trades(limit=5)
+        mode = "PAPER" if getattr(config, 'OKX_SIMULATED', True) else "LIVE"
+        regime_on = getattr(config, 'LIVE_REGIME_ADAPTIVE', False)
+
+        last_trade = ""
+        alerts = ""
+        alert_count = 0
+        try:
+            from utils.system_health import get_health_checker
+            checker = get_health_checker()
+            report = checker.get_health_report()
+            staleness = report.get('data_staleness', {})
+            alert_list = report.get('alerts', []) or []
+            alert_count = len(alert_list)
+            if staleness.get('last_trade_age_hours') is not None:
+                last_trade = f"- Last trade: {staleness['last_trade_age_hours']:.1f}h ago\n"
+            if alert_list:
+                alerts = f"- Alerts: {', '.join(alert_list[:3])}\n"
+        except Exception:
+            pass
+
+        # Recent trade summary line items
+        recent_lines = []
+        for t in recent_trades:
+            pnl = t.get('pnl_abs', t.get('pnl', 0))
+            pnl_pct = t.get('pnl_pct', t.get('pnl_percent', 0))
+            direction = t.get('direction', t.get('side', 'unknown')).upper()
+            strat = t.get('strategy', t.get('strategy_name', 'unknown'))
+            recent_lines.append(f"  • {strat} {direction} PnL ${pnl:+.2f} ({pnl_pct:+.1f}%)")
+        recent_block = "\n".join(recent_lines) if recent_lines else "  • No recent trades"
+
+        context = (
+            "Trading System Context:\n"
+            f"- Mode: {mode} | Regime: {'ON' if regime_on else 'OFF'}\n"
+            f"- Today: {today['trades']} trades ({today['wins']}W/{today['losses']}L) PnL ${today['pnl']:+.2f} | Win {today['win_rate']:.0f}%\n"
+            f"- Weekly: {weekly.get('trades',0)} trades PnL ${weekly.get('pnl',0):+.2f} | Win {weekly.get('win_rate',0):.0f}%\n"
+            f"- All-time: {all_time.get('trades',0)} trades PnL ${all_time.get('pnl',0):+.2f} | Win {all_time.get('win_rate',0):.0f}%\n"
+            f"- Streak: {streak['count']} {streak['type']}\n"
+            f"{last_trade}"
+            f"{alerts}"
+            f"- Alerts count: {alert_count}\n"
+            "Recent trades:\n"
+            f"{recent_block}\n"
+        )
+        return context
+
+    def _call_ai_chatgpt(self, messages: list, system: str, max_tokens: int = 400) -> Optional[str]:
+        """Call ChatGPT agent and return content or None."""
+        if not self.chatgpt_agent:
+            return None
+        try:
+            response = self.chatgpt_agent._call_chatgpt(messages, system=system, max_tokens=max_tokens)
+            return response.get('content', '')
+        except Exception as e:
+            logger.error(f"ChatGPT call failed: {e}")
+            return None
     
-    def _get_ai_trade_analysis(self, trade: Dict, question: str) -> str:
-        """Get AI analysis of a specific trade"""
+    def _get_ai_trade_analysis(self, trade: Dict, question: str) -> Optional[str]:
+        """Get AI analysis of a specific trade (ChatGPT only)"""
         direction = trade.get('direction', 'unknown')
         entry = trade.get('entry_price', 0)
         exit_price = trade.get('exit_price', 0)
@@ -1597,11 +1771,10 @@ Be encouraging and supportive. Call him Boss."""
         system = "You are a supportive trading coach analyzing trades. Be concise and actionable."
         messages = [{'role': 'user', 'content': prompt}]
         
-        response = self.claude_agent._call_claude(messages, system=system, max_tokens=300)
-        return response['content']
+        return self._call_ai_chatgpt(messages, system, max_tokens=300)
     
-    def _get_ai_market_analysis(self, market_data: Dict, question: str) -> str:
-        """Get AI market analysis"""
+    def _get_ai_market_analysis(self, market_data: Dict, question: str) -> Optional[str]:
+        """Get AI market analysis (ChatGPT only)"""
         prompt = f"""Analyze current market conditions for SOL-USDT:
 - Trend: {market_data.get('trend', 'unknown')}
 - Volatility: {market_data.get('volatility', 'unknown')}
@@ -1619,11 +1792,10 @@ Call him Boss. Be direct and actionable."""
         system = "You are a market analyst providing concise market updates. Focus on actionable insights."
         messages = [{'role': 'user', 'content': prompt}]
         
-        response = self.claude_agent._call_claude(messages, system=system, max_tokens=300)
-        return response['content']
+        return self._call_ai_chatgpt(messages, system, max_tokens=300)
     
-    def _get_ai_trade_forecast(self, today: Dict, all_time: Dict, market_data: Dict, question: str) -> str:
-        """Get AI trade forecast"""
+    def _get_ai_trade_forecast(self, today: Dict, all_time: Dict, market_data: Dict, question: str) -> Optional[str]:
+        """Get AI trade forecast (ChatGPT only)"""
         prompt = f"""Boss Shamil wants to know about upcoming trades.
 
 Current status:
@@ -1646,36 +1818,36 @@ Be supportive and call him Boss."""
         system = "You are a trading assistant helping set expectations about trade timing. Be encouraging but realistic."
         messages = [{'role': 'user', 'content': prompt}]
         
-        response = self.claude_agent._call_claude(messages, system=system, max_tokens=250)
-        return response['content']
+        return self._call_ai_chatgpt(messages, system, max_tokens=250)
     
     def _get_recent_trades(self, limit: int = 5) -> List[Dict]:
-        """Get recent trades from trade log"""
-        trades = []
-        
-        # Try to read from paper trades log
-        trades_path = Path(os.path.join(os.path.dirname(__file__), '..', 'logs', 'paper_trades.jsonl'))
-        if trades_path.exists():
+        """Get recent trades from TradeJournal (preferred) with log fallback"""
+        trades: List[Dict] = []
+
+        if TRADE_JOURNAL_AVAILABLE:
             try:
-                with open(trades_path, 'r') as f:
-                    for line in f:
-                        if line.strip():
-                            trades.append(json.loads(line))
+                base = getattr(config, 'TRADE_JOURNAL_PATH', 'runs')
+                j = TradeJournal(base_path=base, enabled=True)
+                trades = j.get_recent_trades(days=90)[:limit]
             except Exception as e:
-                logger.error(f"Error reading trades: {e}")
-        
-        # Try trade journal
-        journal_path = Path(os.path.join(os.path.dirname(__file__), '..', 'logs', 'trade_journal.jsonl'))
-        if journal_path.exists():
-            try:
-                with open(journal_path, 'r') as f:
-                    for line in f:
-                        if line.strip():
-                            trades.append(json.loads(line))
-            except Exception as e:
-                logger.error(f"Error reading trade journal: {e}")
-        
-        # Sort by timestamp and return most recent
+                logger.error(f"TradeJournal read failed: {e}")
+                trades = []
+
+        if not trades:
+            paths = [
+                Path(os.path.join(os.path.dirname(__file__), '..', 'logs', 'paper_trades.jsonl')),
+                Path(os.path.join(os.path.dirname(__file__), '..', 'logs', 'trade_journal.jsonl'))
+            ]
+            for p in paths:
+                if p.exists():
+                    try:
+                        with open(p, 'r') as f:
+                            for line in f:
+                                if line.strip():
+                                    trades.append(json.loads(line))
+                    except Exception as e:
+                        logger.error(f"Error reading {p}: {e}")
+
         trades.sort(key=lambda t: t.get('timestamp_close', t.get('_logged_at', '')), reverse=True)
         return trades[:limit]
     

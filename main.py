@@ -268,12 +268,9 @@ class EliteQuantSystem:
                     self.adaptive_threshold.record_trade(trade_result)
                     logger.info(f"🎚️ Adaptive threshold updated: {self.adaptive_threshold.current_threshold:.0f}")
                 
-                # Also notify enhanced telegram bot
-                if self.telegram_bot:
-                    try:
-                        self.telegram_bot.send_trade_closed(trade_data)
-                    except:
-                        pass
+                # REMOVED: Duplicate notification - TelegramNotifier already sends position_closed
+                # The ProductionOrderManager.notifier.send_position_closed() already handles this
+                # No need to call telegram_bot.send_trade_closed() here to avoid duplicates
                 
                 # Update dashboard with final trade data (FIXES THE WIN/LOSS BUG!)
                 if DASHBOARD_AVAILABLE:
@@ -619,7 +616,15 @@ Manual restart required.
                     add_signal({'type': 'scan', 'reason': 'No signal detected'})
                 return
 
-            logger.info(f"🎯 SIGNAL DETECTED: {signal['strategy']} - {signal['direction'].upper()}")
+            strategy_name = signal.get('strategy', 'unknown')
+            logger.info(f"🎯 SIGNAL DETECTED: {strategy_name} - {signal['direction'].upper()}")
+            
+            # Verify v3 is being used
+            if 'v3' in strategy_name.lower() or 'breakoutv3' in strategy_name.lower():
+                logger.info(f"✅ Using BREAKOUT V3 strategy (verified)")
+            elif 'v2' in strategy_name.lower():
+                logger.info(f"⚠️  Using BREAKOUT V2 strategy (v3 should have priority)")
+            
             if DASHBOARD_AVAILABLE:
                 add_signal({
                     'type': 'detected',
@@ -655,6 +660,9 @@ Manual restart required.
                 if abs(adaptive_thresh - original_thresh) > 1:
                     logger.info(f"🎚️ Adaptive threshold: {original_thresh} → {adaptive_thresh:.0f}")
                 config.SCORE_THRESHOLD = adaptive_thresh
+            
+            # Log current threshold before filtering (diagnostic)
+            logger.debug(f"📊 Current score threshold: {config.SCORE_THRESHOLD}")
             
             # Step 6: Run ALL filters (most important step!)
             filters_passed, filter_results = self.filter_manager.check_all(
@@ -1015,6 +1023,20 @@ Manual restart required.
         logger.info(f"TP1: ${managed_position.tp1_price:.2f} ({'Virtual' if managed_position.tp1_is_virtual else 'Limit'})")
         logger.info(f"TP2: ${managed_position.tp2_price:.2f} ({'Virtual' if managed_position.tp2_is_virtual else 'Limit'})")
         logger.info("="*60 + "\n")
+        
+        # Notify enhanced telegram bot when trade opens (TelegramNotifier handles detailed alerts)
+        if self.telegram_bot:
+            try:
+                trade_data = {
+                    'direction': signal['direction'],
+                    'entry_price': managed_position.entry_price,
+                    'stop_loss': managed_position.stop_loss,
+                    'tp1_price': managed_position.tp1_price,
+                    'strategy': signal.get('strategy', 'unknown')
+                }
+                self.telegram_bot.send_trade_opened(trade_data)
+            except Exception as e:
+                logger.warning(f"Failed to send trade opened notification: {e}")
         
         # Update dashboard
         if DASHBOARD_AVAILABLE:

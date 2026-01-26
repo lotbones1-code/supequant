@@ -262,7 +262,12 @@ class FilterManager:
         if score < score_threshold:
             results['overall_pass'] = False
             results['failed_filters'].append('quality_score')
-            logger.info(f"❌ QUALITY SCORE TOO LOW: {score}/100 (minimum: {score_threshold})")
+            logger.info(f"❌ QUALITY SCORE TOO LOW: {score:.1f}/100 (minimum: {score_threshold})")
+            # Diagnostic: Show score breakdown to help understand why signal was rejected
+            if score_breakdown:
+                breakdown_str = ", ".join([f"{k}: {v:.1f}" for k, v in score_breakdown.items() if isinstance(v, (int, float))])
+                if breakdown_str:
+                    logger.info(f"   Score breakdown: {breakdown_str}")
             logger.info(f"{'='*60}\n")
             self.filter_stats['failed'] += 1
             return False, results
