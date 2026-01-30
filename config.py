@@ -85,7 +85,7 @@ SMALL_ACCOUNT_THRESHOLD = 100.0  # Accounts under $100 use aggressive settings
 
 # MINIMUM POSITION SIZE - ensures we meet exchange minimums
 # Hyperliquid SOL minimum (dynamically updated at startup from szDecimals)
-MIN_POSITION_USDT = 3.0  # Minimum $3 margin
+MIN_POSITION_USDT = 10.0  # Minimum $10 order value (Hyperliquid requirement)
 MIN_SOL_CONTRACT = 1.0   # Hyperliquid minimum - updated at runtime from metadata
 SMALL_ACCOUNT_RISK_MULTIPLIER = 2.0  # 2x risk for small accounts
 SMALL_ACCOUNT_COMPOUND_RATE = 1.5  # Compound 50% faster on wins
