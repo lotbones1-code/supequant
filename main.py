@@ -232,7 +232,10 @@ class EliteQuantSystem:
         if PREDICTION_V1_AVAILABLE:
             try:
                 # Initialize price predictor
-                symbol = getattr(config, 'TRADING_SYMBOL', 'SOL-USDT-SWAP').replace('-SWAP', '').replace('-USDT', '-USDT')
+                symbol = getattr(config, 'TRADING_SYMBOL', 'SOL').replace('-SWAP', '').replace('-USDT', '-USDT')
+                # Ensure format is "SOL-USDT" for the predictor
+                if '-' not in symbol:
+                    symbol = f"{symbol}-USDT"
                 self.price_predictor = create_price_predictor(symbol)
                 
                 # Initialize V1 prediction system (the one that made $8k!)
@@ -393,7 +396,8 @@ class EliteQuantSystem:
 
         # V4 Elite Early Exit Manager (cuts losers early based on MAE/MFE patterns)
         self.v4_early_exit = None
-        self.position_bars_held = {}  # Track bars held per position
+        self.position_bars_held = {}  # Track bars held per position (dict of {last_bar_time, bars})
+        self._position_proxies = {}  # Persistent proxies for MAE/MFE accumulation
         if V4_EARLY_EXIT_AVAILABLE and getattr(config, 'V4_ENABLED', False) and getattr(config, 'V4_EARLY_EXIT_ENABLED', False):
             try:
                 self.v4_early_exit = V4EarlyExitManager()
@@ -427,7 +431,7 @@ class EliteQuantSystem:
         logger.info("\n" + "="*60)
         logger.info("🎯 ELITE QUANT SYSTEM STARTED")
         logger.info(f"Symbol: {config.TRADING_SYMBOL}")
-        logger.info(f"Mode: {'SIMULATED' if config.OKX_SIMULATED else 'LIVE'}")
+        logger.info(f"Mode: LIVE (Hyperliquid)")
         logger.info(f"Max Daily Trades: {config.MAX_DAILY_TRADES}")
         logger.info(f"Risk Per Trade: {config.MAX_RISK_PER_TRADE*100}%")
         ai_status = 'DISABLED'
@@ -510,7 +514,7 @@ Check logs and restart when ready.
                     if MONITORING_AVAILABLE:
                         try:
                             monitor = get_monitoring_system()
-                            balance_info = self.client.get_account_balance()
+                            balance_info = self.okx_client.get_account_balance()
                             if balance_info:
                                 monitor.log_balance(
                                     total_balance=balance_info.get('total', 0),
@@ -1030,18 +1034,18 @@ Manual restart required.
     def _execute_trade_production(self, signal: Dict, position_size: float):
         """
         Execute trade using ProductionOrderManager
-        
+
         Features:
-        - Pre-trade cleanup (cancel orders, sell SOL)
+        - Pre-trade cleanup (cancel orders)
         - Actual fill tracking
         - Smart TP with virtual fallback
         - Background monitoring
         """
-        symbol = config.SPOT_SYMBOL  # Use spot for OKX US compliance
-        
-        # Step 1: Prepare account (cleanup)
+        symbol = config.TRADING_SYMBOL  # Perpetual symbol
+
+        # Step 1: Prepare account (cancel open orders, close stale positions)
         logger.info("\n🧹 Preparing account for trade...")
-        ready = self.production_manager.prepare_for_trade(symbol)
+        ready = self.production_manager.prepare_for_trade(config.TRADING_SYMBOL)
         if not ready:
             logger.error("❌ Account not ready for trading")
             if DASHBOARD_AVAILABLE:
@@ -1236,19 +1240,33 @@ Manual restart required.
             if self.v4_early_exit:
                 position_id = position['position_id']
 
-                # Track bars held (increment each cycle, ~30s per cycle = ~2 bars per minute on 15m TF)
+                # Track bars held using wall-clock time mapped to 15m candle bars
+                # This matches the backtest which iterates on 15m candles
+                BAR_SECONDS = 15 * 60  # 15-minute bars = 900 seconds
                 if position_id not in self.position_bars_held:
-                    self.position_bars_held[position_id] = 0
-                self.position_bars_held[position_id] += 1
-                bars_held = self.position_bars_held[position_id] // 2  # Approximate bars (30s cycles)
+                    self.position_bars_held[position_id] = {
+                        'start_time': time.time(),
+                        'bars': 0
+                    }
 
-                # Create a simple position object for the early exit check
-                class PositionProxy:
-                    pass
-                pos_proxy = PositionProxy()
-                pos_proxy.entry_price = position.get('entry_price', 0)
-                pos_proxy.actual_entry_price = position.get('entry_price', 0)
-                pos_proxy.direction = position.get('direction', 'long')
+                bar_data = self.position_bars_held[position_id]
+                elapsed = time.time() - bar_data['start_time']
+                bars_held = int(elapsed // BAR_SECONDS)
+                bar_data['bars'] = bars_held
+
+                # Persistent PositionProxy — MAE/MFE accumulates across cycles
+                if position_id not in self._position_proxies:
+                    class PositionProxy:
+                        pass
+                    proxy = PositionProxy()
+                    proxy.entry_price = position.get('entry_price', 0)
+                    proxy.actual_entry_price = position.get('entry_price', 0)
+                    proxy.direction = position.get('direction', 'long')
+                    proxy.max_favorable_excursion = 0
+                    proxy.max_adverse_excursion = 0
+                    self._position_proxies[position_id] = proxy
+
+                pos_proxy = self._position_proxies[position_id]
 
                 should_exit, exit_reason, exit_price = self.v4_early_exit.check_early_exit(
                     pos_proxy, current_price, bars_held
@@ -1267,9 +1285,11 @@ Manual restart required.
                             # Fallback to position_tracker if no production manager
                             self.position_tracker.close_position(position_id, current_price, f"v4_early_exit_{exit_reason}")
 
-                        # Clean up bars tracking
+                        # Clean up tracking data
                         if position_id in self.position_bars_held:
                             del self.position_bars_held[position_id]
+                        if position_id in self._position_proxies:
+                            del self._position_proxies[position_id]
                         continue  # Skip to next position
                     except Exception as e:
                         logger.error(f"Failed to execute V4 early exit: {e}")
@@ -1480,7 +1500,7 @@ def main():
         for error in validation_errors:
             logger.error(f"   - {error}")
 
-        if not config.OKX_SIMULATED:
+        if not getattr(config, 'OKX_SIMULATED', False):
             logger.error("⚠️  Cannot start in LIVE mode with configuration errors")
             sys.exit(1)
 

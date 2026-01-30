@@ -495,7 +495,7 @@ class EnhancedTelegramBot:
         self.chatgpt_agent = None
         if CHATGPT_AVAILABLE:
             try:
-                self.chatgpt_agent = ChatGPTAgent(timeout_seconds=10.0)
+                self.chatgpt_agent = ChatGPTAgent(timeout_seconds=30.0, max_retries=1)
                 logger.info("🤖 ChatGPT enabled for enhanced Telegram bot responses")
             except Exception as e:
                 logger.warning(f"Could not initialize ChatGPT agent: {e}")
@@ -681,12 +681,45 @@ class EnhancedTelegramBot:
     # MESSAGE SENDING
     # =========================================================================
     
-    def send_message(self, text: str, parse_mode: str = "HTML", 
+    def send_message(self, text: str, parse_mode: str = "HTML",
                     reply_markup: Dict = None) -> bool:
-        """Send a message with optional inline keyboard"""
+        """Send a message with optional inline keyboard.
+
+        Handles Telegram's 4096 character limit by splitting long messages.
+        """
         if not self.enabled:
             return False
-        
+
+        # Telegram max is 4096; split at 4000 to leave room for formatting
+        MAX_LEN = 4000
+
+        if len(text) <= MAX_LEN:
+            return self._send_single_message(text, parse_mode, reply_markup)
+
+        # Split into chunks on newline boundaries
+        chunks = []
+        while text:
+            if len(text) <= MAX_LEN:
+                chunks.append(text)
+                break
+            # Find last newline before limit
+            split_at = text.rfind('\n', 0, MAX_LEN)
+            if split_at == -1:
+                split_at = MAX_LEN  # No newline found, hard split
+            chunks.append(text[:split_at])
+            text = text[split_at:].lstrip('\n')
+
+        success = True
+        for i, chunk in enumerate(chunks):
+            # Only attach reply_markup to the last chunk
+            markup = reply_markup if i == len(chunks) - 1 else None
+            if not self._send_single_message(chunk, parse_mode, markup):
+                success = False
+        return success
+
+    def _send_single_message(self, text: str, parse_mode: str = "HTML",
+                             reply_markup: Dict = None) -> bool:
+        """Send a single message to Telegram (must be under 4096 chars)."""
         try:
             payload = {
                 'chat_id': self.chat_id,
@@ -696,13 +729,24 @@ class EnhancedTelegramBot:
             }
             if reply_markup:
                 payload['reply_markup'] = json.dumps(reply_markup)
-            
+
             response = requests.post(self.send_url, json=payload, timeout=10)
             return response.status_code == 200 and response.json().get('ok')
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             return False
     
+    def _send_typing_action(self):
+        """Send 'typing...' indicator so user knows bot is processing."""
+        try:
+            url = f"https://api.telegram.org/bot{self.token}/sendChatAction"
+            requests.post(url, json={
+                'chat_id': self.chat_id,
+                'action': 'typing'
+            }, timeout=5)
+        except Exception:
+            pass  # Non-critical, don't log
+
     def _make_inline_keyboard(self, buttons: List[List[Dict]]) -> Dict:
         """Create inline keyboard markup"""
         return {'inline_keyboard': buttons}
@@ -1268,7 +1312,7 @@ Type a word or #tag to search:
         streak_text = f"{streak['count']} {streak['type']}s" if streak['count'] > 0 else "No streak"
         pnl_emoji = "📈" if today['pnl'] >= 0 else "📉"
         
-        mode = "PAPER" if getattr(config, 'OKX_SIMULATED', True) else "LIVE"
+        mode = "PAPER" if getattr(config, 'DRY_RUN', False) else "LIVE"
         
         keyboard = self._make_inline_keyboard([
             [self._make_button("📊 Full Stats", "menu_stats"),
@@ -1365,7 +1409,7 @@ Type a word or #tag to search:
     
     def _handle_health(self, args: str = None):
         """System health check"""
-        mode = "PAPER" if getattr(config, 'OKX_SIMULATED', True) else "LIVE"
+        mode = "PAPER" if getattr(config, 'DRY_RUN', False) else "LIVE"
         try:
             from utils.system_health import get_health_checker
             checker = get_health_checker()
@@ -2015,6 +2059,9 @@ AI APIs are not configured. To enable:
             return
         
         try:
+            # Show "typing..." indicator so user knows bot is processing
+            self._send_typing_action()
+
             context = self._build_system_context()
 
             system_prompt = """You are Boss Shamil's elite trading AI assistant for his SUPEQUANT V4 Elite crypto system.
@@ -2034,7 +2081,7 @@ CRITICAL LIMITATIONS:
 CURRENT SYSTEM STATE (V4 Elite):
 - Score threshold: 45 (lowered for more trades)
 - V4 features: Strategy boost (2.5x breakout), Score sizing, Early exit
-- Trading: SOL-USDT-SWAP perpetual with 5x leverage
+- Trading: SOL perpetual on Hyperliquid with 5x leverage
 - Expected: 3-4 trades per week, ~54% win rate
 - If "last trade 999 hours" - means no trade history yet, system is NEW
 
@@ -2101,7 +2148,7 @@ Or use /status for a quick update.
         weekly = self.performance.get_weekly_stats()
         all_time = self.performance.get_all_time_stats()
         recent_trades = self._get_recent_trades(limit=5)
-        mode = "PAPER" if getattr(config, 'OKX_SIMULATED', True) else "LIVE"
+        mode = "PAPER" if getattr(config, 'DRY_RUN', False) else "LIVE"
         regime_on = getattr(config, 'LIVE_REGIME_ADAPTIVE', False)
 
         last_trade = ""

@@ -239,7 +239,7 @@ class RiskManager:
                 logger.info(f"🚀 V4 Total Multiplier: {v4_multiplier:.2f}x → Position: {position_size:.4f}")
 
         # CRITICAL: Enforce minimum position size for exchange requirements
-        # OKX SOL-USDT-SWAP minimum is 0.1 SOL
+        # Hyperliquid SOL minimum is 0.01 SOL (szDecimals=2)
         if position_size < MIN_SOL_CONTRACT:
             min_margin_needed = MIN_SOL_CONTRACT * entry_price / GROWTH_LEVERAGE
             if min_margin_needed <= account_balance * 0.5:  # Only if we have 2x minimum margin
@@ -471,7 +471,7 @@ class RiskManager:
                 self.current_balance = total_usd
                 return True
 
-            logger.error("❌ Could not extract any balance from OKX response")
+            logger.error("❌ Could not extract any balance from exchange response")
             return False
 
         except Exception as e:

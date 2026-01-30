@@ -62,6 +62,7 @@ class SystemHealthChecker:
         # Exclusion patterns - these are normal operations, not errors
         # Filter rejections are GOOD - they mean the system is working correctly
         self.exclude_patterns = [
+            r'CRITICAL FILTER FAILED',        # Normal filter rejections - this is a feature name, not error level
             r'CRITICAL.*FILTER.*FAILED',      # Normal filter rejections (with or without emoji)
             r'❌.*CRITICAL.*FILTER.*FAILED',  # Normal filter rejections with emoji
             r'❌.*FILTER.*FAILED',            # Normal filter rejections
@@ -69,16 +70,13 @@ class SystemHealthChecker:
             r'❌.*QUALITY SCORE',             # Normal quality score rejections
             r'QUALITY SCORE TOO LOW',         # Normal quality score rejections
             r'filter_manager.*CRITICAL',       # Any CRITICAL from filter_manager (normal operations)
+            r'\[INFO\].*filter_manager',       # ALL [INFO] level from filter_manager are normal (actual log format)
+            r'\[INFO\].*CRITICAL FILTER',      # INFO level CRITICAL FILTER messages (normal rejections)
+            r'filter_manager:\d+.*CRITICAL',   # filter_manager with line number + CRITICAL (normal)
             r'filter_manager:99',             # Line 99 is initialization (not an error)
             r'filters\.filter_manager:99',    # Line 99 with full module path (not an error)
             r'[Cc]ritical filters?',          # Initialization log - "Critical filter" or "Critical filters" (case-insensitive)
             r'Critical filters \(binary\)',   # Initialization log (not an error)
-            r'filters\.filter_manager.*[Cc]ritical',  # Any Critical/critical from filter_manager module
-            r'.*filter_manager.*[Cc]ritical filters?',  # Any "Critical filters" from filter_manager
-            r'^.*\[INFO\].*filter_manager.*[Cc]ritical',  # INFO level Critical from filter_manager
-            r'filters\.filter_manager.*INFO.*[Cc]ritical',  # INFO level from filter_manager with Critical
-            r'.*filter_manager.*- INFO -.*[Cc]ritical',  # Log format: filter_manager - INFO - Critical
-            r'filters\.filter_manager.*- INFO -',  # ALL INFO level messages from filter_manager are normal (not errors)
         ]
 
         logger.debug("SystemHealthChecker initialized")
@@ -126,12 +124,14 @@ class SystemHealthChecker:
                     for line in lines:
                         # FIRST: Exclude filter_manager INFO messages that are normal operations
                         # These are initialization logs and filter rejections (not errors)
-                        if 'filter_manager' in line and 'INFO' in line:
-                            # Exclude if it contains keywords indicating normal operations
-                            normal_keywords = ['Critical', 'CRITICAL', 'FILTER FAILED', 'TRADE REJECTED', 
-                                             'QUALITY SCORE', 'initialized', 'filters:', 'filter:']
-                            if any(keyword in line for keyword in normal_keywords):
-                                continue  # Skip normal filter_manager INFO messages
+                        # Log format: "2026-01-28 19:14:45 [INFO] filters.filter_manager:152 - ❌ CRITICAL FILTER FAILED"
+                        if 'filter_manager' in line and '[INFO]' in line:
+                            # ALL INFO-level filter_manager messages are normal operations
+                            continue  # Skip - these are trade rejections which are GOOD
+
+                        # Also skip any "CRITICAL FILTER FAILED" - this is a feature name, not error level
+                        if 'CRITICAL FILTER FAILED' in line:
+                            continue  # Skip - this is normal filter rejection messaging
                         
                         # SECOND: Check exclusion patterns (normal operations)
                         is_excluded = any(re.search(exclude_pattern, line, re.IGNORECASE) 
@@ -184,8 +184,10 @@ class SystemHealthChecker:
             import config
 
             # Check 1: Perpetual-only (CRITICAL)
-            if not config.TRADING_SYMBOL.endswith('-SWAP'):
-                results['errors'].append('TRADING_SYMBOL must be perpetual (-SWAP)')
+            # Hyperliquid uses bare coin names ("SOL"), OKX used "SOL-USDT-SWAP"
+            # Validate via TRADING_MODE instead of symbol suffix
+            if config.TRADING_MODE != 'perp':
+                results['errors'].append('TRADING_MODE must be "perp" for perpetual trading')
                 results['checks_failed'] += 1
             else:
                 results['checks_passed'] += 1
@@ -219,10 +221,10 @@ class SystemHealthChecker:
                 results['checks_passed'] += 1
 
             # Check 6: API credentials (warn if missing)
-            api_key = getattr(config, 'OKX_API_KEY', '')
-            secret_key = getattr(config, 'OKX_SECRET_KEY', '')
-            if not api_key or not secret_key:
-                results['warnings'].append('OKX API credentials missing')
+            hl_key = getattr(config, 'HYPERLIQUID_PRIVATE_KEY', '')
+            hl_addr = getattr(config, 'HYPERLIQUID_WALLET_ADDRESS', '')
+            if not hl_key or not hl_addr:
+                results['warnings'].append('Hyperliquid API credentials missing')
             else:
                 results['checks_passed'] += 1
 

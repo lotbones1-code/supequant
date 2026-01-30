@@ -20,10 +20,16 @@ from dataclasses import dataclass, field
 
 from data_feed.okx_client import OKXClient
 from config import (
-    TRADING_SYMBOL, SPOT_SYMBOL, TRADING_MODE,
+    TRADING_SYMBOL, TRADING_MODE,
     LIMIT_ORDER_ENTRY_ENABLED, LIMIT_ORDER_IMPROVEMENT,
-    LIMIT_ORDER_TIMEOUT, LIMIT_ORDER_MARKET_FALLBACK
+    LIMIT_ORDER_TIMEOUT, LIMIT_ORDER_MARKET_FALLBACK,
+    GROWTH_MODE_ENABLED, GROWTH_LEVERAGE, MIN_SOL_CONTRACT
 )
+# Backward compat: SPOT_SYMBOL no longer used but may be referenced
+try:
+    from config import SPOT_SYMBOL
+except ImportError:
+    SPOT_SYMBOL = TRADING_SYMBOL
 
 logger = logging.getLogger(__name__)
 
@@ -150,24 +156,98 @@ class ProductionOrderManager:
         journal_status = "enabled" if trade_journal else "disabled"
         notifier_status = "enabled" if notifier else "disabled"
         logger.info(f"✅ ProductionOrderManager initialized (journal: {journal_status}, notifications: {notifier_status})")
+
+        # Check for orphaned positions on Hyperliquid (crash recovery)
+        self._check_existing_positions()
     
+    # =========================================================================
+    # CRASH RECOVERY: Check for orphaned positions on restart
+    # =========================================================================
+
+    def _check_existing_positions(self):
+        """Check if there are open positions on Hyperliquid that we don't know about.
+
+        On restart after a crash, the bot has current_position = None but may have
+        a real open position on the exchange. This prevents opening duplicate positions.
+        """
+        try:
+            positions = self.client.get_positions(TRADING_SYMBOL)
+            if not positions:
+                return
+
+            for pos in positions:
+                pos_size = abs(float(pos.get('pos', 0)))
+                if pos_size > 0:
+                    side = pos.get('posSide', 'net')
+                    entry_px = float(pos.get('avgPx', pos.get('entryPx', 0)))
+                    upnl = float(pos.get('unrealizedPnl', 0))
+                    logger.warning(
+                        f"⚠️  ORPHANED POSITION DETECTED on restart: "
+                        f"{TRADING_SYMBOL} {side} size={pos_size} "
+                        f"entry={entry_px} uPnL={upnl:.2f}"
+                    )
+                    logger.warning(
+                        "The bot will NOT open new positions until this is resolved. "
+                        "Existing TP/SL on the exchange will still execute."
+                    )
+                    # Create a minimal ManagedPosition so the bot knows it has a position
+                    # and won't try to open a new one
+                    direction = 'long' if float(pos.get('pos', 0)) > 0 else 'short'
+                    self.current_position = ManagedPosition(
+                        position_id=f"recovered-{int(time.time())}",
+                        symbol=TRADING_SYMBOL,
+                        direction=direction,
+                    )
+                    self.current_position.entry_price = entry_px
+                    self.current_position.entry_size = pos_size
+                    self.current_position.actual_entry_size = pos_size
+                    logger.warning(f"Set current_position to track orphaned {self.current_position.direction} position")
+                    return
+        except Exception as e:
+            logger.warning(f"Could not check existing positions on startup: {e}")
+
+    # =========================================================================
+    # HELPER: Get position size (works for both spot and perp)
+    # =========================================================================
+
+    def _get_position_size(self, symbol: str) -> float:
+        """
+        Get current position size.
+        For perpetuals: uses get_positions() API
+        """
+        is_perp = TRADING_MODE == 'perp'
+
+        if is_perp:
+            positions = self.client.get_positions(symbol)
+            if positions:
+                for pos in positions:
+                    pos_size = abs(float(pos.get('pos', 0)))
+                    if pos_size > 0:
+                        return pos_size
+            return 0.0
+        else:
+            balance = self.client.get_currency_balance('SOL')
+            return balance if balance else 0.0
+
     # =========================================================================
     # 1. PRE-TRADE CLEANUP
     # =========================================================================
-    
-    def prepare_for_trade(self, symbol: str = 'SOL-USDT') -> bool:
+
+    def prepare_for_trade(self, symbol: str = None) -> bool:
         """
         Prepare account for a fresh trade by cleaning up any existing state.
-        
+
         Steps:
         1. Cancel all open orders for the symbol
-        2. Sell any existing SOL at market
+        2. Close any existing perpetual positions
         3. Wait for settlement
         4. Verify clean state
-        
+
         Returns:
             True if account is ready for trading
         """
+        if symbol is None:
+            symbol = TRADING_SYMBOL
         logger.info("\n" + "="*60)
         logger.info("🧹 PREPARING ACCOUNT FOR TRADE")
         logger.info("="*60)
@@ -175,22 +255,34 @@ class ProductionOrderManager:
         try:
             # Step 1: Cancel all open orders
             logger.info("\n📋 Step 1: Canceling open orders...")
-            cancelled = self._cancel_all_orders(symbol)
+            trade_symbol = TRADING_SYMBOL
+            cancelled = self._cancel_all_orders(trade_symbol)
+            # Also cancel on the passed symbol if different
+            if symbol != trade_symbol:
+                cancelled += self._cancel_all_orders(symbol)
             logger.info(f"   Cancelled {cancelled} order(s)")
-            
-            # Step 2: Sell any existing SOL
-            logger.info("\n💰 Step 2: Checking for existing SOL...")
-            sol_balance = self.client.get_currency_balance('SOL')
-            
-            if sol_balance and sol_balance > 0.001:  # More than dust
-                logger.info(f"   Found {sol_balance:.4f} SOL - selling at market...")
-                sell_result = self._sell_all_sol(symbol, sol_balance)
-                if sell_result:
-                    logger.info(f"   ✅ Sold {sol_balance:.4f} SOL")
-                else:
-                    logger.warning(f"   ⚠️  Could not sell SOL - may have open orders")
+
+            # Step 2: Close any existing perpetual positions
+            logger.info("\n💰 Step 2: Checking for existing perpetual positions...")
+            perp_pos_size = self._get_position_size(trade_symbol)
+            if perp_pos_size and perp_pos_size > 0.001:
+                logger.info(f"   Found {perp_pos_size:.4f} perp position - closing...")
+                positions = self.client.get_positions(trade_symbol)
+                if positions:
+                    pos_amt = float(positions[0].get('pos', 0))
+                    close_side = 'sell' if pos_amt > 0 else 'buy'
+                    self.client.place_order(
+                        symbol=trade_symbol,
+                        side=close_side,
+                        order_type='market',
+                        size=str(round(perp_pos_size, 2)),
+                        tdMode='cross',
+                        reduce_only='true'
+                    )
+                    logger.info(f"   ✅ Closed perp position")
+                    time.sleep(1)
             else:
-                logger.info(f"   No SOL to sell (balance: {sol_balance or 0:.4f})")
+                logger.info(f"   No existing position")
             
             # Step 3: Wait for settlement
             logger.info("\n⏳ Step 3: Waiting for settlement...")
@@ -198,21 +290,15 @@ class ProductionOrderManager:
             
             # Step 4: Verify clean state
             logger.info("\n✅ Step 4: Verifying clean state...")
-            
+
             # Check no open orders
-            open_orders = self.client.get_open_orders(symbol)
-            if open_orders and len(open_orders) > 0:
+            open_orders = self.client.get_open_orders(trade_symbol) or []
+            if symbol != trade_symbol:
+                open_orders += self.client.get_open_orders(symbol) or []
+            if len(open_orders) > 0:
                 logger.warning(f"   ⚠️  Still have {len(open_orders)} open orders")
                 return False
             logger.info("   ✓ No open orders")
-            
-            # Check no SOL balance
-            sol_balance = self.client.get_currency_balance('SOL')
-            if sol_balance and sol_balance > 0.001:
-                logger.warning(f"   ⚠️  Still have {sol_balance:.4f} SOL")
-                # Not a blocker, but note it
-            else:
-                logger.info("   ✓ No SOL balance")
             
             # Check USDT available
             usdt_balance = self.client.get_trading_balance('USDT')
@@ -305,7 +391,7 @@ class ProductionOrderManager:
         Returns:
             ManagedPosition object or None if failed
         """
-        symbol = TRADING_SYMBOL  # Use perpetual symbol from config (SOL-USDT-SWAP)
+        symbol = TRADING_SYMBOL  # Use perpetual symbol from config
         
         logger.info("\n" + "="*60)
         logger.info("🚀 EXECUTING TRADE")
@@ -352,14 +438,48 @@ class ProductionOrderManager:
                 position.state = PositionState.FAILED
                 return None
             
-            # For spot: position_size = (USDT * 0.95) / price
+            # Calculate position size based on trading mode
             current_price = signal['entry_price']
-            actual_size = (usdt_balance * 0.95) / current_price
-            
-            # Cap at max_position_size if smaller
-            if max_position_size < actual_size:
+
+            # For perpetuals: use the calculated max_position_size (already includes leverage)
+            # For spot: position_size = (USDT * 0.95) / price
+            is_perp = TRADING_MODE == 'perp'
+
+            if is_perp:
+                # Perpetual mode - use the risk-calculated position size
                 actual_size = max_position_size
-            
+                logger.info(f"   📊 Perpetual mode with {GROWTH_LEVERAGE}x leverage")
+            else:
+                # Spot mode - calculate from USDT balance
+                actual_size = (usdt_balance * 0.95) / current_price
+                if max_position_size < actual_size:
+                    actual_size = max_position_size
+
+            # CRITICAL: Round to exchange lot size for SOL perpetuals
+            lot_size = MIN_SOL_CONTRACT  # 0.01 from Hyperliquid metadata
+            actual_size = round(actual_size / lot_size) * lot_size
+
+            # Ensure minimum contract size
+            if actual_size < lot_size:
+                actual_size = lot_size
+                logger.warning(f"   ⚠️  Size below minimum, using {lot_size} SOL")
+
+            # CRITICAL: Verify margin after rounding (rounding UP can exceed balance)
+            if is_perp:
+                margin_needed = (actual_size * current_price) / GROWTH_LEVERAGE
+                if margin_needed > usdt_balance * 0.95:  # 95% to leave buffer for fees
+                    # Round DOWN instead of nearest
+                    actual_size = int(actual_size / lot_size - 0.5) * lot_size
+                    if actual_size < lot_size:
+                        actual_size = lot_size
+                    margin_needed = (actual_size * current_price) / GROWTH_LEVERAGE
+                    logger.warning(f"   ⚠️  Margin cap: rounded down to {actual_size:.2f} SOL (margin ${margin_needed:.2f})")
+
+                    if margin_needed > usdt_balance:
+                        logger.error(f"   ❌ Cannot afford minimum position. Need ${margin_needed:.2f}, have ${usdt_balance:.2f}")
+                        position.state = PositionState.FAILED
+                        return None
+
             position.entry_size = actual_size
             
             logger.info(f"\n📊 Trade Details:")
@@ -393,13 +513,18 @@ class ProductionOrderManager:
                 logger.info(f"   Target improvement: {improvement*100:.2f}%")
                 logger.info(f"   Current: ${current_price:.2f} → Limit: ${limit_price:.2f}")
                 
-                entry_result = self.client.place_order(
-                    symbol=symbol,
-                    side=side,
-                    order_type='limit',
-                    size=str(round(actual_size, 4)),
-                    price=str(limit_price)
-                )
+                # Build order kwargs - include tdMode for perpetuals
+                order_kwargs = {
+                    'symbol': symbol,
+                    'side': side,
+                    'order_type': 'limit',
+                    'size': str(round(actual_size, 2)),  # Round to lot size
+                    'price': str(limit_price)
+                }
+                if is_perp:
+                    order_kwargs['tdMode'] = 'cross'  # Use cross margin for reliability
+
+                entry_result = self.client.place_order(**order_kwargs)
                 
                 if entry_result:
                     used_limit = True
@@ -440,12 +565,17 @@ class ProductionOrderManager:
                 else:
                     logger.info(f"\n📤 Placing market entry order...")
                 
-                entry_result = self.client.place_order(
-                    symbol=symbol,
-                    side=side,
-                    order_type='market',
-                    size=str(round(actual_size, 4))
-                )
+                # Build order kwargs - include tdMode for perpetuals
+                order_kwargs = {
+                    'symbol': symbol,
+                    'side': side,
+                    'order_type': 'market',
+                    'size': str(round(actual_size, 2))  # Round to lot size
+                }
+                if is_perp:
+                    order_kwargs['tdMode'] = 'cross'  # Use cross margin for reliability
+
+                entry_result = self.client.place_order(**order_kwargs)
             
             if not entry_result:
                 logger.error("❌ Failed to place entry order")
@@ -458,22 +588,37 @@ class ProductionOrderManager:
             
             # Wait for fill and get actual size
             time.sleep(1)
-            
-            # Get actual filled size from balance
-            sol_balance = self.client.get_currency_balance('SOL')
-            if sol_balance and sol_balance > 0:
-                position.actual_entry_size = sol_balance
-                logger.info(f"   📊 Actual fill size: {sol_balance:.4f} SOL")
+
+            # Get actual filled size (works for both spot and perp)
+            filled_size = self._get_position_size(symbol)
+            if filled_size and filled_size > 0:
+                position.actual_entry_size = filled_size
+                logger.info(f"   📊 Actual fill size: {filled_size:.4f} SOL")
             else:
                 position.actual_entry_size = actual_size
                 logger.warning(f"   ⚠️  Could not verify fill, using requested: {actual_size:.4f}")
             
             position.state = PositionState.ENTRY_FILLED
             
-            # Calculate TP sizes based on ACTUAL entry size (50/50 split)
-            tp1_size = position.actual_entry_size * 0.5
-            tp2_size = position.actual_entry_size * 0.5
-            
+            # Calculate TP sizes based on ACTUAL entry size
+            # For small positions (0.1-0.2 SOL), close 100% at TP1 (can't split below lot size)
+            if position.actual_entry_size <= lot_size:
+                # Position IS the minimum - close all at TP1, skip TP2
+                tp1_size = position.actual_entry_size
+                tp2_size = 0.0
+                logger.info(f"   📝 Small position - closing 100% at TP1")
+            else:
+                # Round TP1 down to lot size, give remainder to TP2
+                tp1_size = round(position.actual_entry_size * 0.5 / lot_size) * lot_size
+                if tp1_size < lot_size:
+                    tp1_size = lot_size
+                tp2_size = round((position.actual_entry_size - tp1_size) / lot_size) * lot_size
+                if tp2_size < lot_size:
+                    # Can't split - give all to TP1
+                    tp1_size = position.actual_entry_size
+                    tp2_size = 0.0
+                    logger.info(f"   📝 Can't split below lot size - closing 100% at TP1")
+
             position.tp1_size = tp1_size
             position.tp2_size = tp2_size
             
@@ -489,10 +634,14 @@ class ProductionOrderManager:
             if tp1_placed:
                 logger.info(f"   ✅ TP1: {'Virtual' if position.tp1_is_virtual else 'Limit'} @ ${position.tp1_price:.2f}")
             
-            # TP2
-            tp2_placed = self._place_smart_tp(position, 2, position.tp2_price, tp2_size)
-            if tp2_placed:
-                logger.info(f"   ✅ TP2: {'Virtual' if position.tp2_is_virtual else 'Limit'} @ ${position.tp2_price:.2f}")
+            # TP2 (skip if all size allocated to TP1)
+            if tp2_size >= lot_size:
+                tp2_placed = self._place_smart_tp(position, 2, position.tp2_price, tp2_size)
+                if tp2_placed:
+                    logger.info(f"   ✅ TP2: {'Virtual' if position.tp2_is_virtual else 'Limit'} @ ${position.tp2_price:.2f}")
+            else:
+                position.tp2_filled = True  # Mark as done - TP1 handles full close
+                logger.info(f"   ℹ️  TP2: Skipped (full close at TP1)")
             
             # Set up virtual stop loss (spot doesn't support native SL)
             position.sl_is_virtual = True
@@ -546,26 +695,36 @@ class ProductionOrderManager:
             True if TP is set (limit or virtual)
         """
         try:
-            # Check available balance
-            sol_balance = self.client.get_currency_balance('SOL')
-            if not sol_balance or sol_balance < 0.001:
-                logger.warning(f"   ⚠️  TP{tp_num}: No SOL balance, setting as virtual")
+            is_perp = TRADING_MODE == 'perp'
+
+            # Check available position/balance
+            pos_size = self._get_position_size(position.symbol)
+            if not pos_size or pos_size < 0.001:
+                logger.warning(f"   ⚠️  TP{tp_num}: No position found, setting as virtual")
                 self._set_virtual_tp(position, tp_num, price, size)
                 return True
-            
+
             # Adjust size if needed
-            if size > sol_balance:
-                logger.warning(f"   ⚠️  TP{tp_num}: Adjusting size {size:.4f} -> {sol_balance:.4f}")
-                size = sol_balance
-            
-            # Try limit order
-            result = self.client.place_order(
-                symbol=position.symbol,
-                side='sell',
-                order_type='limit',
-                size=str(round(size, 4)),
-                price=str(round(price, 2))
-            )
+            if size > pos_size:
+                logger.warning(f"   ⚠️  TP{tp_num}: Adjusting size {size:.4f} -> {pos_size:.4f}")
+                size = pos_size
+
+            # Determine close side (opposite of entry direction)
+            close_side = 'sell' if position.direction == 'long' else 'buy'
+
+            # Try limit order - round to lot size for perpetuals
+            order_kwargs = {
+                'symbol': position.symbol,
+                'side': close_side,
+                'order_type': 'limit',
+                'size': str(round(size, 2)),  # Round to lot size
+                'price': str(round(price, 2)),
+                'tdMode': 'cross' if is_perp else 'cash'
+            }
+            if is_perp:
+                order_kwargs['reduce_only'] = 'true'
+
+            result = self.client.place_order(**order_kwargs)
             
             if result:
                 order_id = result.get('ordId', '')
@@ -730,25 +889,34 @@ class ProductionOrderManager:
             logger.error(f"Error checking position: {e}")
     
     def _execute_virtual_tp(self, position: ManagedPosition, tp_num: int, current_price: float):
-        """Execute a virtual TP by placing market sell"""
+        """Execute a virtual TP by placing market close order"""
         try:
             size = position.tp1_size if tp_num == 1 else position.tp2_size
-            
-            # Check actual balance
-            sol_balance = self.client.get_currency_balance('SOL')
-            if sol_balance and sol_balance < size:
-                size = sol_balance
-            
+            is_perp = TRADING_MODE == 'perp'
+
+            # Check actual position size
+            pos_size = self._get_position_size(position.symbol)
+            if pos_size and pos_size < size:
+                size = pos_size
+
             if size < 0.001:
-                logger.warning(f"   TP{tp_num}: No SOL to sell")
+                logger.warning(f"   TP{tp_num}: No position to close")
                 return
-            
-            result = self.client.place_order(
-                symbol=position.symbol,
-                side='sell',
-                order_type='market',
-                size=str(round(size, 4))
-            )
+
+            # Close side is opposite of entry direction
+            close_side = 'sell' if position.direction == 'long' else 'buy'
+
+            order_kwargs = {
+                'symbol': position.symbol,
+                'side': close_side,
+                'order_type': 'market',
+                'size': str(round(size, 2)),  # Round to lot size
+                'tdMode': 'cross' if is_perp else 'cash'
+            }
+            if is_perp:
+                order_kwargs['reduce_only'] = 'true'
+
+            result = self.client.place_order(**order_kwargs)
 
             if result:
                 if tp_num == 1:
@@ -757,6 +925,8 @@ class ProductionOrderManager:
                     position.tp1_fill_time = datetime.now()
                     position.state = PositionState.TP1_FILLED
                     pnl = (current_price - position.entry_price) * size
+                    if position.direction == 'short':
+                        pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"   ✅ TP1 executed: {size:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
 
@@ -783,6 +953,8 @@ class ProductionOrderManager:
                     position.tp2_fill_time = datetime.now()
                     position.state = PositionState.TP2_FILLED
                     pnl = (current_price - position.entry_price) * size
+                    if position.direction == 'short':
+                        pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"   ✅ TP2 executed: {size:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
                     # Send TP2 notification
@@ -794,34 +966,44 @@ class ProductionOrderManager:
             logger.error(f"Error executing virtual TP{tp_num}: {e}")
     
     def _execute_stop_loss(self, position: ManagedPosition, current_price: float):
-        """Execute stop loss by selling all remaining SOL"""
+        """Execute stop loss by closing all remaining position"""
         try:
-            sol_balance = self.client.get_currency_balance('SOL')
-            if not sol_balance or sol_balance < 0.001:
-                logger.warning("   No SOL to sell for stop loss")
+            is_perp = TRADING_MODE == 'perp'
+            pos_size = self._get_position_size(position.symbol)
+            if not pos_size or pos_size < 0.001:
+                logger.warning("   No position to close for stop loss")
                 position.state = PositionState.STOPPED_OUT
                 self._close_position(position, 'sl')
                 return
-            
+
             # Cancel any open TP orders first
             if position.tp1_order_id and not position.tp1_is_virtual and not position.tp1_filled:
                 self.client.cancel_order(position.symbol, position.tp1_order_id)
             if position.tp2_order_id and not position.tp2_is_virtual and not position.tp2_filled:
                 self.client.cancel_order(position.symbol, position.tp2_order_id)
-            
-            # Sell all remaining
-            result = self.client.place_order(
-                symbol=position.symbol,
-                side='sell',
-                order_type='market',
-                size=str(round(sol_balance, 4))
-            )
+
+            # Close position (opposite side)
+            close_side = 'sell' if position.direction == 'long' else 'buy'
+
+            order_kwargs = {
+                'symbol': position.symbol,
+                'side': close_side,
+                'order_type': 'market',
+                'size': str(round(pos_size, 2)),  # Round to lot size
+                'tdMode': 'cross' if is_perp else 'cash'
+            }
+            if is_perp:
+                order_kwargs['reduce_only'] = 'true'
+
+            result = self.client.place_order(**order_kwargs)
 
             if result:
-                pnl = (current_price - position.entry_price) * sol_balance
+                pnl = (current_price - position.entry_price) * pos_size
+                if position.direction == 'short':
+                    pnl = -pnl  # Reverse PnL for shorts
                 position.realized_pnl += pnl
                 position.state = PositionState.STOPPED_OUT
-                logger.info(f"   ✅ Stop loss executed: {sol_balance:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
+                logger.info(f"   ✅ Stop loss executed: {pos_size:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
                 # Send SL notification
                 if self.notifier:
                     self.notifier.send_sl_hit(position.__dict__, current_price, pnl)
@@ -844,6 +1026,8 @@ class ProductionOrderManager:
                     position.tp1_fill_time = datetime.now()
                     position.state = PositionState.TP1_FILLED
                     pnl = (fill_price - position.entry_price) * fill_size
+                    if position.direction == 'short':
+                        pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"🎯 TP1 FILLED: {fill_size:.4f} SOL @ ${fill_price:.2f} (PnL: ${pnl:.2f})")
                     # Send TP1 notification
@@ -862,6 +1046,8 @@ class ProductionOrderManager:
                     position.tp2_fill_time = datetime.now()
                     position.state = PositionState.TP2_FILLED
                     pnl = (fill_price - position.entry_price) * fill_size
+                    if position.direction == 'short':
+                        pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"🎯 TP2 FILLED: {fill_size:.4f} SOL @ ${fill_price:.2f} (PnL: ${pnl:.2f})")
                     # Send TP2 notification
@@ -937,36 +1123,44 @@ class ProductionOrderManager:
         try:
             logger.info(f"💰 Executing ARB exit ({reason})")
             
-            # Get actual balance
-            sol_balance = self.client.get_currency_balance('SOL')
-            if not sol_balance or sol_balance < 0.001:
-                logger.warning(f"   ⚠️  No SOL to sell, marking as closed")
+            # Get actual position size
+            is_perp = TRADING_MODE == 'perp'
+            pos_size = self._get_position_size(position.symbol)
+            if not pos_size or pos_size < 0.001:
+                logger.warning(f"   ⚠️  No position to close, marking as closed")
                 self._close_position(position, reason)
                 return
-            
+
             # Calculate PnL (price-based + funding earned)
             if position.direction == 'long':
-                price_pnl = (current_price - position.entry_price) * sol_balance
+                price_pnl = (current_price - position.entry_price) * pos_size
             else:
-                price_pnl = (position.entry_price - current_price) * sol_balance
-            
+                price_pnl = (position.entry_price - current_price) * pos_size
+
             # Note: Actual funding earned is calculated by exchange, not tracked here
             # The price PnL might be small positive or negative
             # The funding collected is the main profit source
-            
-            # Execute market sell
-            result = self.client.place_order(
-                symbol=position.symbol,
-                side='sell',
-                order_type='market',
-                size=str(round(sol_balance, 4))
-            )
+
+            # Close position (opposite side)
+            close_side = 'sell' if position.direction == 'long' else 'buy'
+
+            order_kwargs = {
+                'symbol': position.symbol,
+                'side': close_side,
+                'order_type': 'market',
+                'size': str(round(pos_size, 2)),  # Round to lot size
+                'tdMode': 'cross' if is_perp else 'cash'
+            }
+            if is_perp:
+                order_kwargs['reduce_only'] = 'true'
+
+            result = self.client.place_order(**order_kwargs)
 
             if result:
                 fill_price = float(result.get('fillPx', current_price))
                 position.realized_pnl = price_pnl
-                
-                logger.info(f"   ✅ ARB EXIT COMPLETE: {sol_balance:.4f} SOL @ ${fill_price:.2f}")
+
+                logger.info(f"   ✅ ARB EXIT COMPLETE: {pos_size:.4f} SOL @ ${fill_price:.2f}")
                 logger.info(f"   Price PnL: ${price_pnl:.2f} (funding collected separately)")
                 
                 # Send notification
@@ -1174,20 +1368,30 @@ class ProductionOrderManager:
             if position.tp2_order_id and not position.tp2_is_virtual:
                 self.client.cancel_order(position.symbol, position.tp2_order_id)
             
-            # Sell all SOL
-            sol_balance = self.client.get_currency_balance('SOL')
-            if sol_balance and sol_balance > 0.001:
-                result = self.client.place_order(
-                    symbol=position.symbol,
-                    side='sell',
-                    order_type='market',
-                    size=str(round(sol_balance, 4))
-                )
+            # Close position - round to lot size for perpetuals
+            is_perp = TRADING_MODE == 'perp'
+            pos_size = self._get_position_size(position.symbol)
+            if pos_size and pos_size > 0.001:
+                close_side = 'sell' if position.direction == 'long' else 'buy'
+
+                order_kwargs = {
+                    'symbol': position.symbol,
+                    'side': close_side,
+                    'order_type': 'market',
+                    'size': str(round(pos_size, 2)),  # Round to lot size
+                    'tdMode': 'cross' if is_perp else 'cash'
+                }
+                if is_perp:
+                    order_kwargs['reduce_only'] = 'true'
+
+                result = self.client.place_order(**order_kwargs)
 
                 if result:
                     ticker = self.client.get_ticker(position.symbol)
                     close_price = float(ticker.get('last', position.entry_price)) if ticker else position.entry_price
-                    pnl = (close_price - position.entry_price) * sol_balance
+                    pnl = (close_price - position.entry_price) * pos_size
+                    if position.direction == 'short':
+                        pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"✅ Position closed manually @ ${close_price:.2f} (PnL: ${pnl:.2f})")
             

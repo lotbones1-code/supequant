@@ -9,13 +9,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # =====================================
-# API CREDENTIALS
+# API CREDENTIALS (Hyperliquid)
 # =====================================
+HYPERLIQUID_PRIVATE_KEY = os.getenv('HYPERLIQUID_PRIVATE_KEY', '')
+HYPERLIQUID_WALLET_ADDRESS = os.getenv('HYPERLIQUID_WALLET_ADDRESS', '')
+HYPERLIQUID_MAINNET = os.getenv('HYPERLIQUID_MAINNET', 'True').lower() == 'true'
+
+# Legacy OKX credentials (kept for backward compatibility with test scripts)
 OKX_API_KEY = os.getenv('OKX_API_KEY', '')
 OKX_SECRET_KEY = os.getenv('OKX_SECRET_KEY', '')
 OKX_PASSPHRASE = os.getenv('OKX_PASSPHRASE', '')
-OKX_SIMULATED = os.getenv('OKX_SIMULATED', 'True').lower() == 'true'  # Start in demo mode
-OKX_API_DOMAIN = os.getenv('OKX_API_DOMAIN', 'us.okx.com')  # US domain for American accounts
+OKX_SIMULATED = False
+OKX_API_DOMAIN = 'us.okx.com'
 
 # =====================================
 # DASHBOARD SETTINGS
@@ -28,14 +33,14 @@ DASHBOARD_SECRET_KEY = os.getenv('DASHBOARD_SECRET_KEY', 'supequant-dashboard-20
 # =====================================
 # TRADING PARAMETERS
 # =====================================
-# Core trading settings
-TRADING_SYMBOL = "SOL-USDT-SWAP"  # Main trading pair (Solana perpetual)
-REFERENCE_SYMBOL = "BTC-USDT-SWAP"  # Reference symbol (Bitcoin for correlation)
-TRADING_MODE = "perp"  # 'spot' or 'perp'
+# Core trading settings (Hyperliquid uses bare coin names)
+TRADING_SYMBOL = "SOL"  # Main trading pair (Solana perpetual on Hyperliquid)
+REFERENCE_SYMBOL = "BTC"  # Reference symbol (Bitcoin for correlation)
+TRADING_MODE = "perp"  # Always perp on Hyperliquid
 
-# Spot trading DISABLED - perp-only system (all profits come from perps)
-SPOT_FALLBACK_ENABLED = False  # MUST stay False - perp-only
-SPOT_SYMBOL = "SOL-USDT"  # DEPRECATED - not used
+# Spot trading not available on Hyperliquid perps
+SPOT_FALLBACK_ENABLED = False
+SPOT_SYMBOL = "SOL"  # Not used - kept for backward compat
 MAX_DAILY_TRADES = 15  # Increased for more opportunities
 TRADE_INTERVAL_MINUTES = 20  # More frequent checks (was 30)
 
@@ -79,9 +84,9 @@ GROWTH_TP_SPLIT = {1: 0.25, 2: 0.25, 3: 0.50}  # 25/25/50 - let 50% ride to big 
 SMALL_ACCOUNT_THRESHOLD = 100.0  # Accounts under $100 use aggressive settings
 
 # MINIMUM POSITION SIZE - ensures we meet exchange minimums
-# OKX minimum for SOL-USDT-SWAP is 0.1 SOL (~$12 notional, ~$2.5 margin at 5x)
-MIN_POSITION_USDT = 3.0  # Minimum $3 margin to ensure 0.1 SOL minimum is met
-MIN_SOL_CONTRACT = 0.1   # OKX minimum contract size
+# Hyperliquid SOL minimum (dynamically updated at startup from szDecimals)
+MIN_POSITION_USDT = 3.0  # Minimum $3 margin
+MIN_SOL_CONTRACT = 1.0   # Hyperliquid minimum - updated at runtime from metadata
 SMALL_ACCOUNT_RISK_MULTIPLIER = 2.0  # 2x risk for small accounts
 SMALL_ACCOUNT_COMPOUND_RATE = 1.5  # Compound 50% faster on wins
 
@@ -935,8 +940,8 @@ def validate_config():
     """Validate critical configuration settings"""
     errors = []
 
-    if not OKX_API_KEY or not OKX_SECRET_KEY or not OKX_PASSPHRASE:
-        errors.append("Missing OKX API credentials in .env file")
+    if not HYPERLIQUID_PRIVATE_KEY or not HYPERLIQUID_WALLET_ADDRESS:
+        errors.append("Missing Hyperliquid credentials in .env file (HYPERLIQUID_PRIVATE_KEY, HYPERLIQUID_WALLET_ADDRESS)")
 
     if MAX_RISK_PER_TRADE > 0.02:
         errors.append("MAX_RISK_PER_TRADE too high (>2%)")
@@ -950,7 +955,7 @@ def validate_config():
     return errors
 
 _validation_errors = validate_config()
-if _validation_errors and not OKX_SIMULATED:
+if _validation_errors:
     print("⚠️  Configuration Warnings:")
     for error in _validation_errors:
         print(f"   - {error}")
