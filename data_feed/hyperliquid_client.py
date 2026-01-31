@@ -668,7 +668,8 @@ class HyperliquidClient:
 
     def get_health_status(self) -> Dict[str, Any]:
         """Get client health metrics."""
-        error_rate = (self.error_count / max(1, self.request_count)) * 100
+        # Return error_rate as decimal (0.0-1.0) to match risk_manager expectations
+        error_rate = self.error_count / max(1, self.request_count)
         return {
             'request_count': self.request_count,
             'error_count': self.error_count,
@@ -677,3 +678,9 @@ class HyperliquidClient:
             'dry_run_mode': self.dry_run,
             'exchange': 'hyperliquid'
         }
+
+    def reset_error_counts(self):
+        """Reset error tracking counters. Call after recovery from issues."""
+        self.request_count = 0
+        self.error_count = 0
+        logger.info("Health counters reset")

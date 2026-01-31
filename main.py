@@ -180,6 +180,7 @@ class EliteQuantSystem:
 
         # Initialize all components
         self.okx_client = OKXClient()
+        self.okx_client.reset_error_counts()  # Start with clean health metrics
         self.market_data = MarketDataFeed(self.okx_client)
         self.filter_manager = FilterManager()
         self.strategy_manager = StrategyManager()
