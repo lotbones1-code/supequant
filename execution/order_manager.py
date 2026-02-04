@@ -8,9 +8,8 @@ import logging
 from datetime import datetime
 from data_feed.okx_client import OKXClient
 from config import (
-    TRADING_SYMBOL, TRADING_MODE, MAX_RISK_PER_TRADE, 
+    TRADING_SYMBOL, TRADING_MODE, MAX_RISK_PER_TRADE,
     GROWTH_MODE_ENABLED, GROWTH_LEVERAGE,
-    SPOT_FALLBACK_ENABLED, SPOT_SYMBOL,
     LIMIT_ORDER_ENTRY_ENABLED, LIMIT_ORDER_IMPROVEMENT,
     LIMIT_ORDER_TIMEOUT, LIMIT_ORDER_MARKET_FALLBACK
 )
@@ -51,7 +50,6 @@ class OrderManager:
             direction = signal['direction']
             side = 'buy' if direction == 'long' else 'sell'
             is_spot = TRADING_MODE == 'spot'
-            used_spot_fallback = False
 
             logger.info(f"📤 Placing {side.upper()} market order: {position_size:.4f} @ market")
 
@@ -101,69 +99,8 @@ class OrderManager:
                     if order_result:
                         td_mode = 'cross'
 
-                # Check if we got compliance error (51155) - fallback to spot
-                if not order_result and SPOT_FALLBACK_ENABLED:
-                    last_error = getattr(self.client, '_last_error_code', None)
-                    if last_error == '51155':
-                        logger.warning(f"⚠️  Compliance restriction on perpetuals (51155)")
-                        logger.info(f"🔄 Falling back to SPOT trading ({SPOT_SYMBOL})...")
-                        is_spot = True
-                        used_spot_fallback = True
-                        symbol = SPOT_SYMBOL
-                    else:
-                        logger.error("❌ Failed to place perpetual order")
-                        return None
-                elif not order_result:
-                    logger.error("❌ Failed to place perpetual order")
-                    return None
-
-            # SPOT MODE (or fallback)
-            if is_spot:
-                td_mode = 'cash'
-                leverage = None
-                
-                if used_spot_fallback:
-                    logger.info(f"💵 Using SPOT mode (compliance fallback) - no leverage")
-                    
-                    # CRITICAL: Recalculate position size for spot (no leverage!)
-                    # The original position_size was calculated with leverage for perpetuals
-                    # For spot, we need to use actual available USDT
-                    usdt_balance = self.client.get_trading_balance('USDT')
-                    if usdt_balance and usdt_balance > 0:
-                        # Get current price to calculate how much SOL we can buy
-                        current_price = signal.get('entry_price', 0)
-                        if current_price > 0:
-                            # Calculate max SOL we can buy with available USDT
-                            # Use 95% of balance to account for fees
-                            max_sol = (usdt_balance * 0.95) / current_price
-                            
-                            if position_size > max_sol:
-                                logger.warning(f"⚠️  Original size ({position_size:.4f}) exceeds spot capacity")
-                                logger.info(f"   📊 Available USDT: ${usdt_balance:.2f}")
-                                logger.info(f"   📊 Max SOL buyable: {max_sol:.4f}")
-                                logger.info(f"   📝 Adjusting position size for SPOT (no leverage)")
-                                position_size = max_sol
-                else:
-                    logger.info(f"💵 Using SPOT mode - no leverage")
-
-                # Validate minimum for spot (0.01 SOL practical minimum)
-                min_size = 0.01
-                if position_size < min_size:
-                    logger.warning(f"⚠️  Position size {position_size:.4f} below minimum {min_size}")
-                    position_size = min_size
-
-                order_kwargs = {
-                    'symbol': symbol,
-                    'side': side,
-                    'order_type': 'market',
-                    'size': str(round(position_size, 4)),
-                    'tdMode': 'cash'
-                }
-                
-                order_result = self.client.place_order(**order_kwargs)
-                
                 if not order_result:
-                    logger.error("❌ Failed to place spot order")
+                    logger.error("❌ Failed to place perpetual order")
                     return None
 
             order_id = order_result.get('ordId')
@@ -180,18 +117,14 @@ class OrderManager:
                 'status': 'filled',
                 'margin_mode': td_mode,
                 'leverage': leverage,
-                'trading_mode': 'spot' if is_spot else 'perp',
-                'used_fallback': used_spot_fallback
+                'trading_mode': 'perp'
             }
 
             self.active_orders[order_id] = order
             self.order_history.append(order)
 
             logger.info(f"✅ Market order placed: {order_id}")
-            if is_spot:
-                logger.info(f"   Mode: SPOT (cash){' [FALLBACK]' if used_spot_fallback else ''}")
-            else:
-                logger.info(f"   Mode: {td_mode.upper()}, Leverage: {leverage or 1}x")
+            logger.info(f"   Mode: {td_mode.upper()}, Leverage: {leverage or 1}x")
 
             return order
 

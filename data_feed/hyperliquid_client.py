@@ -592,8 +592,9 @@ class HyperliquidClient:
             except Exception:
                 pass
 
-            # Assume filled if not found anywhere
-            return {"ordId": str(order_id), "state": "filled", "fillSz": "0", "avgPx": "0"}
+            # Order not found in open orders or fills - it was likely cancelled
+            # DO NOT assume "filled" - this caused fake TP FILLED logs!
+            return {"ordId": str(order_id), "state": "cancelled", "fillSz": "0", "avgPx": "0"}
 
         except Exception as e:
             self.error_count += 1

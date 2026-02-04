@@ -309,11 +309,12 @@ class PerformanceTracker:
         self.trades_path = Path(trades_path)
         
     def get_today_stats(self) -> Dict:
-        """Get today's trading statistics"""
-        today = datetime.now(timezone.utc).date()
+        """Get today's trading statistics (uses LOCAL timezone, not UTC)"""
+        # Use LOCAL date so "today" matches user's actual day
+        today = datetime.now().date()
         trades = self._load_trades()
-        
-        today_trades = [t for t in trades if self._get_trade_date(t) == today]
+
+        today_trades = [t for t in trades if self._get_trade_date_local(t) == today]
         
         if not today_trades:
             return {
@@ -430,12 +431,29 @@ class PerformanceTracker:
         return trades
     
     def _get_trade_date(self, trade: Dict):
-        """Get date from trade"""
+        """Get date from trade (UTC)"""
         ts = trade.get('timestamp_close', trade.get('_logged_at', ''))
         if ts:
             try:
                 dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
                 return dt.date()
+            except:
+                pass
+        return None
+
+    def _get_trade_date_local(self, trade: Dict):
+        """Get date from trade in LOCAL timezone (for user-facing 'today' stats)"""
+        ts = trade.get('timestamp_close', trade.get('_logged_at', ''))
+        if ts:
+            try:
+                # Parse timestamp and convert to local timezone
+                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                # If naive datetime, treat as local
+                if dt.tzinfo is None:
+                    return dt.date()
+                # Convert UTC to local
+                local_dt = dt.astimezone()
+                return local_dt.date()
             except:
                 pass
         return None
@@ -1288,48 +1306,79 @@ Type a word or #tag to search:
     # =========================================================================
     
     def _handle_status(self, args: str = None):
-        """Quick system status"""
+        """Quick system status - shows balance, open position, and today's stats"""
         today = self.performance.get_today_stats()
         streak = self.performance.get_streak()
-        regime_on = getattr(config, 'LIVE_REGIME_ADAPTIVE', False)
-        regime = "ON" if regime_on else "OFF"
+
+        # Get LIVE exchange data (balance + position)
+        position_line = ""
+        balance_line = ""
+        total_pnl = today['pnl']  # Start with realized PnL
+
+        if self.context_builder:
+            try:
+                live = self.context_builder.get_live_position_from_exchange()
+                if live:
+                    # Show BOTH total equity AND available balance for clarity
+                    total_equity = live.get('balance', 0)
+                    available = live.get('available_balance', 0)
+                    balance_line = f"💰 <b>Equity:</b> ${total_equity:.2f} (${available:.2f} available)\n\n"
+
+                    # Show open position if any
+                    if live.get('has_open_position') and live.get('position'):
+                        pos = live['position']
+                        direction = pos['direction']
+                        size = pos['size']
+                        entry = pos['entry_price']
+                        current = pos['current_price']
+                        upl = pos['unrealized_pnl']
+                        pnl_pct = pos['pnl_pct']
+
+                        upl_emoji = "🟢" if upl >= 0 else "🔴"
+                        position_line = f"""🎯 <b>OPEN POSITION:</b>
+  {direction} {size:.2f} SOL @ ${entry:.2f}
+  Current: ${current:.2f}
+  {upl_emoji} Unrealized: ${upl:+.2f} ({pnl_pct:+.1f}%)
+
+"""
+                        total_pnl += upl  # Add unrealized to total
+            except Exception as e:
+                logger.debug(f"Could not get live data: {e}")
+
+        # Health info
         last_trade_line = ""
-        alerts_line = ""
         try:
             from utils.system_health import get_health_checker
             checker = get_health_checker()
             report = checker.get_health_report()
             staleness = report.get('data_staleness', {}) or {}
-            alerts = report.get('alerts', []) or []
             if staleness.get('last_trade_age_hours') is not None:
-                last_trade_line = f"  Last trade: {staleness['last_trade_age_hours']:.1f}h ago\n"
-            if alerts:
-                alerts_line = f"  Alerts: {', '.join(alerts[:3])}\n"
+                last_trade_line = f"  Last closed trade: {staleness['last_trade_age_hours']:.1f}h ago\n"
         except Exception:
             pass
-        
+
         streak_emoji = "🔥" if streak['type'] == 'win' else "❄️" if streak['type'] == 'loss' else "➖"
         streak_text = f"{streak['count']} {streak['type']}s" if streak['count'] > 0 else "No streak"
-        pnl_emoji = "📈" if today['pnl'] >= 0 else "📉"
-        
+        realized_emoji = "📈" if today['pnl'] >= 0 else "📉"
+        total_emoji = "📈" if total_pnl >= 0 else "📉"
+
         mode = "PAPER" if getattr(config, 'DRY_RUN', False) else "LIVE"
-        
+
         keyboard = self._make_inline_keyboard([
             [self._make_button("📊 Full Stats", "menu_stats"),
              self._make_button("🎯 Streak", "menu_streak")]
         ])
-        
+
         self.send_message(f"""
 📊 <b>STATUS</b>
 
-<b>Today:</b>
+{balance_line}{position_line}<b>Today (closed trades):</b>
   Trades: {today['trades']} ({today['wins']}W/{today['losses']}L)
-  {pnl_emoji} PnL: ${today['pnl']:+.2f}
-  Win Rate: {today['win_rate']:.0f}%
-
+  {realized_emoji} Realized PnL: ${today['pnl']:+.2f}
+  {total_emoji} Total PnL: ${total_pnl:+.2f}
+{last_trade_line}
 <b>Streak:</b> {streak_emoji} {streak_text}
-<b>Mode:</b> {mode} | <b>Regime:</b> {regime} | <b>System:</b> ✅ Running
-{last_trade_line}{alerts_line}
+<b>Mode:</b> {mode} | ✅ Running
         """.strip(), reply_markup=keyboard)
     
     def _handle_stats(self, args: str = None):
@@ -1935,25 +1984,36 @@ The system is scanning for opportunities.
         exit_price = trade.get('exit_price', 0)
         pnl = trade.get('pnl_abs', 0)
         reason = trade.get('close_reason', 'unknown')
-        
+
         result_emoji = "💰" if pnl > 0 else "📉"
-        
-        if pnl > 0:
-            msg = "The trade hit take profit! Great setup."
-        elif reason == 'stop_loss':
-            msg = "Stop loss was hit. Risk was managed properly - that's the discipline!"
+
+        # ACCURATE close reason messaging - don't lie about TPs!
+        if reason in ('tp1', 'tp2', 'tp3', 'take_profit'):
+            msg = "Take profit hit! Great setup. ✅"
+        elif reason == 'trailing_stop':
+            msg = "Trailing stop locked in profits after TP1! 🔄"
+        elif reason == 'stop_loss' or reason == 'sl':
+            msg = "Stop loss was hit. Risk was managed properly."
+        elif reason == 'force_closed_new_signal':
+            if pnl > 0:
+                msg = "Closed early for new signal (profitable exit, but NOT a TP hit)."
+            else:
+                msg = "Closed early for new signal (small loss from repositioning)."
+        elif reason == 'early_exit':
+            msg = "V4 Early Exit triggered based on price action."
+        elif reason == 'manual':
+            msg = "Manually closed."
         else:
-            msg = f"Trade closed due to: {reason}"
-        
+            msg = f"Closed: {reason}"
+
         self.send_message(f"""
-{result_emoji} <b>TRADE ANALYSIS</b>
+{result_emoji} <b>TRADE CLOSED</b>
 
 <b>Trade:</b> {direction}
 <b>Entry:</b> ${entry:.2f} → Exit: ${exit_price:.2f}
 <b>PnL:</b> ${pnl:+.2f}
-<b>Closed:</b> {reason}
+<b>Reason:</b> {reason}
 
-<b>Analysis:</b>
 {msg}
         """.strip())
     
@@ -2375,30 +2435,66 @@ Be supportive and call him Boss."""
             self.notes.mark_note_reminded(note.id)
     
     def _check_hourly_update(self):
-        """Send hourly status update"""
+        """Send hourly status update with live exchange data"""
         now = datetime.now(timezone.utc)
-        
+
         if self._last_hourly_update:
             time_since = now - self._last_hourly_update
             if time_since.total_seconds() < 3500:
                 return
-        
+
         if now.minute > 5:
             return
-        
+
         self._last_hourly_update = now
-        
+
+        # Get closed trade stats
         today = self.performance.get_today_stats()
         streak = self.performance.get_streak()
-        
-        pnl_emoji = "📈" if today['pnl'] >= 0 else "📉"
-        
+
+        # Get LIVE exchange data (open positions + unrealized PnL)
+        live_data = None
+        if self.context_builder:
+            try:
+                live_data = self.context_builder.get_live_position_from_exchange()
+            except Exception as e:
+                logger.debug(f"Could not get live exchange data: {e}")
+
+        # Calculate total PnL (realized + unrealized)
+        realized_pnl = today['pnl']
+        unrealized_pnl = 0
+        position_line = ""
+
+        if live_data and live_data.get('has_open_position') and live_data.get('position'):
+            pos = live_data['position']
+            unrealized_pnl = pos.get('unrealized_pnl', 0)
+            direction = pos['direction']
+            size = pos['size']
+            entry = pos['entry_price']
+            current = pos['current_price']
+            pnl_pct = pos['pnl_pct']
+            position_line = f"\n📍 <b>Open:</b> {direction} {size:.2f} SOL @ ${entry:.2f} → ${current:.2f} ({pnl_pct:+.1f}%)"
+
+        total_pnl = realized_pnl + unrealized_pnl
+        pnl_emoji = "📈" if total_pnl >= 0 else "📉"
+
+        # Build PnL display
+        if unrealized_pnl != 0:
+            pnl_display = f"${total_pnl:+.2f} (${realized_pnl:+.2f} closed, ${unrealized_pnl:+.2f} open)"
+        else:
+            pnl_display = f"${realized_pnl:+.2f}"
+
+        # Build balance line
+        balance_line = ""
+        if live_data and 'balance' in live_data:
+            balance_line = f"\n💰 <b>Balance:</b> ${live_data['balance']:.2f}"
+
         self.send_message(f"""
 🕐 <b>HOURLY UPDATE</b>
 
-{pnl_emoji} <b>PnL:</b> ${today['pnl']:+.2f}
-📊 <b>Trades:</b> {today['trades']} ({today['win_rate']:.0f}% WR)
-🎯 <b>Streak:</b> {streak['count']} {streak['type']}{'s' if streak['count'] > 1 else ''}
+{pnl_emoji} <b>PnL:</b> {pnl_display}
+📊 <b>Trades:</b> {today['trades']} closed ({today['win_rate']:.0f}% WR)
+🎯 <b>Streak:</b> {streak['count']} {streak['type']}{'s' if streak['count'] > 1 else ''}{position_line}{balance_line}
 
 <i>{now.strftime('%I:%M %p')} UTC</i>
         """.strip())
@@ -2457,8 +2553,20 @@ Be supportive and call him Boss."""
                 alerts.append(f"🔒 Filters very strict: {pass_rate:.1f}% pass rate")
 
             # Check 4: Critical errors detected (check alerts list)
+            # Separate volatility pause (protective) from real errors
             system_alerts = health_summary.get('alerts', [])
-            critical_alerts = [a for a in system_alerts if 'CRITICAL' in str(a).upper()]
+
+            # Check for volatility pause - report as info, not error
+            volatility_paused = any('volatility' in str(a).lower() or 'PAUSED' in str(a).upper()
+                                   for a in system_alerts)
+            if volatility_paused:
+                alerts.append(f"⏸️ Trading PAUSED - high volatility (protecting your money)")
+
+            # Check for real critical errors (not volatility)
+            critical_alerts = [a for a in system_alerts
+                              if 'CRITICAL' in str(a).upper()
+                              and 'volatility' not in str(a).lower()
+                              and 'PAUSED' not in str(a).upper()]
             if critical_alerts:
                 alerts.append(f"🚨 CRITICAL errors detected!")
 

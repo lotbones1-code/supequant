@@ -1,9 +1,9 @@
 """
 Data Feed Module
-Handles all market data acquisition from OKX API and on-chain sources
+Handles all market data acquisition from exchange API and on-chain sources
 """
 
-from .okx_client import OKXClient
+from .hyperliquid_client import HyperliquidClient as OKXClient  # Alias for compatibility
 from .market_data import MarketDataFeed
 from .indicators import TechnicalIndicators
 from .onchain_tracker import OnchainTracker
@@ -12,10 +12,10 @@ from .sentiment_tracker import SentimentTracker, get_sentiment_tracker
 from .market_structure import MarketStructureAnalyzer
 
 __all__ = [
-    'OKXClient', 
-    'MarketDataFeed', 
-    'TechnicalIndicators', 
-    'OnchainTracker', 
+    'OKXClient',  # Now points to HyperliquidClient
+    'MarketDataFeed',
+    'TechnicalIndicators',
+    'OnchainTracker',
     'LiquidationTracker',
     'SentimentTracker',
     'get_sentiment_tracker',

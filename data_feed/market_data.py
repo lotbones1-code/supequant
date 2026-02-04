@@ -406,8 +406,9 @@ class MarketDataFeed:
         candle_data = self.get_multi_timeframe_data(symbol, timeframes, limit=200)
 
         # Get market metrics
-        # Funding rate and open interest only exist for perpetuals (SWAP)
-        is_perpetual = 'SWAP' in symbol.upper()
+        # Funding rate and open interest exist for all perpetuals
+        from config import TRADING_MODE
+        is_perpetual = TRADING_MODE == 'perp' or 'SWAP' in symbol.upper()
         funding = self.get_funding_rate(symbol) if is_perpetual else None
         oi = self.get_open_interest(symbol) if is_perpetual else None
         current_price = self.get_current_price(symbol)

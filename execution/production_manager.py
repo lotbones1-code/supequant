@@ -23,8 +23,9 @@ from config import (
     TRADING_SYMBOL, TRADING_MODE,
     LIMIT_ORDER_ENTRY_ENABLED, LIMIT_ORDER_IMPROVEMENT,
     LIMIT_ORDER_TIMEOUT, LIMIT_ORDER_MARKET_FALLBACK,
-    GROWTH_MODE_ENABLED, GROWTH_LEVERAGE, MIN_SOL_CONTRACT
+    GROWTH_MODE_ENABLED, GROWTH_LEVERAGE
 )
+import config  # For dynamically updated MIN_SOL_CONTRACT
 # Backward compat: SPOT_SYMBOL no longer used but may be referenced
 try:
     from config import SPOT_SYMBOL
@@ -74,7 +75,8 @@ class ManagedPosition:
     tp1_filled: bool = False
     tp1_fill_price: float = 0.0
     tp1_fill_time: datetime = None
-    
+    tp1_notification_sent: bool = False  # Prevent duplicate TP1 notifications
+
     tp2_price: float = 0.0
     tp2_size: float = 0.0
     tp2_order_id: str = ""
@@ -82,6 +84,7 @@ class ManagedPosition:
     tp2_filled: bool = False
     tp2_fill_price: float = 0.0
     tp2_fill_time: datetime = None
+    tp2_notification_sent: bool = False  # Prevent duplicate TP2 notifications
 
     # ELITE V3: Trailing stop after TP1
     trailing_stop_active: bool = False
@@ -270,8 +273,14 @@ class ProductionOrderManager:
                 positions = self.client.get_positions(trade_symbol)
                 if positions:
                     pos_amt = float(positions[0].get('pos', 0))
+                    entry_px = float(positions[0].get('entryPx', 0))
                     close_side = 'sell' if pos_amt > 0 else 'buy'
-                    self.client.place_order(
+
+                    # Get current price before closing
+                    ticker = self.client.get_ticker(trade_symbol)
+                    close_price = float(ticker.get('last', entry_px)) if ticker else entry_px
+
+                    result = self.client.place_order(
                         symbol=trade_symbol,
                         side=close_side,
                         order_type='market',
@@ -279,7 +288,23 @@ class ProductionOrderManager:
                         tdMode='cross',
                         reduce_only='true'
                     )
-                    logger.info(f"   ✅ Closed perp position")
+
+                    # Log forced close to journal if we have a tracked position
+                    if self.current_position and self.trade_journal:
+                        direction = self.current_position.direction
+                        if direction == 'long':
+                            pnl = (close_price - self.current_position.entry_price) * perp_pos_size
+                        else:
+                            pnl = (self.current_position.entry_price - close_price) * perp_pos_size
+
+                        logger.warning(f"   📝 Force-closed position: PnL ${pnl:+.2f} (new signal override)")
+
+                        # Log to journal as force-closed (ADD to preserve any partial TP profits)
+                        self.current_position.realized_pnl += pnl
+                        self._close_position(self.current_position, 'force_closed_new_signal')
+                    else:
+                        logger.info(f"   ✅ Closed perp position (untracked)")
+
                     time.sleep(1)
             else:
                 logger.info(f"   No existing position")
@@ -456,7 +481,8 @@ class ProductionOrderManager:
                     actual_size = max_position_size
 
             # CRITICAL: Round to exchange lot size for SOL perpetuals
-            lot_size = MIN_SOL_CONTRACT  # 0.01 from Hyperliquid metadata
+            # Use config.MIN_SOL_CONTRACT directly (dynamically updated at runtime by hyperliquid_client)
+            lot_size = config.MIN_SOL_CONTRACT  # 0.01 from Hyperliquid metadata
             actual_size = round(actual_size / lot_size) * lot_size
 
             # Ensure minimum contract size
@@ -477,6 +503,22 @@ class ProductionOrderManager:
 
                     if margin_needed > usdt_balance:
                         logger.error(f"   ❌ Cannot afford minimum position. Need ${margin_needed:.2f}, have ${usdt_balance:.2f}")
+                        position.state = PositionState.FAILED
+                        return None
+
+                # CRITICAL: Verify $10 minimum notional value (Hyperliquid requirement)
+                notional_value = actual_size * current_price
+                if notional_value < 10.0:
+                    # Try to adjust UP to meet $10 minimum
+                    min_sol_needed = (10.0 / current_price)
+                    min_sol_needed = (int(min_sol_needed / lot_size) + 1) * lot_size
+                    margin_for_min = min_sol_needed * current_price / GROWTH_LEVERAGE
+
+                    if margin_for_min <= usdt_balance * 0.95:
+                        logger.warning(f"   ⚠️  Notional ${notional_value:.2f} < $10, adjusting to {min_sol_needed:.2f} SOL")
+                        actual_size = min_sol_needed
+                    else:
+                        logger.error(f"   ❌ Cannot afford $10 minimum. Need ${margin_for_min:.2f} margin, have ${usdt_balance:.2f}")
                         position.state = PositionState.FAILED
                         return None
 
@@ -857,7 +899,7 @@ class ProductionOrderManager:
                     # Check if trailing stop hit
                     if current_price <= position.trailing_stop_price:
                         logger.info(f"🔄 TRAILING STOP HIT @ ${current_price:.2f} (was ${position.trailing_stop_high:.2f})")
-                        self._execute_virtual_tp(position, 2, current_price)  # Close remaining position
+                        self._execute_virtual_tp(position, 2, current_price, close_reason='trailing_stop')
                         return
 
                 else:  # short
@@ -870,7 +912,7 @@ class ProductionOrderManager:
                     # Check if trailing stop hit
                     if current_price >= position.trailing_stop_price:
                         logger.info(f"🔄 TRAILING STOP HIT @ ${current_price:.2f} (was ${position.trailing_stop_low:.2f})")
-                        self._execute_virtual_tp(position, 2, current_price)  # Close remaining position
+                        self._execute_virtual_tp(position, 2, current_price, close_reason='trailing_stop')
                         return
 
             # Check TP2 (if virtual and not filled, and TP1 is filled, and NO trailing stop)
@@ -888,8 +930,8 @@ class ProductionOrderManager:
         except Exception as e:
             logger.error(f"Error checking position: {e}")
     
-    def _execute_virtual_tp(self, position: ManagedPosition, tp_num: int, current_price: float):
-        """Execute a virtual TP by placing market close order"""
+    def _execute_virtual_tp(self, position: ManagedPosition, tp_num: int, current_price: float, close_reason: str = None):
+        """Execute a virtual TP by placing market close order. close_reason overrides default tp1/tp2."""
         try:
             size = position.tp1_size if tp_num == 1 else position.tp2_size
             is_perp = TRADING_MODE == 'perp'
@@ -943,10 +985,16 @@ class ProductionOrderManager:
                             position.trailing_stop_price = current_price * (1 + trailing_pct)
                         logger.info(f"   🔄 TRAILING STOP ACTIVATED: {trailing_pct*100:.1f}% @ ${position.trailing_stop_price:.2f}")
 
-                    # Send TP1 notification
-                    if self.notifier:
+                    # Send TP1 notification (only once!)
+                    if self.notifier and not position.tp1_notification_sent:
+                        position.tp1_notification_sent = True
                         remaining = position.tp2_size if not position.tp2_filled else 0
                         self.notifier.send_tp_hit(position.__dict__, 1, current_price, pnl, remaining)
+
+                    # If TP2 was already marked filled (small position - 100% at TP1), close now
+                    if position.tp2_filled and position.tp2_size == 0:
+                        logger.info(f"   📝 TP1 closed 100% of position (small position mode)")
+                        self._close_position(position, 'tp1')
                 else:
                     position.tp2_filled = True
                     position.tp2_fill_price = current_price
@@ -957,10 +1005,12 @@ class ProductionOrderManager:
                         pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"   ✅ TP2 executed: {size:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
-                    # Send TP2 notification
-                    if self.notifier:
+                    # Send TP2 notification (only once!)
+                    if self.notifier and not position.tp2_notification_sent:
+                        position.tp2_notification_sent = True
                         self.notifier.send_tp_hit(position.__dict__, 2, current_price, pnl, 0)
-                    self._close_position(position, 'tp2')
+                    # Use provided close_reason or default to 'tp2'
+                    self._close_position(position, close_reason or 'tp2')
                     
         except Exception as e:
             logger.error(f"Error executing virtual TP{tp_num}: {e}")
@@ -1030,11 +1080,17 @@ class ProductionOrderManager:
                         pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"🎯 TP1 FILLED: {fill_size:.4f} SOL @ ${fill_price:.2f} (PnL: ${pnl:.2f})")
-                    # Send TP1 notification
-                    if self.notifier:
+                    # Send TP1 notification (only once!)
+                    if self.notifier and not position.tp1_notification_sent:
+                        position.tp1_notification_sent = True
                         remaining = position.tp2_size if not position.tp2_filled else 0
                         self.notifier.send_tp_hit(position.__dict__, 1, fill_price, pnl, remaining)
-            
+
+                    # If TP2 was already marked filled (small position - 100% at TP1), close now
+                    if position.tp2_filled and position.tp2_size == 0:
+                        logger.info(f"   📝 TP1 closed 100% of position (small position mode)")
+                        self._close_position(position, 'tp1')
+
             # Check TP2
             if position.tp2_order_id and not position.tp2_is_virtual and not position.tp2_filled:
                 order = self.client.get_order(position.symbol, position.tp2_order_id)
@@ -1050,8 +1106,9 @@ class ProductionOrderManager:
                         pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"🎯 TP2 FILLED: {fill_size:.4f} SOL @ ${fill_price:.2f} (PnL: ${pnl:.2f})")
-                    # Send TP2 notification
-                    if self.notifier:
+                    # Send TP2 notification (only once!)
+                    if self.notifier and not position.tp2_notification_sent:
+                        position.tp2_notification_sent = True
                         self.notifier.send_tp_hit(position.__dict__, 2, fill_price, pnl, 0)
                     self._close_position(position, 'tp2')
                     
@@ -1162,10 +1219,11 @@ class ProductionOrderManager:
 
                 logger.info(f"   ✅ ARB EXIT COMPLETE: {pos_size:.4f} SOL @ ${fill_price:.2f}")
                 logger.info(f"   Price PnL: ${price_pnl:.2f} (funding collected separately)")
-                
-                # Send notification
+
+                # Send notification (function only takes position dict)
                 if self.notifier:
-                    self.notifier.send_position_closed(position.__dict__, current_price, price_pnl)
+                    position.realized_pnl = price_pnl  # Set PnL before sending
+                    self.notifier.send_position_closed(position.__dict__)
                 
                 self._close_position(position, reason)
             else:

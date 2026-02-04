@@ -248,8 +248,22 @@ class SystemHealthChecker:
             'last_trade_age_hours': None,
             'last_trade_date': None,
             'trades_today': 0,
-            'trades_this_week': 0
+            'trades_this_week': 0,
+            'has_open_position': False
         }
+
+        # CRITICAL: Check for open positions on exchange first
+        # If there's an open position, the system is NOT stale
+        try:
+            from data_feed.hyperliquid_client import HyperliquidClient
+            client = HyperliquidClient()
+            positions = client.get_positions('SOL')
+            open_pos = [p for p in positions if abs(float(p.get('pos', 0))) > 0]
+            if open_pos:
+                results['has_open_position'] = True
+                results['is_stale'] = False  # Never stale if position is open
+        except Exception as e:
+            logger.debug(f"Could not check exchange positions: {e}")
 
         if not self.runs_path.exists():
             results['warning'] = 'Runs directory not found'
@@ -292,8 +306,10 @@ class SystemHealthChecker:
                 results['last_trade_age_hours'] = round(age.total_seconds() / 3600, 1)
                 results['last_trade_date'] = most_recent_trade[:10]
 
-                # Consider stale if no trades in 48+ hours
-                results['is_stale'] = age.total_seconds() > 48 * 3600
+                # Consider stale if no trades in 48+ hours AND no open position
+                # If there's an open position, the system is active (not stale)
+                if not results.get('has_open_position'):
+                    results['is_stale'] = age.total_seconds() > 48 * 3600
             except Exception as e:
                 logger.debug(f"Error parsing trade timestamp: {e}")
 
@@ -346,8 +362,11 @@ class SystemHealthChecker:
             is_healthy = False
             alerts.append(f"High error rate: {log_scan['errors_found']} errors in last hour")
 
-        if staleness.get('is_stale'):
+        if staleness.get('is_stale') and not staleness.get('has_open_position'):
             alerts.append("No trades in 48+ hours - system may be stalled")
+        elif staleness.get('has_open_position'):
+            # Active position - this is good, not an alert
+            pass
 
         # Check for critical errors
         critical_count = log_scan['by_type'].get('critical', 0)
@@ -398,8 +417,13 @@ class SystemHealthChecker:
 
         # Data
         staleness = report['data_staleness']
+
+        # Show open position status prominently
+        if staleness.get('has_open_position'):
+            lines.append("\n<b>ACTIVE POSITION:</b> Yes (trade in progress)")
+
         if staleness.get('last_trade_age_hours') is not None:
-            lines.append(f"\n<b>Last Trade:</b> {staleness['last_trade_age_hours']:.1f}h ago")
+            lines.append(f"<b>Last Closed Trade:</b> {staleness['last_trade_age_hours']:.1f}h ago")
         lines.append(f"<b>Trades Today:</b> {staleness.get('trades_today', 0)}")
         lines.append(f"<b>Trades This Week:</b> {staleness.get('trades_this_week', 0)}")
 

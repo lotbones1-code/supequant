@@ -681,13 +681,28 @@ Manual restart required.
 
             strategy_name = signal.get('strategy', 'unknown')
             logger.info(f"🎯 SIGNAL DETECTED: {strategy_name} - {signal['direction'].upper()}")
-            
+
+            # CRITICAL: Don't close and re-enter if we already have a position in the SAME direction!
+            # This prevents the flip-flopping issue where the bot keeps closing profitable positions
+            if self.production_manager and self.production_manager.current_position:
+                current_dir = self.production_manager.current_position.direction.lower()
+                signal_dir = signal['direction'].lower()
+                if current_dir == signal_dir:
+                    logger.info(f"📊 Already have {current_dir.upper()} position open - skipping same-direction signal")
+                    if DASHBOARD_AVAILABLE:
+                        add_signal({
+                            'type': 'skipped',
+                            'direction': signal['direction'],
+                            'reason': f"Already in {current_dir.upper()} position"
+                        })
+                    return
+
             # Verify v3 is being used
             if 'v3' in strategy_name.lower() or 'breakoutv3' in strategy_name.lower():
                 logger.info(f"✅ Using BREAKOUT V3 strategy (verified)")
             elif 'v2' in strategy_name.lower():
                 logger.info(f"⚠️  Using BREAKOUT V2 strategy (v3 should have priority)")
-            
+
             if DASHBOARD_AVAILABLE:
                 add_signal({
                     'type': 'detected',
@@ -851,6 +866,15 @@ Manual restart required.
 
             # Store size_details for monitoring (READ-ONLY logging)
             self._last_size_details = size_details
+
+            # CRITICAL: Check if position size meets $10 minimum BEFORE closing existing position
+            # This prevents closing a good position only to fail on reopening
+            if size_details.get('insufficient_margin') or size_details.get('min_notional_failed'):
+                logger.warning("⚠️ Cannot afford minimum $10 position - skipping trade")
+                logger.warning("   (Keeping existing position if any)")
+                if DASHBOARD_AVAILABLE:
+                    add_error("Position size below $10 minimum - trade skipped")
+                return
 
             # Apply V1 prediction multiplier to position size
             if prediction_multiplier != 1.0:

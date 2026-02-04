@@ -221,7 +221,7 @@ def create_app():
             entry_time = pos.get('entry_time') or pos.get('entry_timestamp')
             
             enhanced = {
-                'symbol': pos.get('symbol', 'SOL-USDT-SWAP'),
+                'symbol': pos.get('symbol', 'SOL'),
                 'direction': pos.get('direction', pos.get('side', 'unknown')),
                 'entry_price': float(pos.get('entry_price', 0)),
                 'current_price': float(pos.get('current_price', dashboard_data['current_price'])),
@@ -356,7 +356,7 @@ def create_app():
                 
                 formatted = {
                     'timestamp': trade.get('timestamp_close', trade.get('_logged_at', '')),
-                    'symbol': trade.get('symbol', 'SOL-USDT-SWAP'),
+                    'symbol': trade.get('symbol', 'SOL'),
                     'direction': trade.get('side', trade.get('direction', 'unknown')),
                     'entry_price': float(trade.get('entry_price', 0)),
                     'exit_price': float(trade.get('exit_price', 0)),
@@ -440,7 +440,7 @@ def create_app():
             
             # Fetch SOL price
             sol_price = 0
-            sol_ticker = client.get_ticker('SOL-USDT-SWAP')
+            sol_ticker = client.get_ticker('SOL')
             if sol_ticker and 'data' in sol_ticker and sol_ticker['data']:
                 sol_price = float(sol_ticker['data'][0].get('last', 0))
             

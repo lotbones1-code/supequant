@@ -29,10 +29,10 @@ from config import (
     GROWTH_LEVERAGE,
     GROWTH_COMPOUND_ENABLED,
     MIN_POSITION_USDT,
-    MIN_SOL_CONTRACT,
     GROWTH_CONFIDENCE_MULTIPLIER,
     GROWTH_AGGRESSIVE_TP
 )
+# Note: config.MIN_SOL_CONTRACT is accessed via config.config.MIN_SOL_CONTRACT (dynamically updated at runtime)
 
 # V4 Elite imports
 import config
@@ -239,13 +239,41 @@ class RiskManager:
                 logger.info(f"🚀 V4 Total Multiplier: {v4_multiplier:.2f}x → Position: {position_size:.4f}")
 
         # CRITICAL: Enforce minimum position size for exchange requirements
-        # Hyperliquid SOL minimum is 0.01 SOL (szDecimals=2)
-        if position_size < MIN_SOL_CONTRACT:
-            min_margin_needed = MIN_SOL_CONTRACT * entry_price / GROWTH_LEVERAGE
+        # Hyperliquid has TWO minimums:
+        # 1. Contract size minimum: 0.01 SOL (szDecimals=2)
+        # 2. Notional value minimum: $10 USD
+
+        # Calculate current notional value
+        notional_value = position_size * entry_price
+
+        # Check 1: Enforce $10 minimum notional value (Hyperliquid requirement)
+        if notional_value < MIN_POSITION_USDT:
+            # Calculate minimum SOL needed to meet $10
+            min_sol_for_notional = MIN_POSITION_USDT / entry_price
+            # Round UP to lot size to ensure we meet $10
+            min_sol_for_notional = (int(min_sol_for_notional / config.MIN_SOL_CONTRACT) + 1) * config.MIN_SOL_CONTRACT
+
+            min_margin_needed = min_sol_for_notional * entry_price / GROWTH_LEVERAGE
+            if min_margin_needed <= account_balance * 0.95:  # 95% to leave buffer
+                logger.warning(f"⚠️  Notional ${notional_value:.2f} < ${MIN_POSITION_USDT} minimum")
+                logger.warning(f"   Adjusting to {min_sol_for_notional:.2f} SOL (${min_sol_for_notional * entry_price:.2f})")
+                position_size = min_sol_for_notional
+                details['position_size'] = position_size
+                details['notional_value'] = position_size * entry_price
+                details['adjusted_to_minimum'] = True
+            else:
+                logger.error(f"❌ Cannot afford $10 minimum position")
+                logger.error(f"   Need ${min_margin_needed:.2f} margin, have ${account_balance:.2f}")
+                details['insufficient_margin'] = True
+                details['min_notional_failed'] = True
+
+        # Check 2: Enforce contract size minimum (0.01 SOL)
+        elif position_size < config.MIN_SOL_CONTRACT:
+            min_margin_needed = config.MIN_SOL_CONTRACT * entry_price / GROWTH_LEVERAGE
             if min_margin_needed <= account_balance * 0.5:  # Only if we have 2x minimum margin
-                logger.warning(f"⚠️  Position {position_size:.4f} SOL < minimum {MIN_SOL_CONTRACT}")
-                logger.warning(f"   Adjusting to minimum: {MIN_SOL_CONTRACT} SOL")
-                position_size = MIN_SOL_CONTRACT
+                logger.warning(f"⚠️  Position {position_size:.4f} SOL < minimum {config.MIN_SOL_CONTRACT}")
+                logger.warning(f"   Adjusting to minimum: {config.MIN_SOL_CONTRACT} SOL")
+                position_size = config.MIN_SOL_CONTRACT
                 details['position_size'] = position_size
                 details['notional_value'] = position_size * entry_price
                 details['adjusted_to_minimum'] = True
@@ -433,14 +461,15 @@ class RiskManager:
                             except (ValueError, TypeError):
                                 pass
             
-            # Use USDT balance if found
-            if usdt_balance is not None and usdt_balance > 0:
+            # Use totalEq for current_balance (drawdown tracking) - includes position value
+            # This ensures drawdown is calculated correctly when positions are open
+            if total_eq and total_eq > 0:
                 if self.starting_balance is None:
-                    self.starting_balance = usdt_balance
-                    logger.info(f"💰 Starting balance (USDT): ${usdt_balance:.2f}")
-                    if total_eq and total_eq != usdt_balance:
-                        logger.info(f"   (Total account equity: ${total_eq:.2f} - includes other assets)")
-                self.current_balance = usdt_balance
+                    self.starting_balance = total_eq
+                    logger.info(f"💰 Starting balance (totalEq): ${total_eq:.2f}")
+                    if usdt_balance and usdt_balance != total_eq:
+                        logger.info(f"   (Available for trading: ${usdt_balance:.2f})")
+                self.current_balance = total_eq
                 return True
             
             # FALLBACK: Use totalEq if no USDT found

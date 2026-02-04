@@ -6,98 +6,121 @@
     <title>SupeQuant | Elite Trading System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { font-family: 'Inter', sans-serif; }
-        body { background: #121212; min-height: 100vh; }
-        
-        /* OKX-style dark theme */
-        .card { 
-            background: #1b1b1b; 
-            border: 1px solid #2a2a2a; 
-            border-radius: 12px;
-            transition: all 0.2s ease;
+        :root {
+            --bg: #05070f;
+            --panel: rgba(12,16,30,0.8);
+            --border: rgba(255,255,255,0.08);
+            --glow: 0 20px 60px rgba(0,0,0,0.35);
         }
-        .card:hover { border-color: #3a3a3a; }
-        
-        /* Accent colors */
-        .text-profit { color: #00c076; }
-        .text-loss { color: #ff5353; }
-        .bg-profit { background: rgba(0, 192, 118, 0.1); }
-        .bg-loss { background: rgba(255, 83, 83, 0.1); }
-        
-        /* Badge styles */
-        .badge { 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            font-size: 12px; 
-            font-weight: 500;
+        * { font-family: 'Space Grotesk', sans-serif; }
+        body {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 18% 22%, rgba(56,189,248,0.09), transparent 30%),
+                radial-gradient(circle at 78% 8%, rgba(34,197,94,0.08), transparent 28%),
+                radial-gradient(circle at 50% 90%, rgba(168,85,247,0.05), transparent 25%),
+                linear-gradient(180deg, #05070f 0%, #070a16 55%, #05070f 100%);
         }
-        .badge-green { background: rgba(0, 192, 118, 0.15); color: #00c076; }
-        .badge-yellow { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
-        .badge-orange { background: rgba(255, 152, 0, 0.15); color: #ff9800; }
-        .badge-red { background: rgba(255, 83, 83, 0.15); color: #ff5353; }
-        .badge-gray { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
-        
-        /* Progress bars */
-        .progress-bar { background: #2a2a2a; border-radius: 4px; overflow: hidden; }
-        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-        .fill-green { background: linear-gradient(90deg, #00c076, #00a060); }
-        .fill-yellow { background: linear-gradient(90deg, #ffc107, #e6ac00); }
-        .fill-orange { background: linear-gradient(90deg, #ff9800, #e68900); }
-        .fill-red { background: linear-gradient(90deg, #ff5353, #e64545); }
-        
-        /* Table styles */
-        .table-row { 
-            border-bottom: 1px solid #2a2a2a; 
-            transition: background 0.15s ease;
+        .card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: var(--glow);
+            backdrop-filter: blur(6px);
+            transition: border 0.2s ease, transform 0.2s ease;
         }
-        .table-row:hover { background: #1f1f1f; }
-        
-        /* Pulse animation */
-        .pulse-dot { animation: pulse 2s infinite; }
-        @keyframes pulse { 
-            0%, 100% { opacity: 1; transform: scale(1); } 
-            50% { opacity: 0.5; transform: scale(0.95); } 
+        .card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+        .badge { padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+        .badge-green { background: rgba(34,197,94,0.12); color: #4ade80; }
+        .badge-yellow { background: rgba(234,179,8,0.12); color: #facc15; }
+        .badge-orange { background: rgba(249,115,22,0.12); color: #fb923c; }
+        .badge-red { background: rgba(248,113,113,0.12); color: #f87171; }
+        .badge-gray { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+        .table-row { border-bottom: 1px solid var(--border); transition: background 0.15s ease; }
+        .table-row:hover { background: rgba(255,255,255,0.02); }
+        .text-profit { color: #22c55e; }
+        .text-loss { color: #f87171; }
+        .status-dot { width: 10px; height: 10px; border-radius: 999px; }
+        .status-live { background: #22c55e; box-shadow: 0 0 12px rgba(34,197,94,0.6); }
+        .status-offline { background: #f87171; }
+        .ticker {
+            border: 1px solid var(--border);
+            background: linear-gradient(120deg, rgba(59,130,246,0.12), rgba(16,185,129,0.08), rgba(59,130,246,0.06));
+            box-shadow: var(--glow);
         }
-        
-        /* Status indicator */
-        .status-live { 
-            background: #00c076; 
-            box-shadow: 0 0 8px rgba(0, 192, 118, 0.5);
-        }
-        .status-offline { background: #ff5353; }
-        
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #1b1b1b; }
-        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
     </style>
 </head>
-<body class="text-white p-6" x-data="dashboard()" x-init="init()">
-    <!-- Header -->
-    <header class="flex justify-between items-center mb-6">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center font-bold text-lg">
-                SQ
+<body class="text-slate-100" x-data="dashboard()" x-init="init()">
+    <div class="max-w-7xl mx-auto py-8 px-4 lg:px-8">
+        <!-- Header -->
+        <header class="mb-6">
+            <div class="card p-6 lg:p-7 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between border border-white/10">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center font-bold text-xl shadow-lg shadow-emerald-900/30">
+                        SQ
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase tracking-[0.2em]">SupeQuant</p>
+                        <h1 class="text-2xl lg:text-3xl font-semibold leading-tight">Elite Trading Command</h1>
+                        <p class="text-sm text-slate-400">Production dashboard • Live regime-aware system</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                    <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                        <span class="status-dot" :class="connected ? 'status-live' : 'status-offline'"></span>
+                        <div>
+                            <div class="text-xs text-slate-400">Connection</div>
+                            <div class="text-slate-200" x-text="connected ? 'Live data' : 'Offline'"></div>
+                        </div>
+                    </div>
+                    <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                        <div class="text-xs text-slate-400">Last update</div>
+                        <div class="text-slate-200" x-text="lastUpdate"></div>
+                    </div>
+                    <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                        <div class="text-xs text-slate-400">Market regime</div>
+                        <div class="flex items-center gap-2">
+                            <span class="badge" :class="regime === 'bullish' ? 'badge-green' : regime === 'bearish' ? 'badge-red' : regime === 'ranging' ? 'badge-yellow' : 'badge-gray'" x-text="regime ? regime.toUpperCase() : 'UNKNOWN'"></span>
+                            <span class="text-[11px] text-slate-400">adaptive</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div>
-                <h1 class="text-xl font-semibold text-white">SupeQuant</h1>
-                <p class="text-gray-500 text-sm">Elite Trading System</p>
-            </div>
-        </div>
-        <div class="flex items-center gap-6">
-            <div class="flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full" :class="connected ? 'status-live pulse-dot' : 'status-offline'"></div>
-                <span class="text-sm text-gray-400" x-text="connected ? 'Connected' : 'Offline'"></span>
-            </div>
-            <div class="text-gray-500 text-sm" x-text="lastUpdate"></div>
-        </div>
-    </header>
+        </header>
 
-    <!-- Main Stats Row -->
-    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+        <!-- Live ticker -->
+        <div class="ticker rounded-2xl p-4 lg:p-5 mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg font-semibold text-white shadow-inner">↺</div>
+                <div>
+                    <div class="text-sm text-slate-400">Live Market Snapshot</div>
+                    <div class="text-base text-slate-100">SOL / BTC reference with equity rollup</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 w-full lg:w-auto text-sm">
+                <div class="card p-3 border border-white/10">
+                    <div class="text-[11px] uppercase text-slate-400 tracking-wide">SOL Price</div>
+                    <div class="text-xl font-semibold" x-text="solPrice ? '$' + solPrice.toFixed(2) : '--'"></div>
+                </div>
+                <div class="card p-3 border border-white/10">
+                    <div class="text-[11px] uppercase text-slate-400 tracking-wide">BTC Price</div>
+                    <div class="text-xl font-semibold" x-text="btcPrice ? '$' + formatNumber(btcPrice) : '--'"></div>
+                </div>
+                <div class="card p-3 border border-white/10">
+                    <div class="text-[11px] uppercase text-slate-400 tracking-wide">Equity</div>
+                    <div class="text-xl font-semibold" x-text="equity ? '$' + equity.toFixed(2) : '--'"></div>
+                </div>
+                <div class="card p-3 border border-white/10">
+                    <div class="text-[11px] uppercase text-slate-400 tracking-wide">PnL Today</div>
+                    <div class="text-xl font-semibold" :class="dailySummary.pnl_today >= 0 ? 'text-profit' : 'text-loss'" x-text="(dailySummary.pnl_today >= 0 ? '+' : '') + '$' + Math.abs(dailySummary.pnl_today || 0).toFixed(2)"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Stats Row -->
+        <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
         <!-- Total Portfolio (SOL + USDT) -->
         <div class="card p-5 col-span-2 lg:col-span-1 border-l-2 border-emerald-500">
             <div class="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">Portfolio Value</div>
