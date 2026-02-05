@@ -99,6 +99,17 @@ size = round(size / config.MIN_SOL_CONTRACT) * config.MIN_SOL_CONTRACT
 from config import MIN_SOL_CONTRACT  # DON'T DO THIS
 ```
 
+## Exchange State Reconciliation
+
+The bot now reconciles its internal state with Hyperliquid every cycle to prevent missed TP fills:
+
+1. **State file persistence** (`data/position_state.json`): TP order IDs saved to disk so they survive restarts
+2. **Enhanced startup recovery**: On restart, loads saved state → validates TP orders → detects fills that happened while down
+3. **Every-cycle reconciliation**: If exchange says no position but bot thinks one is open → checks fills → logs correct close reason (tp1/tp2 not force_closed)
+4. **Pre-cancel reconciliation**: Before canceling TP orders for a new trade, checks if they already filled
+
+**DO NOT** delete `data/position_state.json` while a position is open — it contains TP order IDs needed for accurate tracking.
+
 ## Telegram Bot Context Fixes
 
 The following were fixed to prevent false alerts when a position is open:

@@ -557,6 +557,10 @@ Manual restart required.
         Single iteration of the trading loop
         """
         try:
+            # Step 0: Reconcile bot state with exchange (detect missed TP fills)
+            if self.production_manager:
+                self.production_manager._reconcile_with_exchange()
+
             # Step 1: Update existing positions
             self._update_positions()
 

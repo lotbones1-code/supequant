@@ -13,6 +13,8 @@ Features:
 import logging
 import time
 import threading
+import json
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, List, Callable
 from enum import Enum
@@ -168,46 +170,615 @@ class ProductionOrderManager:
     # =========================================================================
 
     def _check_existing_positions(self):
-        """Check if there are open positions on Hyperliquid that we don't know about.
+        """Check for orphaned positions on Hyperliquid (crash recovery).
 
-        On restart after a crash, the bot has current_position = None but may have
-        a real open position on the exchange. This prevents opening duplicate positions.
+        Recovery priority:
+        1. Load state file (has full TP info from before crash)
+        2. Scan exchange open orders for reduce-only orders (TP recovery)
+        3. Create minimal tracking position (last resort)
         """
         try:
             positions = self.client.get_positions(TRADING_SYMBOL)
             if not positions:
+                # No exchange position — clear stale state file if any
+                self._clear_position_state()
                 return
 
+            exchange_pos = None
             for pos in positions:
                 pos_size = abs(float(pos.get('pos', 0)))
                 if pos_size > 0:
-                    side = pos.get('posSide', 'net')
-                    entry_px = float(pos.get('avgPx', pos.get('entryPx', 0)))
-                    upnl = float(pos.get('unrealizedPnl', 0))
-                    logger.warning(
-                        f"⚠️  ORPHANED POSITION DETECTED on restart: "
-                        f"{TRADING_SYMBOL} {side} size={pos_size} "
-                        f"entry={entry_px} uPnL={upnl:.2f}"
-                    )
-                    logger.warning(
-                        "The bot will NOT open new positions until this is resolved. "
-                        "Existing TP/SL on the exchange will still execute."
-                    )
-                    # Create a minimal ManagedPosition so the bot knows it has a position
-                    # and won't try to open a new one
-                    direction = 'long' if float(pos.get('pos', 0)) > 0 else 'short'
-                    self.current_position = ManagedPosition(
-                        position_id=f"recovered-{int(time.time())}",
-                        symbol=TRADING_SYMBOL,
-                        direction=direction,
-                    )
-                    self.current_position.entry_price = entry_px
-                    self.current_position.entry_size = pos_size
-                    self.current_position.actual_entry_size = pos_size
-                    logger.warning(f"Set current_position to track orphaned {self.current_position.direction} position")
-                    return
+                    exchange_pos = pos
+                    break
+
+            if not exchange_pos:
+                self._clear_position_state()
+                return
+
+            pos_size = abs(float(exchange_pos.get('pos', 0)))
+            entry_px = float(exchange_pos.get('avgPx', exchange_pos.get('entryPx', 0)))
+            upnl = float(exchange_pos.get('upl', exchange_pos.get('unrealizedPnl', 0)))
+            direction = 'long' if float(exchange_pos.get('pos', 0)) > 0 else 'short'
+
+            logger.warning(
+                f"⚠️  ORPHANED POSITION DETECTED on restart: "
+                f"{TRADING_SYMBOL} {direction.upper()} size={pos_size} "
+                f"entry=${entry_px:.2f} uPnL=${upnl:.2f}"
+            )
+
+            # === Priority 1: Try loading saved state file (has TP order IDs) ===
+            saved_state = self._load_position_state()
+            if saved_state and saved_state.get('direction') == direction:
+                logger.info("📂 Restoring position from saved state file")
+                self.current_position = ManagedPosition(
+                    position_id=saved_state.get('position_id', f"recovered-{int(time.time())}"),
+                    symbol=TRADING_SYMBOL,
+                    direction=direction,
+                )
+                pos = self.current_position
+                pos.entry_price = saved_state.get('entry_price', entry_px)
+                pos.entry_size = saved_state.get('entry_size', pos_size)
+                pos.actual_entry_size = pos_size  # Use exchange truth for current size
+                pos.entry_time = datetime.fromisoformat(saved_state['entry_time']) if saved_state.get('entry_time') else None
+                pos.entry_order_id = saved_state.get('entry_order_id', '')
+                pos.stop_loss = saved_state.get('stop_loss', 0.0)
+                pos.tp1_price = saved_state.get('tp1_price', 0.0)
+                pos.tp1_size = saved_state.get('tp1_size', 0.0)
+                pos.tp1_order_id = saved_state.get('tp1_order_id', '')
+                pos.tp1_is_virtual = saved_state.get('tp1_is_virtual', False)
+                pos.tp1_filled = saved_state.get('tp1_filled', False)
+                pos.tp1_fill_price = saved_state.get('tp1_fill_price', 0.0)
+                pos.tp2_price = saved_state.get('tp2_price', 0.0)
+                pos.tp2_size = saved_state.get('tp2_size', 0.0)
+                pos.tp2_order_id = saved_state.get('tp2_order_id', '')
+                pos.tp2_is_virtual = saved_state.get('tp2_is_virtual', False)
+                pos.tp2_filled = saved_state.get('tp2_filled', False)
+                pos.tp2_fill_price = saved_state.get('tp2_fill_price', 0.0)
+                pos.strategy = saved_state.get('strategy', '')
+                pos.confidence_score = saved_state.get('confidence_score')
+                pos.filters_passed = saved_state.get('filters_passed', [])
+                pos.trading_mode = saved_state.get('trading_mode', 'perp')
+                pos.realized_pnl = saved_state.get('realized_pnl', 0.0)
+                pos.state = PositionState.ACTIVE
+                pos.sl_is_virtual = True
+
+                # Validate TP order IDs still exist on exchange (may have filled while down)
+                self._validate_tp_orders_on_exchange(pos)
+
+                # Start monitoring for virtual TPs/SL
+                self._start_monitoring()
+
+                logger.info(f"   ✅ Position restored: {pos.direction.upper()} {pos.actual_entry_size} SOL @ ${pos.entry_price:.2f}")
+                logger.info(f"   TP1: {'FILLED' if pos.tp1_filled else pos.tp1_order_id or 'virtual'} @ ${pos.tp1_price:.2f}")
+                logger.info(f"   TP2: {'FILLED' if pos.tp2_filled else pos.tp2_order_id or 'virtual'} @ ${pos.tp2_price:.2f}")
+                return
+
+            # === Priority 2: No state file — create minimal + scan exchange orders ===
+            logger.warning("   No state file found, scanning exchange for TP orders...")
+            self.current_position = ManagedPosition(
+                position_id=f"recovered-{int(time.time())}",
+                symbol=TRADING_SYMBOL,
+                direction=direction,
+            )
+            self.current_position.entry_price = entry_px
+            self.current_position.entry_size = pos_size
+            self.current_position.actual_entry_size = pos_size
+            self.current_position.state = PositionState.ACTIVE
+            self.current_position.sl_is_virtual = True
+
+            # Scan exchange for reduce-only orders (these are our TPs)
+            self._recover_tp_orders_from_exchange(self.current_position)
+
+            # Start monitoring
+            self._start_monitoring()
+
+            logger.warning(f"   Set current_position to track orphaned {self.current_position.direction.upper()} position")
+            return
+
         except Exception as e:
             logger.warning(f"Could not check existing positions on startup: {e}")
+
+    # =========================================================================
+    # STATE FILE PERSISTENCE: TP order IDs survive restarts
+    # =========================================================================
+
+    def _save_position_state(self):
+        """Persist current position state to disk so TP order IDs survive restarts."""
+        if not self.current_position:
+            self._clear_position_state()
+            return
+        pos = self.current_position
+        state = {
+            'position_id': pos.position_id,
+            'symbol': pos.symbol,
+            'direction': pos.direction,
+            'entry_price': pos.entry_price,
+            'entry_size': pos.entry_size,
+            'actual_entry_size': pos.actual_entry_size,
+            'entry_time': pos.entry_time.isoformat() if pos.entry_time else None,
+            'entry_order_id': pos.entry_order_id,
+            'stop_loss': pos.stop_loss,
+            'tp1_price': pos.tp1_price,
+            'tp1_size': pos.tp1_size,
+            'tp1_order_id': pos.tp1_order_id,
+            'tp1_is_virtual': pos.tp1_is_virtual,
+            'tp1_filled': pos.tp1_filled,
+            'tp1_fill_price': pos.tp1_fill_price,
+            'tp2_price': pos.tp2_price,
+            'tp2_size': pos.tp2_size,
+            'tp2_order_id': pos.tp2_order_id,
+            'tp2_is_virtual': pos.tp2_is_virtual,
+            'tp2_filled': pos.tp2_filled,
+            'tp2_fill_price': pos.tp2_fill_price,
+            'strategy': pos.strategy,
+            'confidence_score': pos.confidence_score,
+            'filters_passed': pos.filters_passed,
+            'trading_mode': pos.trading_mode,
+            'realized_pnl': pos.realized_pnl,
+            'state': pos.state.value if pos.state else 'active',
+            'saved_at': datetime.now().isoformat(),
+        }
+        try:
+            state_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'position_state.json')
+            os.makedirs(os.path.dirname(state_path), exist_ok=True)
+            tmp_path = state_path + '.tmp'
+            with open(tmp_path, 'w') as f:
+                json.dump(state, f, indent=2)
+            os.replace(tmp_path, state_path)
+            logger.debug(f"Position state saved: {pos.position_id}")
+        except Exception as e:
+            logger.error(f"Failed to save position state: {e}")
+
+    def _load_position_state(self) -> Optional[dict]:
+        """Load persisted position state from disk."""
+        try:
+            state_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'position_state.json')
+            if not os.path.exists(state_path):
+                return None
+            with open(state_path, 'r') as f:
+                state = json.load(f)
+            logger.info(f"   Loaded saved state: {state.get('position_id', '?')} ({state.get('direction', '?')})")
+            return state
+        except Exception as e:
+            logger.warning(f"Failed to load position state: {e}")
+            return None
+
+    def _clear_position_state(self):
+        """Remove persisted position state (position fully closed)."""
+        try:
+            state_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'position_state.json')
+            if os.path.exists(state_path):
+                os.remove(state_path)
+                logger.debug("Position state file cleared")
+        except Exception as e:
+            logger.warning(f"Failed to clear position state: {e}")
+
+    # =========================================================================
+    # TP ORDER RECOVERY: Validate/recover TP orders after restart
+    # =========================================================================
+
+    def _validate_tp_orders_on_exchange(self, position: ManagedPosition):
+        """Verify saved TP order IDs are still live on exchange.
+        If an order filled while we were down, update position accordingly."""
+        try:
+            for tp_num in [1, 2]:
+                order_id = position.tp1_order_id if tp_num == 1 else position.tp2_order_id
+                is_virtual = position.tp1_is_virtual if tp_num == 1 else position.tp2_is_virtual
+                already_filled = position.tp1_filled if tp_num == 1 else position.tp2_filled
+
+                if not order_id or is_virtual or already_filled:
+                    continue
+
+                order_status = self.client.get_order(position.symbol, order_id)
+                if not order_status:
+                    continue
+
+                state = order_status.get('state', '')
+                if state == 'filled':
+                    fill_price = float(order_status.get('avgPx', 0))
+                    fill_size = float(order_status.get('fillSz', 0))
+                    tp_price = position.tp1_price if tp_num == 1 else position.tp2_price
+
+                    logger.info(f"   🎯 TP{tp_num} order {order_id} FILLED while bot was down @ ${fill_price or tp_price:.2f}")
+
+                    pnl = self._calc_tp_pnl(position, fill_price or tp_price, fill_size or (position.tp1_size if tp_num == 1 else position.tp2_size))
+
+                    if tp_num == 1:
+                        position.tp1_filled = True
+                        position.tp1_fill_price = fill_price or tp_price
+                        position.tp1_fill_time = datetime.now()
+                        position.realized_pnl += pnl
+                        position.state = PositionState.TP1_FILLED
+                    else:
+                        position.tp2_filled = True
+                        position.tp2_fill_price = fill_price or tp_price
+                        position.tp2_fill_time = datetime.now()
+                        position.realized_pnl += pnl
+                        position.state = PositionState.TP2_FILLED
+
+                    # Send notification
+                    if self.notifier:
+                        try:
+                            remaining = position.actual_entry_size - (position.tp1_size if tp_num == 1 else position.actual_entry_size)
+                            self.notifier.send_tp_hit(position.__dict__, tp_num, fill_price or tp_price, pnl, max(0, remaining))
+                        except Exception:
+                            pass
+
+                elif state == 'cancelled':
+                    logger.warning(f"   ⚠️  TP{tp_num} order {order_id} was CANCELLED while bot was down — converting to virtual")
+                    if tp_num == 1:
+                        position.tp1_is_virtual = True
+                        position.tp1_order_id = ''
+                    else:
+                        position.tp2_is_virtual = True
+                        position.tp2_order_id = ''
+
+                elif state == 'live':
+                    logger.info(f"   ✅ TP{tp_num} order {order_id} still LIVE on exchange")
+
+        except Exception as e:
+            logger.warning(f"Error validating TP orders: {e}")
+
+    def _recover_tp_orders_from_exchange(self, position: ManagedPosition):
+        """Scan exchange open orders for reduce-only orders (our TPs).
+        Uses frontend_open_orders which has the reduceOnly field."""
+        try:
+            coin = TRADING_SYMBOL.replace('-USDT-SWAP', '').replace('-USDT', '').replace('-SWAP', '')
+            raw_orders = self.client.info.frontend_open_orders(self.client.address)
+
+            tp_candidates = []
+            for order in raw_orders:
+                if order.get('coin') != coin:
+                    continue
+                if not order.get('reduceOnly', False):
+                    continue
+                tp_candidates.append({
+                    'oid': str(order.get('oid', '')),
+                    'price': float(order.get('limitPx', 0)),
+                    'size': float(order.get('sz', 0)),
+                    'side': order.get('side', ''),
+                })
+
+            if not tp_candidates:
+                logger.warning("   No reduce-only orders found on exchange (TPs may have already filled)")
+                return
+
+            # Sort: TP1 = closer to entry, TP2 = further
+            if position.direction == 'long':
+                tp_candidates.sort(key=lambda x: x['price'])
+            else:
+                tp_candidates.sort(key=lambda x: x['price'], reverse=True)
+
+            if len(tp_candidates) >= 1:
+                tp1 = tp_candidates[0]
+                position.tp1_order_id = tp1['oid']
+                position.tp1_price = tp1['price']
+                position.tp1_size = tp1['size']
+                position.tp1_is_virtual = False
+                logger.info(f"   📌 Recovered TP1: oid={tp1['oid']} @ ${tp1['price']:.2f} size={tp1['size']}")
+
+            if len(tp_candidates) >= 2:
+                tp2 = tp_candidates[1]
+                position.tp2_order_id = tp2['oid']
+                position.tp2_price = tp2['price']
+                position.tp2_size = tp2['size']
+                position.tp2_is_virtual = False
+                logger.info(f"   📌 Recovered TP2: oid={tp2['oid']} @ ${tp2['price']:.2f} size={tp2['size']}")
+
+        except Exception as e:
+            logger.warning(f"Error recovering TP orders from exchange: {e}")
+
+    def _calc_tp_pnl(self, position: ManagedPosition, fill_price: float, fill_size: float) -> float:
+        """Calculate PnL for a TP fill."""
+        if position.direction == 'long':
+            return (fill_price - position.entry_price) * fill_size
+        else:
+            return (position.entry_price - fill_price) * fill_size
+
+    # =========================================================================
+    # EXCHANGE RECONCILIATION: Detect missed fills every cycle
+    # =========================================================================
+
+    def _reconcile_with_exchange(self) -> bool:
+        """Reconcile bot state with exchange reality.
+
+        Detects: exchange position closed (TP/SL/liquidation) while bot
+        thought it was still open. Logs correct PnL and close reason.
+
+        Returns True if a reconciliation occurred (position was closed).
+        """
+        if not self.current_position:
+            return False
+
+        position = self.current_position
+
+        try:
+            # Step 1: Check if exchange still has our position
+            exchange_positions = self.client.get_positions(TRADING_SYMBOL)
+            has_exchange_pos = False
+            exchange_size = 0.0
+
+            if exchange_positions:
+                for pos in exchange_positions:
+                    sz = abs(float(pos.get('pos', 0)))
+                    if sz > 0.0001:
+                        has_exchange_pos = True
+                        exchange_size = sz
+                        break
+
+            if has_exchange_pos:
+                # Position still exists — check for partial TP fill (size decreased)
+                if not position.tp1_filled and exchange_size < position.actual_entry_size * 0.9:
+                    logger.info(f"🔍 Reconciliation: exchange size {exchange_size:.4f} < tracked {position.actual_entry_size:.4f}")
+                    self._check_fills_for_partial_close(position, exchange_size)
+                return False
+
+            # Step 2: Exchange has NO position but bot thinks one is open!
+            logger.warning(
+                f"🔄 RECONCILIATION: Bot has {position.direction.upper()} "
+                f"{position.actual_entry_size:.4f} SOL but exchange shows NO position!"
+            )
+
+            # Step 3: Check fills to determine what happened
+            close_info = self._find_close_fills(position)
+
+            if close_info:
+                close_reason = close_info['reason']
+                exit_price = close_info['exit_price']
+                exchange_pnl = close_info['closed_pnl']
+                close_time = close_info['close_time']
+                fill_count = close_info['fill_count']
+
+                # Map exchange reason to our close_reason format
+                if close_reason == 'tp_limit':
+                    # All fills were limit orders (TP hits!)
+                    if fill_count >= 2 or position.tp1_filled:
+                        close_reason_str = 'tp2'
+                        position.tp2_filled = True
+                        position.tp2_fill_price = exit_price
+                    else:
+                        close_reason_str = 'tp1'
+                        position.tp1_filled = True
+                        position.tp1_fill_price = exit_price
+                elif close_reason == 'mixed':
+                    # Some limit (TP1), some market (TP2 virtual or force close)
+                    close_reason_str = 'tp2'
+                    position.tp1_filled = True
+                    position.tp2_filled = True
+                elif close_reason == 'liquidation':
+                    close_reason_str = 'liquidation'
+                elif close_reason == 'market_close':
+                    close_reason_str = 'force_closed_external'
+                else:
+                    close_reason_str = 'reconciled_unknown'
+
+                logger.info(
+                    f"   ✅ RECONCILED: Closed by {close_reason_str.upper()} "
+                    f"@ ${exit_price:.2f} | PnL: ${exchange_pnl:.4f} | {fill_count} fill(s)"
+                )
+
+                # Log with correct data
+                self._close_position_reconciled(position, close_reason_str, exit_price, exchange_pnl, close_time)
+                return True
+            else:
+                # No fills found — position vanished (shouldn't happen)
+                logger.error("   ❌ RECONCILIATION: No close fills found! Clearing stale position.")
+                self._close_position_reconciled(position, 'reconciled_no_fills', position.entry_price, 0, datetime.now())
+                return True
+
+        except Exception as e:
+            logger.error(f"Reconciliation error: {e}")
+            return False
+
+    def _find_close_fills(self, position: ManagedPosition) -> Optional[dict]:
+        """Find fills that closed our position by scanning user_fills.
+
+        Returns dict: {reason, exit_price, closed_pnl, close_time, fill_count, total_size}
+        """
+        try:
+            coin = TRADING_SYMBOL.replace('-USDT-SWAP', '').replace('-USDT', '').replace('-SWAP', '')
+
+            # Time-bounded fill query (more efficient)
+            if position.entry_time:
+                entry_ms = int(position.entry_time.timestamp() * 1000) - 60000  # 60s buffer
+                fills = self.client.info.user_fills_by_time(self.client.address, entry_ms)
+            else:
+                fills = self.client.info.user_fills(self.client.address)
+
+            if not fills:
+                return None
+
+            # Filter to close fills matching our position
+            close_fills = []
+            for fill in fills:
+                if fill.get('coin') != coin:
+                    continue
+                fill_dir = fill.get('dir', '')
+                if position.direction == 'long' and 'Close Long' not in fill_dir:
+                    continue
+                if position.direction == 'short' and 'Close Short' not in fill_dir:
+                    continue
+                # Only consider fills after our entry
+                if position.entry_time:
+                    fill_time_ms = int(fill.get('time', 0))
+                    entry_ms = int(position.entry_time.timestamp() * 1000) - 60000
+                    if fill_time_ms < entry_ms:
+                        continue
+                close_fills.append(fill)
+
+            if not close_fills:
+                return None
+
+            # Aggregate close fills
+            total_closed_pnl = 0.0
+            total_size = 0.0
+            weighted_price = 0.0
+            latest_time_ms = 0
+            any_limit = False
+            any_market = False
+
+            for fill in close_fills:
+                pnl = float(fill.get('closedPnl', 0))
+                sz = float(fill.get('sz', 0))
+                px = float(fill.get('px', 0))
+                crossed = fill.get('crossed', True)
+                fill_time_ms = int(fill.get('time', 0))
+
+                total_closed_pnl += pnl
+                total_size += sz
+                weighted_price += px * sz
+                if fill_time_ms > latest_time_ms:
+                    latest_time_ms = fill_time_ms
+                if crossed:
+                    any_market = True
+                else:
+                    any_limit = True
+
+            if total_size <= 0:
+                return None
+
+            avg_exit_price = weighted_price / total_size
+            close_time = datetime.fromtimestamp(latest_time_ms / 1000) if latest_time_ms else datetime.now()
+
+            # Determine close reason
+            if any_limit and not any_market:
+                reason = 'tp_limit'
+            elif any_market and not any_limit:
+                reason = 'market_close'
+            else:
+                reason = 'mixed'
+
+            return {
+                'reason': reason,
+                'exit_price': avg_exit_price,
+                'closed_pnl': total_closed_pnl,
+                'close_time': close_time,
+                'fill_count': len(close_fills),
+                'total_size': total_size,
+            }
+
+        except Exception as e:
+            logger.error(f"Error finding close fills: {e}")
+            return None
+
+    def _close_position_reconciled(self, position: ManagedPosition, reason: str,
+                                    exit_price: float, exchange_pnl: float,
+                                    close_time: datetime):
+        """Close a position reconciled with exchange data.
+        Uses exchange PnL as source of truth."""
+        position.state = PositionState.CLOSED
+        position.closed_at = close_time
+        position.close_reason = reason
+        position.realized_pnl = exchange_pnl
+
+        # Add to history
+        self.trade_history.append(position)
+
+        # Clear current position and state file
+        self.current_position = None
+        self._clear_position_state()
+
+        # Stop monitoring
+        self._stop_monitoring_thread()
+
+        # PnL percentage
+        notional = position.entry_price * position.actual_entry_size
+        pnl_pct = (exchange_pnl / notional * 100) if notional > 0 else 0
+
+        # Log to trade journal
+        if self.trade_journal:
+            trade_record = {
+                'timestamp_close': close_time.isoformat(),
+                'timestamp_entry': position.entry_time.isoformat() if position.entry_time else None,
+                'position_id': position.position_id,
+                'symbol': position.symbol,
+                'side': position.direction,
+                'entry_price': position.entry_price,
+                'exit_price': exit_price,
+                'size': position.actual_entry_size,
+                'pnl_abs': exchange_pnl,
+                'pnl_pct': pnl_pct,
+                'strategy_name': position.strategy,
+                'confidence_score': position.confidence_score,
+                'filters_passed': position.filters_passed or [],
+                'position_size_multiplier': 1.0,
+                'duration_seconds': (close_time - position.entry_time).total_seconds() if position.entry_time else 0,
+                'close_reason': reason,
+                'trading_mode': position.trading_mode,
+                'stop_loss': position.stop_loss,
+                'tp1_price': position.tp1_price,
+                'tp1_filled': position.tp1_filled,
+                'tp1_fill_price': position.tp1_fill_price,
+                'tp2_price': position.tp2_price,
+                'tp2_filled': position.tp2_filled,
+                'tp2_fill_price': position.tp2_fill_price,
+                'entry_order_id': position.entry_order_id,
+                'reconciled': True,
+            }
+            self.trade_journal.log_trade(trade_record)
+
+        # Send position closed notification
+        if self.notifier:
+            try:
+                self.notifier.send_position_closed(position.__dict__)
+            except Exception as e:
+                logger.warning(f"Failed to send reconciliation notification: {e}")
+
+        # Call trade close callback
+        if self._on_trade_close:
+            try:
+                trade_data = {
+                    'pnl': exchange_pnl,
+                    'is_win': exchange_pnl > 0,
+                    'direction': position.direction,
+                    'strategy': position.strategy,
+                    'close_reason': reason,
+                    'entry_price': position.entry_price,
+                    'exit_price': exit_price,
+                }
+                self._on_trade_close(trade_data)
+            except Exception as e:
+                logger.warning(f"Trade close callback error: {e}")
+
+        # Log summary
+        emoji = "🟢" if exchange_pnl > 0 else "🔴"
+        logger.info("\n" + "="*60)
+        logger.info(f"{emoji} RECONCILED POSITION CLOSED")
+        logger.info("="*60)
+        logger.info(f"   Position ID: {position.position_id}")
+        logger.info(f"   Close Reason: {reason.upper()}")
+        logger.info(f"   Entry: ${position.entry_price:.2f}")
+        logger.info(f"   Exit: ${exit_price:.2f}")
+        logger.info(f"   Size: {position.actual_entry_size:.4f} SOL")
+        logger.info(f"   Exchange PnL: ${exchange_pnl:.4f} ({pnl_pct:+.2f}%)")
+        logger.info("="*60 + "\n")
+
+    def _check_fills_for_partial_close(self, position: ManagedPosition, current_exchange_size: float):
+        """Detect TP1 fill by noticing position size decreased on exchange."""
+        try:
+            size_diff = position.actual_entry_size - current_exchange_size
+            if size_diff < 0.005:  # Less than 0.005 SOL change = noise
+                return
+
+            close_info = self._find_close_fills(position)
+            if close_info and close_info['total_size'] > 0 and not position.tp1_filled:
+                fill_price = close_info['exit_price']
+                fill_pnl = close_info['closed_pnl']
+                position.tp1_filled = True
+                position.tp1_fill_price = fill_price
+                position.tp1_fill_time = close_info['close_time']
+                position.realized_pnl += fill_pnl
+                position.actual_entry_size = current_exchange_size
+                position.state = PositionState.TP1_FILLED
+
+                logger.info(f"   🎯 Reconciled TP1 fill: ${fill_price:.2f} PnL=${fill_pnl:.4f}")
+                self._save_position_state()
+
+                if self.notifier and not position.tp1_notification_sent:
+                    position.tp1_notification_sent = True
+                    self.notifier.send_tp_hit(position.__dict__, 1, fill_price, fill_pnl, current_exchange_size)
+        except Exception as e:
+            logger.warning(f"Error checking partial close fills: {e}")
 
     # =========================================================================
     # HELPER: Get position size (works for both spot and perp)
@@ -256,6 +827,9 @@ class ProductionOrderManager:
         logger.info("="*60)
         
         try:
+            # Step 0: Reconcile with exchange before canceling (detect TP fills first!)
+            self._reconcile_with_exchange()
+
             # Step 1: Cancel all open orders
             logger.info("\n📋 Step 1: Canceling open orders...")
             trade_symbol = TRADING_SYMBOL
@@ -691,11 +1265,14 @@ class ProductionOrderManager:
             
             position.state = PositionState.ACTIVE
             self.current_position = position
-            
+
+            # Persist state so TP order IDs survive restarts
+            self._save_position_state()
+
             # Start monitoring if we have virtual orders
             if position.tp1_is_virtual or position.tp2_is_virtual or position.sl_is_virtual:
                 self._start_monitoring()
-            
+
             logger.info("\n" + "="*60)
             logger.info("✅ TRADE EXECUTED SUCCESSFULLY")
             logger.info(f"   Position ID: {position.position_id}")
@@ -972,6 +1549,9 @@ class ProductionOrderManager:
                     position.realized_pnl += pnl
                     logger.info(f"   ✅ TP1 executed: {size:.4f} SOL @ ${current_price:.2f} (PnL: ${pnl:.2f})")
 
+                    # Persist state after TP1 fill
+                    self._save_position_state()
+
                     # ELITE V3: Activate trailing stop after TP1
                     import config
                     if getattr(config, 'ELITE_TRAILING_AFTER_TP1', False):
@@ -1080,6 +1660,10 @@ class ProductionOrderManager:
                         pnl = -pnl
                     position.realized_pnl += pnl
                     logger.info(f"🎯 TP1 FILLED: {fill_size:.4f} SOL @ ${fill_price:.2f} (PnL: ${pnl:.2f})")
+
+                    # Persist state after TP1 fill
+                    self._save_position_state()
+
                     # Send TP1 notification (only once!)
                     if self.notifier and not position.tp1_notification_sent:
                         position.tp1_notification_sent = True
@@ -1241,12 +1825,13 @@ class ProductionOrderManager:
         # Add to history
         self.trade_history.append(position)
         
-        # Clear current position
+        # Clear current position and state file
         self.current_position = None
-        
+        self._clear_position_state()
+
         # Stop monitoring
         self._stop_monitoring_thread()
-        
+
         # Calculate duration and exit price
         duration = (position.closed_at - position.entry_time).total_seconds() if position.entry_time else 0
         
