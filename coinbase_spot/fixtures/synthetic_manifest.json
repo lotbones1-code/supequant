@@ -1,0 +1,25 @@
+{
+  "coverage": {
+    "end": 1767228600,
+    "start": 1767225600
+  },
+  "files": {
+    "candles": {
+      "path": "synthetic_candles.json",
+      "sha256": "10942e2e093a40518490baef174bd90b0930c47f3cacb92cf606e2f243ab7d17"
+    },
+    "product": {
+      "path": "synthetic_product.json",
+      "sha256": "30cfc8bd5705559b26c3a3cc62b3f5ccef6988aae3b06894e0eab93311b4ed74"
+    }
+  },
+  "interval_seconds": 60,
+  "product_id": "SOL-USD",
+  "provenance": {
+    "captured_at": "2026-01-02T00:00:00Z",
+    "description": "SYNTHETIC pipeline validation data. No exchange was contacted. Invented prices and metadata are not performance evidence or current trading permissions.",
+    "kind": "synthetic",
+    "source": "locally invented deterministic test fixture"
+  },
+  "schema_version": 1
+}
