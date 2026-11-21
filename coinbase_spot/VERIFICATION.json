@@ -1,0 +1,57 @@
+{
+  "review_regressions": [
+    "journal truncation must not lose halt or restore starting cash",
+    "UTC rollover includes prior execution PnL/fees without erasing new-day loss",
+    "artifact write/fsync failure must not publish completion",
+    "partial exits never double-credit PnL",
+    "duplicate fills and ambiguous cancellations retain correct reservations"
+  ],
+  "runtime": {
+    "implementation": "CPython",
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "system": "Linux"
+  },
+  "scope": "credential-free offline replay milestone; not live readiness or profitability evidence",
+  "synthetic_smoke": {
+    "command": "python -S -B -m coinbase_spot replay --manifest coinbase_spot/fixtures/synthetic_manifest.json --run-id verification-final --output-root coinbase_spot/runs --initial-cash 1000 --fee-bps 60 --slippage-bps 10",
+    "completed": true,
+    "entries": 2,
+    "exits": 2,
+    "final_quantity": "0.000",
+    "implementation_sha256": "02a5ff389340bb2259c10589ec630d8b4c18d3ba53f87c29eb79476d30731e24",
+    "input_kind": "synthetic"
+  },
+  "tests": {
+    "command": "python -S -B -m unittest discover -s coinbase_spot/tests -p 'test_*.py' -v",
+    "execution": "local; no CI workflow launched",
+    "failed": 0,
+    "passed": 82
+  },
+  "upstream_base_commit": "122e0066537ad0697fe7df08a40b6cc9a66675d1",
+  "validated_files_sha256": {
+    "coinbase_spot/.gitignore": "628118207ca0d005e5287597e29eeeec016b98089109a13a06f5db53b18c1117",
+    "coinbase_spot/README.md": "846d6b19306e97c3a4b1ece6b961234cec1e94e7ee7772481674cff7060a7e4b",
+    "coinbase_spot/__init__.py": "90636edcd5d5677716585d49a7e0a7cb31d841d291c8de33f7e250d1c097517f",
+    "coinbase_spot/__main__.py": "2b4ff050803342d5868c86426720c340e76f9dee026e9618d26db74fcf41f560",
+    "coinbase_spot/fixtures/synthetic_candles.json": "10942e2e093a40518490baef174bd90b0930c47f3cacb92cf606e2f243ab7d17",
+    "coinbase_spot/fixtures/synthetic_manifest.json": "d476747bf76be1e3a50f5133c081c8d270632e9a7eddb939e8978a6c212cdc2d",
+    "coinbase_spot/fixtures/synthetic_product.json": "30cfc8bd5705559b26c3a3cc62b3f5ccef6988aae3b06894e0eab93311b4ed74",
+    "coinbase_spot/ledger.py": "cc3c3473fee4496c04b201d5420bad044c33ae30f8206d5c26f336688b38c389",
+    "coinbase_spot/market_data.py": "41b3f93e246b9fb764342e2c33eeee8eb042eb675e9324dc1e328916d680852d",
+    "coinbase_spot/models.py": "b609dd966e3b8ef333da4762b03ef1ca6fdf2713d176a46c4d288ff2d9cfc482",
+    "coinbase_spot/replay.py": "7c09771f63fd5e3b32e808f2a743a29255578b3206e1aafc78ef130607e94605",
+    "coinbase_spot/risk.py": "7c61371a63fcbc184d333fe1ea23dc4619322e278f28fecdfcf5fbccfab74dc4",
+    "coinbase_spot/strategy.py": "cbd7498bb7b9eb5b6d20cf1df39828e655b530725ea7f0ab8978661b32a18544",
+    "coinbase_spot/tests/__init__.py": "99d538a0f66bff150b84875e37ec04710e08787f76f0e22f288c2621137b9dab",
+    "coinbase_spot/tests/test_cli.py": "5803f5c607907cf195756c3cf54891cc91aeb7f958b9555f85a40640953c4941",
+    "coinbase_spot/tests/test_integration_review.py": "af0541b41a76239d44e6a85ad24255313619d73a7fd6d1eddeb17c3e798ac723",
+    "coinbase_spot/tests/test_isolation.py": "b724c10b66f904395300c65215dab9d68741eba0b14019169fc66704ccda24a0",
+    "coinbase_spot/tests/test_ledger.py": "026ef20f47e255d3d5d948716b7836f315845bb97e293782fd9929b481cffb43",
+    "coinbase_spot/tests/test_market_data.py": "cee94751a9d1920e22185b408d7859f5a6e1ee002a93f5c206a6a64e42292070",
+    "coinbase_spot/tests/test_replay.py": "4d458094172ec5846e53e8b5e008c5801562be998514644ac903b646bfe3f1a4",
+    "coinbase_spot/tests/test_review.py": "620f74b552834303ddfcfc3a0be47994c35b5c2b006992db11d4a71f14c0db33",
+    "coinbase_spot/tests/test_risk.py": "1f761a8aed688e58a71de02eb33c37b1defaa4f29ca10d31f5f1c4d14b4400ef",
+    "coinbase_spot/tests/test_strategy.py": "965b568e756d7ca61b0ab47e1088a18c1678d82ad199773ff3a4922ebcdff2c1"
+  }
+}
